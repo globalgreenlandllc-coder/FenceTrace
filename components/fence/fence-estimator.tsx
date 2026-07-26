@@ -133,11 +133,19 @@ export function FenceEstimator() {
   const gatesDouble = layout.gates.filter((g) => g.kind === "double").length;
   const effRemoval = removalLf < 0 ? totalLf : removalLf; // -1 = "same as drawn"
 
+  const runLengths = useMemo(
+    () =>
+      scan
+        ? layout.runs.map((r) => canvasPolylineFt(r.points, scan.canvasPxPerFt))
+        : [],
+    [layout.runs, scan],
+  );
   const layoutInput = useMemo(
     () => ({
       type: typeId,
       heightFt,
       totalLf,
+      runLengths,
       corners,
       ends,
       gatesSingle,
@@ -147,7 +155,7 @@ export function FenceEstimator() {
       removalLf: jobType === "replacement" ? effRemoval : 0,
       stain,
     }),
-    [typeId, heightFt, totalLf, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType],
   );
 
   const takeoff = useMemo(
@@ -161,7 +169,9 @@ export function FenceEstimator() {
       tier,
       label: fenceType(tier.type).label,
       price: priceFence(
-        { ...layoutInput, type: tier.type, stain: tier.stain },
+        // The user's stain choice applies to every stainable tier; Best
+        // adds it regardless.
+        { ...layoutInput, type: tier.type, stain: tier.stain || stain },
         { markupPct: tier.markupPct },
       ),
     }));
@@ -200,6 +210,7 @@ export function FenceEstimator() {
       rakes: [],
       downspouts,
       aerial: scan.aerial,
+      canvasPxPerFt: scan.canvasPxPerFt,
       jobType,
       fence: {
         type: typeId,

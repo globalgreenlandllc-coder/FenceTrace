@@ -44,10 +44,26 @@ export async function POST(request: Request) {
     );
   }
 
+  // Platform-wide backstop even while stubbed — the per-IP pass above
+  // already spent a durable-limit read, and when the engine lands this
+  // cap is what protects the API budget.
+  const global = await consumeLimit({
+    policy: POLICIES.teaserGlobal,
+    key: "global",
+    context: { route: "/api/teaser" },
+  });
+  if (!global.ok) {
+    return NextResponse.json(
+      { ok: false, reason: global.reason, signup: true },
+      { status: 429, headers: { "Retry-After": String(global.retryAfterSec) } },
+    );
+  }
+
   // TODO(fence): run the fence measuring engine here and return the redacted
-  // trace. Until then: honest 503 so the landing page can show the teaser copy.
+  // trace. Until then: honest 503 — signup:true so the widget renders the
+  // create-account link the copy promises.
   return NextResponse.json(
-    { ok: false, reason: LAUNCHING_REASON },
+    { ok: false, reason: LAUNCHING_REASON, signup: true },
     { status: 503 },
   );
 }

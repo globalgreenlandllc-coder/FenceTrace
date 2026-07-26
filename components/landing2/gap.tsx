@@ -21,7 +21,7 @@ function TruckIllo() {
           {/* cargo box + cab */}
           <rect x="52" y="42" width="96" height="50" rx="5" fill="#ffffff" stroke="#0C1B24" strokeWidth="2.5" />
           <path d="M148 92 V56 h22 l16 18 v18 Z" fill="#ffffff" stroke="#0C1B24" strokeWidth="2.5" strokeLinejoin="round" />
-          <path d="M170 60 l11 13 h-11 Z" fill="#93C6DC" stroke="#0C1B24" strokeWidth="1.6" />
+          <path d="M170 60 l11 13 h-11 Z" fill="#E8A13B" stroke="#0C1B24" strokeWidth="1.6" />
           <text x="100" y="73" textAnchor="middle" fill="#0C1B24" fontSize="11" fontWeight="600" fontFamily="var(--font-inter), sans-serif" letterSpacing="0.5">
             SITE VISIT
           </text>
@@ -53,7 +53,7 @@ function GaugeIllo() {
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                stroke={i % 3 === 0 ? "#14688C" : "#E4E4E7"}
+                stroke={i % 3 === 0 ? "#1E7340" : "#E4E4E7"}
                 strokeWidth="2"
                 strokeLinecap="round"
               />
@@ -62,7 +62,7 @@ function GaugeIllo() {
         </svg>
         <div className="text-center">
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-            Without AI
+            Without FenceTrace
           </p>
           <p className="text-[30px] font-semibold leading-none tracking-tight text-zinc-900">0%</p>
           <p className="text-[9px] text-zinc-400">measured remotely</p>
@@ -93,7 +93,7 @@ const CARDS = [
   {
     illo: <TruckIllo />,
     title: "Built for truck rolls",
-    body: "Manual estimating assumes exploration: a drive, a wheel, and an afternoon per quote. AI-scanned properties need a different model — measure first, visit only to install.",
+    body: "Manual estimating assumes exploration: a drive, a wheel, and an afternoon per quote. Satellite-measured properties need a different model — measure first, visit only to install.",
   },
   {
     illo: <GaugeIllo />,

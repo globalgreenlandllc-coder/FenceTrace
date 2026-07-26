@@ -337,7 +337,7 @@ export default function LeadDetailsPanel({ lead, score, mapsApiKey, onClose, onU
             {relevance && (
               <span
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ring-1 ${relevance.classes}`}
-                title={`AI-scored relevance for fence business: ${relevance.label}`}
+                title={`Scored relevance for fence business: ${relevance.label}`}
               >
                 {Array.from({ length: relevance.flames }).map((_, i) => (
                   <Flame key={i} size={11} />
@@ -403,9 +403,9 @@ export default function LeadDetailsPanel({ lead, score, mapsApiKey, onClose, onU
             className="ring-focus-dark press-scale flex items-center justify-center gap-2 rounded-xl bg-accent-600 px-3 py-3 text-sm font-semibold text-white shadow-sm transition-smooth hover:bg-accent-700"
           >
             <Ruler size={16} />
-            Scan this property with AI
+            Run an instant fence takeoff
             <span className="text-[10px] font-normal opacity-80">
-              — instant fence takeoff
+              — free property scan
             </span>
           </motion.a>
 
@@ -575,7 +575,7 @@ export default function LeadDetailsPanel({ lead, score, mapsApiKey, onClose, onU
               className="bg-accent-500/10 border border-accent-500/30 p-3 rounded-xl"
             >
               <div className="flex items-center gap-1.5 font-label text-[10px] text-accent-300 mb-1">
-                <Sparkles size={11} /> AI Summary
+                <Sparkles size={11} /> Permit Summary
               </div>
               <p className="text-sm text-zinc-200 leading-relaxed">{lead.aiSummary}</p>
             </motion.div>

@@ -142,7 +142,7 @@ export function PricingPanel({
       if (!aiAddress) {
         setAi((s) => ({
           ...s,
-          error: "Add the property address first — the AI prices by location.",
+          error: "Add the property address first — market pricing is by location.",
         }));
         return;
       }
@@ -211,7 +211,7 @@ export function PricingPanel({
       <div className="border-b border-zinc-200/70 px-4 pb-4 pt-4">
         <h2 className="microlabel text-accent-600">Estimate builder</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          AI scope auto-applies. Override anything below.
+          Measured scope auto-applies. Override anything below.
         </p>
         <div className="mt-3 flex rounded-lg border border-zinc-200 bg-white p-0.5">
           {TABS.map((t) => {

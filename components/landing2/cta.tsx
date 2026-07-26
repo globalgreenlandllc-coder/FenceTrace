@@ -16,13 +16,13 @@ export function CTA() {
         <Sparkle className="anim-float absolute left-[8%] top-12 h-8 w-8 text-accent-500/60" />
         <Sparkle className="anim-float absolute bottom-14 right-[9%] h-10 w-10 text-accent-300/70 [animation-delay:0.8s]" />
         <Sparkle className="anim-float absolute bottom-24 left-[16%] h-4 w-4 text-accent-400/50 [animation-delay:1.6s]" />
-        {/* light rain over the CTA */}
+        {/* drifting survey ticks over the CTA */}
         <svg
           viewBox="0 0 600 120"
           className="pointer-events-none absolute inset-x-0 top-0 w-full opacity-60"
           preserveAspectRatio="none"
         >
-          <g stroke="#5AA6C6" strokeWidth="2" strokeLinecap="round">
+          <g stroke="#5CA974" strokeWidth="2" strokeLinecap="round">
             {[60, 150, 260, 340, 430, 540].map((x, i) => (
               <line
                 key={x}
@@ -39,7 +39,7 @@ export function CTA() {
         <Container className="text-center">
           <Reveal>
             <h2 className="mx-auto max-w-2xl text-[32px] font-semibold leading-[1.05] tracking-tight text-white md:text-[46px]">
-              Ready to activate your AI takeoffs?
+              Ready to activate your smart takeoffs?
             </h2>
             <p className="mx-auto mt-5 max-w-md text-[15px] leading-relaxed text-white/60">
               Join contractors winning measured, three-tier bids &mdash; then

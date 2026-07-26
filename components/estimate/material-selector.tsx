@@ -14,6 +14,7 @@ import {
   Waves,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import type {
   EstimateConfig,
   GutterAccessories,
@@ -87,6 +88,39 @@ export function MaterialSelector({
    *  view — the complete bill of materials the homeowner receives. */
   measurements?: Measurements;
 }) {
+  // Fence packages: the gutter configurator below would edit dead config
+  // fields — show the fence spec instead. Geometry facts (gates, corners,
+  // footage) live on the layout; type/height/extras were chosen in the
+  // estimator.
+  if (config.fence) {
+    const f = config.fence;
+    const ft = fenceType(f.type as FenceTypeId);
+    const facts: [string, string][] = [
+      ["Fence", `${f.heightFt}' ${ft.label}`],
+      ["Ground", f.terrain],
+      ["Gates", `${f.gatesSingle + f.gatesDouble}`],
+      ["Corners", `${f.corners}`],
+      ["Stain & seal", f.stain ? "Included" : "Not included"],
+      ["Old-fence removal", f.removalLf > 0 ? `${f.removalLf} LF` : "None"],
+    ];
+    return (
+      <div className="space-y-2">
+        <div className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 bg-white">
+          {facts.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between px-3.5 py-2.5 text-[13px]">
+              <span className="text-zinc-500">{k}</span>
+              <span className="font-medium capitalize text-zinc-900">{v}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-zinc-400">
+          Fence spec comes from the estimator layout — adjust gates and runs
+          on the canvas above and the bill of materials re-prices live.
+        </p>
+      </div>
+    );
+  }
+
   const accessories = config.accessories ?? DEFAULT_ACCESSORIES;
   const [view, setView] = useState<"interactive" | "system">("interactive");
   const showSystem = view === "system" && !!measurements;

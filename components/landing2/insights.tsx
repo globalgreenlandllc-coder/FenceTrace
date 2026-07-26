@@ -6,7 +6,7 @@ const POSTS = [
   {
     tag: "Takeoffs",
     date: "Feb 2, 2026",
-    title: "The First AI Takeoff Built for Fence Contractors",
+    title: "The First Smart Takeoff Built for Fence Contractors",
     visual: (
       <div className="relative flex h-[180px] items-center justify-center overflow-hidden rounded-xl bg-accent-900">
         <div className="absolute inset-0 [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:20px_20px]" />
@@ -41,24 +41,21 @@ const POSTS = [
     visual: (
       <div className="flex h-[180px] items-center justify-center rounded-xl bg-accent-950">
         <svg viewBox="0 0 160 90" className="w-[170px]">
-          <path
-            d="M14 62h132l-26-38H40z"
-            fill="none"
-            stroke="#ffffff"
-            strokeWidth="2"
-          />
-          <path d="M14 62l26-38M146 62l-26-38M52 62l28-38M108 62l-28-38" stroke="rgba(255,255,255,0.3)" strokeWidth="1.4" />
-          <path d="M14 62h132" stroke="#0E9CC3" strokeWidth="3" />
+          {/* corner lot: two street sides, fence on the other two */}
+          <path d="M22 14 H138 V76 H54 L22 48 Z" fill="none" stroke="#ffffff" strokeWidth="2" />
+          <rect x="66" y="26" width="40" height="26" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="1.4" />
+          <path d="M22 14 H138 V76" fill="none" stroke="#3FA65B" strokeWidth="3.5" strokeLinecap="round" />
+          <circle cx="96" cy="76" r="3.5" fill="#f472b6" stroke="#ffffff" strokeWidth="1.2" />
         </svg>
       </div>
     ),
   },
   {
-    tag: "AI Measurement",
+    tag: "Satellite Measurement",
     date: "Jan 3, 2026",
     title: "Understanding Property Lines From the Sky",
     visual: (
-      <div className="relative flex h-[180px] items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(90%_120%_at_50%_110%,#10475E,#082733_70%)]">
+      <div className="relative flex h-[180px] items-center justify-center overflow-hidden rounded-xl bg-[radial-gradient(90%_120%_at_50%_110%,#195F36,#0A2B19_70%)]">
         <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(#E8A13B_1px,transparent_1.4px)] [background-size:22px_18px]" />
         <div className="relative h-16 w-24 rounded-md border-2 border-accent-300/80" />
       </div>
@@ -80,7 +77,7 @@ export function Insights() {
                 takeoff frontier
               </>
             }
-            copy="Research, field studies, and market intelligence on AI measurement, remote estimating, and the economics of winning exterior work faster."
+            copy="Research, field studies, and market intelligence on satellite measurement, remote estimating, and the economics of winning exterior work faster."
             action={<PillLink href="/sign-in" variant="outline">Explore Our Blog</PillLink>}
           />
         </Reveal>

@@ -78,7 +78,7 @@ function Inner() {
             No proposals yet
           </h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500">
-            Run an AI takeoff for any address. Your drafts, sent proposals,
+            Run an instant takeoff for any address. Your drafts, sent proposals,
             and accepted jobs will show up here with status filters and
             search.
           </p>

@@ -39,7 +39,7 @@ import type { EstimateResult } from "@/lib/ai";
 const MIN_LOADING_MS = 2400;
 const WATCHDOG_MESSAGE =
   "The estimate is taking longer than usual to come back. An upstream service " +
-  "(Solar API, satellite imagery, or AI vision) may be slow right now. Try again.";
+  "(satellite imagery or property data) may be slow right now. Try again.";
 
 export type TakeoffJobParams = {
   planId?: string | null;

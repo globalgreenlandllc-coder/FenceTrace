@@ -72,7 +72,7 @@ export function Stats() {
               <p className="text-[15px] leading-snug text-white">
                 Trusted by contractors
                 <br />
-                estimating with AI
+                estimating from the sky
                 <br />
                 at scale
               </p>

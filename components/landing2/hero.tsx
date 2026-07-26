@@ -128,7 +128,7 @@ export function Hero() {
     <section className="pb-10 pt-14 md:pt-20">
       <Container>
         <Reveal>
-          <Eyebrow>AI Takeoff Intelligence</Eyebrow>
+          <Eyebrow>Smart Takeoff Engine</Eyebrow>
           <div className="mt-6 grid gap-10 md:grid-cols-[1.4fr_0.6fr] md:items-start md:gap-12">
             <h1 className="text-[clamp(2.6rem,6vw,4.6rem)] font-semibold leading-[1.02] tracking-[-0.03em] text-zinc-900">
               Where property lines
@@ -137,8 +137,9 @@ export function Hero() {
             </h1>
             <div className="max-w-sm md:justify-self-end md:pt-3">
               <p className="text-[15px] leading-relaxed text-zinc-600">
-                Type an address — AI pulls the satellite view and property
-                lines, you draw the fence, and a priced proposal is ready in
+                Type an address — FenceTrace pulls the satellite view and
+                county property lines, you draw the fence, and a priced
+                proposal is ready in
                 60 seconds, sent with e-sign and payments. No wheel, no tape
                 measure.
               </p>

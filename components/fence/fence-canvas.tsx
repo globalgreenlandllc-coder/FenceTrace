@@ -34,6 +34,21 @@ const SNAP_PX = 12;
 let idSeq = 0;
 const nextId = (p: string) => `${p}-${Date.now().toString(36)}-${idSeq++}`;
 
+/** Distance from a point to the nearest spot on a run's segments. */
+function distToRun(p: Pt, run: FenceRun): number {
+  let best = Infinity;
+  for (let i = 1; i < run.points.length; i++) {
+    const a = run.points[i - 1];
+    const b = run.points[i];
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const len2 = abx * abx + aby * aby || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2));
+    best = Math.min(best, Math.hypot(a.x + t * abx - p.x, a.y + t * aby - p.y));
+  }
+  return best;
+}
+
 export function FenceCanvas({
   scan,
   layout,
@@ -98,35 +113,51 @@ export function FenceCanvas({
 
   const finishDraft = useCallback(() => {
     setDraft((d) => {
-      if (d.length >= 2) {
+      // Double-click fires click twice before dblclick — collapse any
+      // consecutive duplicate vertices so they can't inflate the corner
+      // count or leave zero-length segments.
+      const pts = d.filter(
+        (p, i) => i === 0 || Math.hypot(p.x - d[i - 1].x, p.y - d[i - 1].y) > 1,
+      );
+      if (pts.length >= 2) {
         onChange({
           ...layout,
-          runs: [...layout.runs, { id: nextId("run"), points: d }],
+          runs: [...layout.runs, { id: nextId("run"), points: pts }],
         });
       }
       return [];
     });
   }, [layout, onChange]);
 
+  // Deleting a run takes its gates with it — an orphan gate would keep
+  // billing a gate AND keep shrinking the net fence footage.
+  const removeRun = useCallback(
+    (runId: string) => {
+      const run = layout.runs.find((r) => r.id === runId);
+      onChange({
+        runs: layout.runs.filter((r) => r.id !== runId),
+        gates: run
+          ? layout.gates.filter((g) => distToRun(g, run) > 14)
+          : layout.gates,
+      });
+      setSelectedRun(null);
+    },
+    [layout, onChange],
+  );
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "Escape") setDraft([]);
       if (e.key === "Enter" && draft.length >= 2) finishDraft();
-      if (
-        (e.key === "Delete" || e.key === "Backspace") &&
-        selectedRun &&
-        (e.target as HTMLElement)?.tagName !== "INPUT"
-      ) {
-        onChange({
-          runs: layout.runs.filter((r) => r.id !== selectedRun),
-          gates: layout.gates,
-        });
-        setSelectedRun(null);
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedRun) {
+        removeRun(selectedRun);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [draft.length, finishDraft, selectedRun, layout, onChange]);
+  }, [draft.length, finishDraft, selectedRun, removeRun]);
 
   /* ---- gate tool: nearest point on any run segment ---- */
 
@@ -155,6 +186,7 @@ export function FenceCanvas({
   function onCanvasClick(e: React.MouseEvent) {
     const raw = toCanvas(e);
     if (tool === "draw") {
+      if (e.detail > 1) return; // second click of a dbl-click — finish handles it
       const p = snap(raw);
       setDraft((d) => [...d, p]);
       return;
@@ -253,13 +285,7 @@ export function FenceCanvas({
         {selectedRun && (
           <button
             type="button"
-            onClick={() => {
-              onChange({
-                runs: layout.runs.filter((r) => r.id !== selectedRun),
-                gates: layout.gates,
-              });
-              setSelectedRun(null);
-            }}
+            onClick={() => removeRun(selectedRun)}
             className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
           >
             <Trash2 className="h-3.5 w-3.5" />

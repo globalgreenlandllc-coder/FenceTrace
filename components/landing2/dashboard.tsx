@@ -5,14 +5,14 @@ import { CountUp } from "./stats";
 
 /* Data-viz palette per the design spec: series-1..4 on an accent-950 panel. */
 const TABS = [
-  { label: "Aerial", dot: "#1479B8", active: true },
-  { label: "Plan", dot: "#0E9CC3", active: false },
+  { label: "Aerial", dot: "#1E7340", active: true },
+  { label: "Plan", dot: "#3FA65B", active: false },
   { label: "Manual", dot: "#E8A13B", active: false },
 ];
 
 const KPIS = [
-  { label: "Takeoffs (30d)", value: "540", delta: "+18%", dot: "#1479B8" },
-  { label: "Fence feet measured", value: "109k", delta: "+24%", dot: "#0E9CC3" },
+  { label: "Takeoffs (30d)", value: "540", delta: "+18%", dot: "#1E7340" },
+  { label: "Fence feet measured", value: "109k", delta: "+24%", dot: "#3FA65B" },
   { label: "Avg turnaround", value: "4 min", delta: "-92%", dot: "#E8A13B" },
   { label: "Revenue quoted (30d)", value: "$96,330", delta: "+31%", dot: "#7C5CBF" },
 ];

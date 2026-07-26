@@ -107,8 +107,9 @@ export default function SignInPage() {
               <span className="text-white">in under a minute.</span>
             </h2>
             <p className="mt-4 max-w-md text-white/60">
-              AI measures the property line, packages a proposal, and collects
-              the deposit — all from your truck.
+              FenceTrace measures the property line from satellite imagery and
+              county records, packages a proposal, and collects the deposit —
+              all from your truck.
             </p>
           </div>
 

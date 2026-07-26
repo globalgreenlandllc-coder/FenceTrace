@@ -141,7 +141,7 @@ function Inner() {
           />
           <StatTile
             index={3}
-            label="AI takeoffs · 30d"
+            label="Smart takeoffs · 30d"
             value={String(overview?.takeoffs30d ?? 0)}
             footnote="satellite + blueprint"
             loading={loading}
@@ -197,7 +197,7 @@ function EmptyProposals() {
         No proposals yet
       </h3>
       <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500">
-        Run an AI takeoff for any address — your draft, the proposal you send,
+        Run an instant takeoff for any address — your draft, the proposal you send,
         and the homeowner&apos;s response will all land here.
       </p>
       <Link href="/dashboard/proposals/new" className="mt-5 inline-block">

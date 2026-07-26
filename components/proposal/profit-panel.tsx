@@ -118,7 +118,7 @@ export function ProfitPanel({
                   : "bg-accent-50 text-accent-700",
               )}
             >
-              {usingManual ? "your number" : "AI estimate"}
+              {usingManual ? "your number" : "takeoff estimate"}
             </span>
           </span>
           {editing ? (
@@ -153,7 +153,7 @@ export function ProfitPanel({
                   onClick={() =>
                     onChange({ ...proposal, jobCostManual: null })
                   }
-                  title="Back to the AI estimate"
+                  title="Back to the takeoff estimate"
                   className="ring-focus rounded-md p-0.5 text-zinc-400 transition-smooth hover:bg-accent-50 hover:text-accent-700"
                 >
                   <Undo2 className="h-3 w-3" />

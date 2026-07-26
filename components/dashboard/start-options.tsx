@@ -346,13 +346,14 @@ function SatelliteTakeoffCard() {
               FREE
             </span>
             <span className="bg-cta-gradient rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide text-white">
-              AI
+              INSTANT
             </span>
           </span>
         </div>
         <p className="mt-3.5 text-sm leading-relaxed text-zinc-500">
-          Type an address — AI pulls satellite imagery and property lines,
-          you confirm the fence. Free on every plan, no credits used.
+          Type an address — FenceTrace pulls satellite imagery and county
+          property lines, you confirm the fence. Free on every plan, no
+          credits used.
         </p>
 
         {fromTeaser && (
@@ -526,7 +527,7 @@ function SatelliteTakeoffCard() {
             className="bg-cta-gradient ring-focus press-scale ![transition:transform_150ms_ease,box-shadow_200ms_ease,opacity_150ms_ease] motion-reduce:![transition:none] group mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm hover:shadow-glow disabled:cursor-not-allowed disabled:bg-none disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none"
           >
             <Sparkles className="h-4 w-4" />
-            {submitting ? "Starting…" : "Run AI takeoff"}
+            {submitting ? "Starting…" : "Run smart takeoff"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </button>
         </form>

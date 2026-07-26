@@ -1,39 +1,31 @@
 /**
- * Fence pricing — dollars from a layout. Pure math over the catalog +
- * takeoff, unit-tested. All amounts in DOLLARS here (the proposal layer
- * converts to cents at its boundary, matching the platform convention).
+ * Fence pricing — dollars from a layout. THIN WRAPPER over the same
+ * pipeline the proposal uses (lib/pricing buildLineItems + the fence
+ * branch of lib/proposal-mock packageTotal math), so the estimator rail
+ * and the saved proposal can never disagree. Parity is asserted by
+ * lib/fence/takeoff.test.mts.
  *
- * total = (materials + labor + gates + removal + stain) × (1 + markup%)
- *         − discount% → + tax%
+ * total = lines(materials+labor+gates+removal+stain) × (1 + markup%)
+ *         − discount% → + FENCE_TAX_RATE on the TAXABLE share only
+ *           (materials/gates/stain; labor and tear-out untaxed).
  */
 import {
   fenceType,
-  heightFactor,
-  TERRAIN_FACTOR,
   type FenceTypeId,
-  type Terrain,
 } from "./catalog";
 import { computeFenceTakeoff, type FenceLayoutInput } from "./takeoff";
+import { buildLineItems } from "@/lib/pricing";
+import { FENCE_TAX_RATE } from "@/lib/proposal-mock";
+import type { EstimateConfig, Measurements } from "@/lib/types";
 
 export type FencePriceConfig = {
-  /** Contractor's labor rate multiplier (1 = catalog default). */
-  laborRate?: number;
-  /** Old-fence removal $/LF. */
-  removalPerLf?: number;
-  /** Stain/seal $/sq ft (both faces already accounted). */
-  stainPerSqFt?: number;
   markupPct?: number; // applied on cost subtotal
   discountPct?: number; // applied after markup
-  taxPct?: number; // applied last
 };
 
 export const DEFAULT_PRICE_CONFIG: Required<FencePriceConfig> = {
-  laborRate: 1,
-  removalPerLf: 4,
-  stainPerSqFt: 1.1,
   markupPct: 35,
   discountPct: 0,
-  taxPct: 8.25,
 };
 
 export type FencePriceLine = {
@@ -52,72 +44,83 @@ export type FencePriceBreakdown = {
   pricePerLf: number; // total ÷ net fence LF (headline number)
 };
 
+/** The Measurements + EstimateConfig a layout maps to — exported so the
+ *  estimator hands the proposal EXACTLY what it priced. */
+export function layoutToPricingInputs(layout: FenceLayoutInput): {
+  measurements: Measurements;
+  config: EstimateConfig;
+  netFenceLf: number;
+} {
+  const take = computeFenceTakeoff(layout);
+  const measurements: Measurements = {
+    eaveLF: take.netFenceLf,
+    rakeLF: 0,
+    outsideCorners: Math.max(0, layout.corners),
+    insideCorners: 0,
+    endCaps: Math.max(0, layout.ends),
+    downspoutCount: Math.max(0, layout.gatesSingle + layout.gatesDouble),
+    stories: 1,
+    wasteFactorPct: Math.min(30, Math.max(0, layout.wastePct ?? 10)),
+  };
+  const config: EstimateConfig = {
+    // Legacy gutter fields are dead weight for fence packages but the
+    // type requires them; the fence block below is what prices.
+    size: "5",
+    style: "k-style",
+    material: "aluminum",
+    color: "white",
+    downspoutSize: "2x3",
+    fence: {
+      type: layout.type,
+      heightFt: layout.heightFt,
+      terrain: layout.terrain,
+      stain: !!layout.stain,
+      removalLf: Math.max(0, layout.removalLf ?? 0),
+      gatesSingle: Math.max(0, layout.gatesSingle),
+      gatesDouble: Math.max(0, layout.gatesDouble),
+      corners: Math.max(0, layout.corners),
+      ends: Math.max(0, layout.ends),
+    },
+  };
+  return { measurements, config, netFenceLf: take.netFenceLf };
+}
+
 export function priceFence(
   layout: FenceLayoutInput,
-  config: FencePriceConfig = {},
+  priceConfig: FencePriceConfig = {},
 ): FencePriceBreakdown {
-  const c = { ...DEFAULT_PRICE_CONFIG, ...config };
-  const t = fenceType(layout.type);
-  const take = computeFenceTakeoff(layout);
-  const hf = heightFactor(t, layout.heightFt);
-  const lf = take.netFenceLf;
+  const c = { ...DEFAULT_PRICE_CONFIG, ...priceConfig };
+  const { measurements, config, netFenceLf } = layoutToPricingInputs(layout);
+  const items = buildLineItems(measurements, config);
 
-  const lines: FencePriceLine[] = [];
-  const add = (key: string, label: string, amount: number) => {
-    if (amount > 0) lines.push({ key, label, amount: round2(amount) });
-  };
-
-  const waste = 1 + Math.min(30, Math.max(0, layout.wastePct ?? 10)) / 100;
-  add(
-    "materials",
-    `${t.label} materials — ${lf} LF at ${layout.heightFt}'`,
-    lf * t.materialPerLf * hf * waste,
+  const subtotal = round2(
+    items.reduce((acc, i) => acc + i.quantity * i.unitPrice, 0),
   );
-  add(
-    "labor",
-    `Installation labor (${layout.terrain} ground)`,
-    lf * t.laborPerLf * hf * TERRAIN_FACTOR[layout.terrain] * c.laborRate,
+  const taxableBase = items.reduce(
+    (acc, i) => acc + (i.taxable ? i.quantity * i.unitPrice : 0),
+    0,
   );
-  add(
-    "gates-single",
-    `Walk gates (4') × ${layout.gatesSingle}`,
-    layout.gatesSingle * t.gateSingle,
-  );
-  add(
-    "gates-double",
-    `Drive gates (10') × ${layout.gatesDouble}`,
-    layout.gatesDouble * t.gateSingle * 2.4,
-  );
-  if ((layout.removalLf ?? 0) > 0)
-    add(
-      "removal",
-      `Tear out & haul away ${layout.removalLf} LF of old fence`,
-      layout.removalLf! * c.removalPerLf,
-    );
-  if (layout.stain && t.stainable)
-    add(
-      "stain",
-      "Stain & seal (both faces)",
-      lf * layout.heightFt * 2 * c.stainPerSqFt,
-    );
-
-  const subtotal = round2(lines.reduce((a, l) => a + l.amount, 0));
   const markup = round2(subtotal * (Math.max(0, c.markupPct) / 100));
   const afterMarkup = subtotal + markup;
   const discount = round2(
     afterMarkup * (Math.min(50, Math.max(0, c.discountPct)) / 100),
   );
-  const tax = round2((afterMarkup - discount) * (Math.max(0, c.taxPct) / 100));
+  const share = subtotal > 0 ? taxableBase / subtotal : 0;
+  const tax = round2((afterMarkup - discount) * share * FENCE_TAX_RATE);
   const total = round2(afterMarkup - discount + tax);
 
   return {
-    lines,
+    lines: items.map((i) => ({
+      key: i.id,
+      label: i.name,
+      amount: round2(i.quantity * i.unitPrice),
+    })),
     subtotal,
     markup,
     discount,
     tax,
     total,
-    pricePerLf: lf > 0 ? round2(total / lf) : 0,
+    pricePerLf: netFenceLf > 0 ? round2(total / netFenceLf) : 0,
   };
 }
 

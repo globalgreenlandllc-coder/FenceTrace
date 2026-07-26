@@ -1,10 +1,10 @@
 # FenceTrace
 
 FenceTrace is the platform fence contractors run their business on. Type an
-address and the AI pulls the satellite view and property lines; you confirm the
-fence, and a measured, priced, three-tier proposal is ready to send in about a
-minute — with e-sign, scheduling, crew assignments, and payment tracking built
-in.
+address and FenceTrace pulls the satellite view and county property lines; you
+confirm the fence, and a measured, priced, three-tier proposal is ready to send
+in about a minute — with e-sign, scheduling, crew assignments, and payment
+tracking built in.
 
 ## Development
 

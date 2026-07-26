@@ -42,14 +42,12 @@ type Step = "measure" | "review";
 const MICROLABEL =
   "font-mono text-[10px] font-bold uppercase tracking-[0.14em]";
 
-/** One downspout drop per ~35 ft of total run (industry 30–40 ft rule);
- *  in run-by-run mode long runs over 40 ft earn a second drop each. */
+/** Gates aren't a per-footage rule like gutter drops were — nearly every
+ *  yard wants exactly one walk gate until told otherwise. */
 function suggestDownspouts(mode: EntryMode, runs: number[], eaveLF: number) {
-  if (eaveLF <= 0) return 0;
-  if (mode === "runs" && runs.length > 0) {
-    return runs.reduce((acc, r) => acc + Math.max(1, Math.ceil(r / 40)), 0);
-  }
-  return Math.max(1, Math.ceil(eaveLF / 35));
+  void mode;
+  void runs;
+  return eaveLF > 0 ? 1 : 0;
 }
 
 /** Every run has 2 open ends; each mitered corner joins 2 run ends, so
@@ -195,6 +193,28 @@ export function ManualMeasureForm() {
   // persists it verbatim and SendModal/sendProposal consume it directly.
   // `jobType` rides along as the same ad-hoc data key the estimate flow
   // stores.
+  // The measured facts must land INSIDE each fence package config — that
+  // is what buildFenceLineItems prices. Without this overlay every manual
+  // proposal would bill the sample config's 1 gate / 2 corners forever.
+  const pkgsWithFence = pkgs.map((p) =>
+    p.config.fence
+      ? {
+          ...p,
+          config: {
+            ...p.config,
+            fence: {
+              ...p.config.fence,
+              gatesSingle: downspoutCount,
+              gatesDouble: 0,
+              corners: outsideCorners + insideCorners,
+              ends: endCaps,
+              removalLf: jobType === "replacement" ? eaveLF : 0,
+            },
+          },
+        }
+      : p,
+  );
+
   const proposal: Proposal & { jobType: JobType } = {
     ...base,
     address: address.trim(),
@@ -209,14 +229,14 @@ export function ManualMeasureForm() {
       squarePaymentUrl: profile.payments.squareUrl ?? null,
     },
     measurements,
-    packages: pkgs,
+    packages: pkgsWithFence,
     source: "manual",
     jobType,
   };
 
   const tiers = useMemo(() => {
     if (eaveLF <= 0) return [];
-    return pkgs.map((p) => ({
+    return pkgsWithFence.map((p) => ({
       id: p.id,
       name: p.name,
       recommended: !!p.recommended,
@@ -226,6 +246,7 @@ export function ManualMeasureForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     pkgs,
+    jobType,
     eaveLF,
     downspoutCount,
     outsideCorners,

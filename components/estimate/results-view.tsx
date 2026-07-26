@@ -577,7 +577,7 @@ function SourceBadge({ source }: { source: EstimateResult["source"] }) {
     return (
       <Badge tone="accent">
         <Sparkles className="h-3 w-3" />
-        AI takeoff
+        Smart takeoff
       </Badge>
     );
   }
@@ -585,7 +585,7 @@ function SourceBadge({ source }: { source: EstimateResult["source"] }) {
     return (
       <Badge tone="amber">
         <Sparkles className="h-3 w-3" />
-        Partial AI · geometry pending
+        Partial read · geometry pending
       </Badge>
     );
   }
@@ -667,7 +667,7 @@ function BadTraceBanner({
                 onClick={onKeepAndEdit}
                 className="ring-focus inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 text-[13px] font-medium text-zinc-700 transition-smooth hover:bg-zinc-50 hover:border-zinc-300 active:scale-[0.98]"
               >
-                Keep AI lines & edit
+                Keep measured lines & edit
               </button>
             )}
           </div>

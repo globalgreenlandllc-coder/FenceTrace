@@ -50,7 +50,8 @@ const DROP_LEN_FT = 20;
 
 // Priced against a mid-range spec so the estimate reads like a real quote.
 const GUTTER_UNIT = GUTTER_UNIT_PRICES["6-k-style-aluminum"]; // $12 / LF
-const DOWNSPOUT_UNIT = DOWNSPOUT_UNIT_PRICES["3x4"]; // $9 / LF
+const DOWNSPOUT_UNIT = DOWNSPOUT_UNIT_PRICES["3x4"];
+const GATE_UNIT = 385; // installed walk gate, demo rate // $9 / LF
 
 const CANVAS_W = 900;
 const CANVAS_H = 580;
@@ -360,9 +361,9 @@ export default function Page() {
   );
   const downspoutCount = downspouts.length;
   const estimate = useMemo(() => {
-    const gutterCost = gutterLF * GUTTER_UNIT;
-    const downspoutCost = downspoutCount * DROP_LEN_FT * DOWNSPOUT_UNIT;
-    return gutterCost + downspoutCost;
+    const fenceCost = gutterLF * GUTTER_UNIT;
+    const gateCost = downspoutCount * GATE_UNIT;
+    return fenceCost + gateCost;
   }, [gutterLF, downspoutCount]);
 
   // ── Handlers ──

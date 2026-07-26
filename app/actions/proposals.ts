@@ -288,6 +288,10 @@ export async function saveDraftFromEstimate(args: {
    *  the saved (possibly contractor-edited) takeoff back to the AI output
    *  that produced it — the ground-truth pair the learning loop trains on. */
   planId?: string;
+  /** Canvas px-per-foot of the takeoff geometry — REQUIRED for correct
+   *  re-measuring when the proposal canvas edits fence runs (missing =
+   *  legacy plan scale fallback, which mis-prices satellite scans). */
+  canvasPxPerFt?: number;
   /** FenceTrace: the drawn fence layout — when present the draft's
    *  Good/Better/Best packages are rebuilt around it (type ladder,
    *  gates/corners/terrain/removal baked into every tier's config). */
@@ -308,6 +312,7 @@ export async function saveDraftFromEstimate(args: {
 
 async function saveDraftFromEstimateImpl(args: {
   fence?: FenceDraftInput;
+  canvasPxPerFt?: number;
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -379,6 +384,7 @@ async function saveDraftFromEstimateImpl(args: {
       rakes: args.rakes,
       downspouts: args.downspouts,
       aerial: args.aerial,
+      canvasPxPerFt: args.canvasPxPerFt,
     },
     contractor: {
       name: me.profile.contractorName || me.user.name,

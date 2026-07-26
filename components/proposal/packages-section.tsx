@@ -150,7 +150,7 @@ export function PackagesSection({
                 {!readOnly && p.pricingMode === "ai" && (
                   <span className="inline-flex items-center gap-1 rounded-md border border-accent-200 bg-accent-50 px-1.5 py-0.5 text-[10px] font-medium text-accent-700">
                     <Sparkles className="h-2.5 w-2.5" />
-                    AI price
+                    Market price
                   </span>
                 )}
               </div>

@@ -62,7 +62,7 @@ export function TopBar({
     if (!planId || reanalyzing) return;
     if (
       !confirm(
-        "Re-analyze this plan against the latest AI prompts? Takes ~60-90s. " +
+        "Re-analyze this plan with the latest measuring engine? Takes ~60-90s. " +
           "Your current edits will be replaced with a fresh trace.",
       )
     ) {
@@ -227,7 +227,7 @@ export function TopBar({
               size="sm"
               onClick={onReanalyze}
               disabled={reanalyzing}
-              title="Re-run the two-stage AI pipeline against the latest prompts"
+              title="Re-run the measuring pipeline with the latest engine"
             >
               {reanalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

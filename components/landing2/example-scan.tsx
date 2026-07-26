@@ -36,7 +36,8 @@ export function ExampleScanPanel({
           <BadgeCheck className="h-4 w-4 shrink-0 text-emerald-600" />
           <span className="truncate">
             <span className="font-semibold text-zinc-900">{ex.address}</span>
-            {" — "}scanned by the AI, fence lines verified by a contractor.
+            {" — "}measured from satellite imagery, fence lines verified by a
+            contractor.
           </span>
         </p>
         {ex.aerialUrl && (

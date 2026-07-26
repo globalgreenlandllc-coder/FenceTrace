@@ -17,7 +17,7 @@ import { Reveal } from "./reveal";
 const FEATURES = [
   {
     icon: Satellite,
-    title: "AI takeoffs",
+    title: "Smart takeoffs",
     body: "Satellite measurements in minutes — fence runs, corners, and gates, priced from your own rate card.",
   },
   {

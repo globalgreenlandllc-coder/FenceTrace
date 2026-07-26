@@ -1,6 +1,6 @@
 /**
- * Thin full-width "gutter flow" divider between the hero and the stats band:
- * a dashed water line running left to right with a few droplets falling off.
+ * Thin full-width "property line" divider between the hero and the stats band:
+ * a dashed survey line running left to right with a few marker points.
  * Pure CSS animation (anim-flow from globals.css, ls-drip from landing.css);
  * both are disabled under prefers-reduced-motion.
  */
@@ -20,7 +20,7 @@ export function FlowDivider() {
         <path
           d="M0 12 H1200"
           fill="none"
-          stroke="rgba(46,134,173,0.4)"
+          stroke="rgba(52,141,81,0.45)"
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeDasharray="10 14"
@@ -32,7 +32,7 @@ export function FlowDivider() {
             cx={p.x}
             cy={18}
             r="3"
-            fill="rgba(46,134,173,0.4)"
+            fill="rgba(52,141,81,0.45)"
             className="ls-drip"
             style={{ animationDelay: p.d }}
           />

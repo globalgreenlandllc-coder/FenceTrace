@@ -12,7 +12,7 @@ const TONE_BG: Record<LogoTone, string> = {
 };
 
 const TONE_GLOW: Record<LogoTone, string> = {
-  emerald: "shadow-[0_8px_24px_-8px_rgba(20,104,140,0.45)]",
+  emerald: "shadow-[0_8px_24px_-8px_rgba(30,115,64,0.45)]",
   sky: "shadow-[0_8px_24px_-8px_rgba(2,132,199,0.45)]",
   indigo: "shadow-[0_8px_24px_-8px_rgba(67,56,202,0.45)]",
   rose: "shadow-[0_8px_24px_-8px_rgba(225,29,72,0.45)]",

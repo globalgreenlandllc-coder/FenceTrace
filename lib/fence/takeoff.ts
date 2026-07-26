@@ -19,6 +19,9 @@ export type FenceLayoutInput = {
   heightFt: number;
   /** Total drawn fence length, feet (gate openings included). */
   totalLf: number;
+  /** Per-run lengths (feet). When present, sections/posts are computed
+   *  per run — a 3-run layout needs more posts than one long run. */
+  runLengths?: number[];
   /** Corner count (run direction changes) and open ends. */
   corners: number;
   ends: number;
@@ -73,13 +76,28 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     input.gatesDouble * GATE_DOUBLE_OPENING_FT;
   const netFenceLf = Math.max(0, input.totalLf - gateOpenings);
 
-  const sections = Math.ceil(netFenceLf / t.postSpacingFt);
-  // Posts: one per section boundary (sections+1 on a single straight run),
-  // corners already sit on boundaries but need the heavier set (counted as
-  // upgrades, not extra posts), ends terminate runs, gates add a pair each.
+  // Sections are counted PER RUN when the layout provides run lengths —
+  // three 40' runs need ceil(40/8)=5 sections each (15 total), not
+  // ceil(120/8)=15 by luck; 3×34' runs need 15, not 13. Gate openings are
+  // subtracted proportionally.
+  const runLfs =
+    input.runLengths && input.runLengths.length > 0
+      ? input.runLengths.filter((r) => r > 0)
+      : [input.totalLf];
+  const runTotal = runLfs.reduce((a, b) => a + b, 0) || 1;
+  const netRatio = netFenceLf / runTotal;
+  const sections = runLfs.reduce(
+    (acc, r) => acc + Math.ceil((r * netRatio) / t.postSpacingFt),
+    0,
+  );
+  // Posts: one per section boundary (sections+1 per open run), corners
+  // already sit on boundaries but need the heavier set (counted as
+  // upgrades, not extra posts), ends terminate runs, gates add a pair
+  // each. A closed loop (ends=0) has no end posts — its boundary posts
+  // are all line/corner posts.
   const linePosts = Math.max(0, sections - 1 - input.corners);
-  const cornerPosts = input.corners;
-  const endPosts = Math.max(2, input.ends); // a run has two ends minimum
+  const cornerPosts = Math.max(0, input.corners);
+  const endPosts = Math.max(0, input.ends);
   const gatePosts = (input.gatesSingle + input.gatesDouble) * 2;
   const totalPosts = linePosts + cornerPosts + endPosts + gatePosts;
 
@@ -107,7 +125,9 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     const pitch = Math.max(1.5, w + gap); // board-on-board overlap floors at 1.5"
     let pickets = (netFenceLf * 12) / pitch;
     if (input.type === "shadowbox") pickets *= 2; // both faces
-    add("picket", "Pickets", pickets * waste * hf, "ea");
+    // NOTE: picket COUNT doesn't grow with height — taller fences use
+    // longer pickets (priced via heightFactor on the $/LF side), not more.
+    add("picket", "Pickets", pickets * waste, "ea");
     add(
       "fasteners",
       "Fasteners (5 lb boxes)",
@@ -121,7 +141,14 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     add("mesh", "Chain-link fabric", netFenceLf * waste, "lf");
     add("top-rail", "Top rail", netFenceLf * waste, "lf");
     add("tension-bar", "Tension bars", input.ends + input.corners + gatePosts, "ea");
-    add("tension-band", "Tension bands", totalPosts * (input.heightFt / 1.2), "ea");
+    // Bands only wrap TERMINAL posts (ends/corners/gate posts) — line
+    // posts carry the fabric on the top rail and ties.
+    add(
+      "tension-band",
+      "Tension bands",
+      (input.ends + input.corners + gatePosts) * (input.heightFt / 1.2),
+      "ea",
+    );
     add("tie-wire", "Aluminum ties (100 ct bags)", netFenceLf / 60, "box");
   } else if (t.build === "rail") {
     const rails = sections * t.railsPerSection(input.heightFt);

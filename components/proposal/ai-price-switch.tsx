@@ -101,7 +101,7 @@ export function useAiPricing({
     if (busy) return;
     setError(null);
     if (!address.trim()) {
-      setError("Add the property address first — the AI prices by location.");
+      setError("Add the property address first — market pricing is by location.");
       return;
     }
     setBusy(true);
@@ -232,7 +232,7 @@ export function AiPriceSwitch({
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          AI market price
+          Market price
         </button>
       </div>
       {ai.error && <p className="mt-1.5 text-xs text-rose-600">{ai.error}</p>}

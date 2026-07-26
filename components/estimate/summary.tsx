@@ -112,7 +112,7 @@ export function Summary({
               ) : (
                 <Sparkles className="h-3.5 w-3.5" />
               )}
-              AI market price
+              Market price
             </button>
           </div>
           {ai.error && <p className="mt-1.5 text-xs text-rose-600">{ai.error}</p>}

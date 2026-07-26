@@ -21,7 +21,7 @@ function SpecTable() {
   );
 }
 
-/** Dark card: stylized shop-drawing cross-section (decorative). */
+/** Dark card: stylized fence-section shop drawing (decorative). */
 function ProfileCard() {
   return (
     <div className="relative flex flex-col justify-between overflow-hidden rounded-3xl bg-accent-950 p-7">
@@ -35,75 +35,86 @@ function ProfileCard() {
       </div>
 
       <svg viewBox="0 0 400 300" className="my-4 w-full">
-        {/* width dimension */}
-        <text x="196" y="46" textAnchor="middle" fill="#93C6DC" fontSize="11" fontFamily="var(--font-mono), monospace" fontWeight="700">
-          5 IN
+        {/* post-spacing dimension */}
+        <text x="196" y="46" textAnchor="middle" fill="#94C7A3" fontSize="11" fontFamily="var(--font-mono), monospace" fontWeight="700">
+          8 FT
         </text>
-        <path d="M130 58 H172 M220 58 H262" stroke="#93C6DC" strokeWidth="1.5" />
-        <path d="M130 52v12M262 52v12" stroke="#93C6DC" strokeWidth="1.5" />
-        <text x="196" y="62" textAnchor="middle" fill="#93C6DC" fontSize="9" fontFamily="var(--font-mono), monospace">
-          &#8596;
-        </text>
+        <path d="M137 58 H176 M216 58 H255" stroke="#94C7A3" strokeWidth="1.5" />
+        <path d="M137 52v12M255 52v12" stroke="#94C7A3" strokeWidth="1.5" />
 
         {/* height dimension */}
-        <path d="M100 80 V225" stroke="#93C6DC" strokeWidth="1.5" />
-        <path d="M94 80h12M94 225h12" stroke="#93C6DC" strokeWidth="1.5" />
+        <path d="M100 80 V245" stroke="#94C7A3" strokeWidth="1.5" />
+        <path d="M94 80h12M94 245h12" stroke="#94C7A3" strokeWidth="1.5" />
         <text
           x="88"
-          y="156"
-          fill="#93C6DC"
+          y="162"
+          fill="#94C7A3"
           fontSize="11"
           fontFamily="var(--font-mono), monospace"
           fontWeight="700"
-          transform="rotate(-90 88 156)"
+          transform="rotate(-90 88 162)"
           textAnchor="middle"
         >
-          4 IN
+          6 FT
         </text>
 
-        {/* K-style profile: back wall, bottom, ogee face, curled lip */}
+        {/* pickets between the posts */}
+        {Array.from({ length: 10 }, (_, i) => 152 + i * 10).map((x) => (
+          <line key={x} x1={x} y1={88} x2={x} y2={242} stroke="rgba(255,255,255,0.3)" strokeWidth="4" />
+        ))}
+
+        {/* 4×4 posts */}
+        <rect x="130" y="76" width="14" height="174" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+        <rect x="248" y="76" width="14" height="174" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+
+        {/* rails */}
+        <path d="M144 108 H248 M144 176 H248 M144 228 H248" stroke="#ffffff" strokeWidth="3" />
+
+        {/* cap rail — animated trace along the top */}
         <path
-          d="M130 80 V225 H235 C260 225 268 200 252 185 C238 172 240 158 258 146 C276 134 280 112 262 100 L254 96"
+          d="M124 80 H268"
           fill="none"
           stroke="#ffffff"
-          strokeWidth="3"
-          strokeLinejoin="round"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray="900"
           className="anim-trace"
         />
-        {/* hanger */}
-        <path d="M132 102 H256" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeDasharray="5 5" />
-        <circle cx="134" cy="102" r="3" fill="rgba(255,255,255,0.25)" />
-        <circle cx="254" cy="102" r="3" fill="rgba(255,255,255,0.25)" />
-
-        {/* water in the trough */}
-        <path d="M142 212 H226" stroke="#0E9CC3" strokeWidth="11" strokeLinecap="round" opacity="0.3" />
+        {/* AI measuring line running the cap */}
         <path
-          d="M142 212 H226"
-          stroke="#0E9CC3"
+          d="M124 68 H268"
+          stroke="#3FA65B"
           strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray="8 10"
           className="anim-flow"
         />
 
+        {/* concrete footings below grade */}
+        <path d="M118 250 H400 M0 250 H106" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeDasharray="5 5" />
+        <path d="M126 250 l4 26 h14 l4 -26 Z" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
+        <path d="M244 250 l4 26 h14 l4 -26 Z" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
+
         {/* leader labels */}
-        <path d="M262 100 L318 90" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="322" y="93" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path d="M268 80 L318 74" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+        <text x="322" y="77" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
           CAP
         </text>
-        <path d="M252 180 L318 180" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="322" y="183" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path d="M248 176 L318 168" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+        <text x="322" y="171" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
           RAIL
         </text>
-        <path d="M184 212 L184 252 L232 252" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="236" y="255" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path d="M197 242 L197 262 L232 262" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+        <text x="236" y="265" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
           RUN 186 LF
+        </text>
+        <path d="M148 276 L188 285" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+        <text x="192" y="288" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+          CONCRETE FTG
         </text>
 
         {/* title block */}
-        <text x="130" y="282" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace" fontWeight="700" letterSpacing="2">
+        <text x="130" y="298" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace" fontWeight="700" letterSpacing="2">
           CEDAR &middot; 4&times;4 POST &middot; STK GRADE
         </text>
       </svg>

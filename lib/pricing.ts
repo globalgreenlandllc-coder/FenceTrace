@@ -104,6 +104,17 @@ function buildFenceLineItems(
   const hf = heightFactor(t, fence.heightFt);
   const waste = 1 + Math.max(0, measurements.wasteFactorPct) / 100;
   const lf = Math.max(0, measurements.eaveLF);
+  // Gates re-price from the LIVE drawn count (measurements.downspoutCount
+  // carries gates) — the config split only decides how many of them are
+  // doubles. Editing gate markers on the proposal canvas must move money.
+  const liveGates = Math.max(
+    0,
+    Math.round(
+      measurements.downspoutCount ?? fence.gatesSingle + fence.gatesDouble,
+    ),
+  );
+  const gatesDouble = Math.min(Math.max(0, fence.gatesDouble), liveGates);
+  const gatesSingle = liveGates - gatesDouble;
   const lines: LineItemPlan[] = [
     {
       id: "fence-materials",
@@ -127,22 +138,22 @@ function buildFenceLineItems(
       taxable: false,
     },
   ];
-  if (fence.gatesSingle > 0)
+  if (gatesSingle > 0)
     lines.push({
       id: "gate-single",
       name: "Walk gate (4') — framed & hung",
       description: "Heavy-set posts, hinges & latch included",
-      quantity: fence.gatesSingle,
+      quantity: gatesSingle,
       unit: "ea",
       unitPrice: t.gateSingle,
       taxable: true,
     });
-  if (fence.gatesDouble > 0)
+  if (gatesDouble > 0)
     lines.push({
       id: "gate-double",
       name: "Drive gate (10') — framed & hung",
       description: "Double swing, drop rod & latch included",
-      quantity: fence.gatesDouble,
+      quantity: gatesDouble,
       unit: "ea",
       unitPrice: round2(t.gateSingle * 2.4),
       taxable: true,

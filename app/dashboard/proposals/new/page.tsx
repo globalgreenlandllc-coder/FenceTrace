@@ -18,7 +18,7 @@ export default function NewProposalPage() {
         </h1>
         <p className="anim-enter stagger-2 mt-3 max-w-lg text-[15px] leading-relaxed text-zinc-500">
           Every lane ends in the same place — a priced proposal ready to
-          send. The AI lanes do the measuring for you.
+          send. The smart lanes do the measuring for you.
         </p>
 
         <StartOptions />

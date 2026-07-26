@@ -148,10 +148,10 @@ export function PricingTable({
             <button
               onClick={() => onChange(baseline)}
               className="ring-focus inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 py-0.5 font-sans text-[10px] font-medium normal-case tracking-normal text-zinc-500 transition-smooth hover:border-accent-300 hover:text-accent-700 active:scale-[0.98]"
-              title="Discard edits and custom rows; restore the AI scope"
+              title="Discard edits and custom rows; restore the measured scope"
             >
               <RotateCcw className="h-2.5 w-2.5" />
-              Reset to AI scope
+              Reset to measured scope
             </button>
           )}
         </span>
@@ -277,9 +277,9 @@ function OriginBadge({ origin }: { origin: ItemOrigin }) {
     return (
       <span
         className="shrink-0 rounded-full bg-accent-50 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-accent-600"
-        title="Priced automatically from the AI takeoff"
+        title="Priced automatically from the takeoff"
       >
-        AI
+        Auto
       </span>
     );
   }
@@ -287,7 +287,7 @@ function OriginBadge({ origin }: { origin: ItemOrigin }) {
     return (
       <span
         className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wide text-amber-600"
-        title="AI line item you've overridden"
+        title="Measured line item you've overridden"
       >
         Edited
       </span>

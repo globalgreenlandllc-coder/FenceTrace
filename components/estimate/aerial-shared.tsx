@@ -290,7 +290,7 @@ export function BlueprintBackground() {
           fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
           letterSpacing="0.12em"
         >
-          AI-ASSISTED · CONTRACTOR VERIFIED
+          MEASURED · CONTRACTOR VERIFIED
         </text>
       </g>
     </g>

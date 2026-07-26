@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /worker
+Disallow: /api
+
+Sitemap: https://fencetrace.com/sitemap.xml

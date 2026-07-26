@@ -43,7 +43,9 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
       gates > 0
         ? `${gates} ${gates === 1 ? "gate" : "gates"} — hung, latched & adjusted`
         : "Layout staked & string-lined before digging",
-      ...(tier.stain && t.stainable ? ["Penetrating stain & seal, both faces"] : []),
+      ...((tier.stain || input.stain) && t.stainable
+        ? ["Penetrating stain & seal, both faces"]
+        : []),
       ...(input.removalLf > 0
         ? [`Tear-out & haul-away of ${input.removalLf} LF of old fence`]
         : []),
@@ -57,7 +59,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         type: tier.type,
         heightFt,
         terrain: input.terrain,
-        stain: tier.stain && t.stainable,
+        stain: (tier.stain || input.stain) && t.stainable,
         removalLf: input.removalLf,
         gatesSingle: input.gatesSingle,
         gatesDouble: input.gatesDouble,

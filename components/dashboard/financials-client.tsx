@@ -385,7 +385,7 @@ function JobsCard({
         <div className="microlabel">Profit per job</div>
         <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
           <Sparkles className="h-3 w-3 text-accent-500" />
-          AI cost estimate — tap to correct it
+          Costs estimated from the takeoff — tap to correct
         </span>
       </div>
       <div className="mt-3 space-y-3">
@@ -554,7 +554,7 @@ function CostBasisEditor({
         )}
         Materials + labor cost
         <Badge tone={usingManual ? "neutral" : "accent"}>
-          {usingManual ? "your number" : "AI estimate"}
+          {usingManual ? "your number" : "takeoff estimate"}
         </Badge>
       </span>
       <span className="flex-1" />
@@ -600,7 +600,7 @@ function CostBasisEditor({
               onClick={resetToAi}
               disabled={busy}
               className="ring-focus rounded-md p-1 text-zinc-400 transition-smooth hover:bg-accent-50 hover:text-accent-700"
-              title="Back to the AI estimate"
+              title="Back to the takeoff estimate"
             >
               <Undo2 className="h-3.5 w-3.5" />
             </button>

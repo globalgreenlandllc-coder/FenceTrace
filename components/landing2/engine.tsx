@@ -49,9 +49,9 @@ export function Engine() {
         <Reveal>
           <div className="grid gap-14 md:grid-cols-2 md:gap-20">
             <div>
-              <Eyebrow>AI Takeoffs</Eyebrow>
+              <Eyebrow>Smart Takeoffs</Eyebrow>
               <h2 className="mt-6 text-[30px] font-semibold leading-[1.05] tracking-tight text-zinc-900 md:text-[40px]">
-                AI measures the yards{" "}
+                FenceTrace measures the yards{" "}
                 <span className="text-zinc-400">you never visit</span>
               </h2>
               <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-600">

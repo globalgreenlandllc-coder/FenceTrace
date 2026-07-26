@@ -444,6 +444,9 @@ export function sanitizeProposalForClient(p: Proposal): Proposal {
  *  non-taxable labor. Exported so the inverse (`markupPctForTarget`)
  *  can't drift from the forward calc below. */
 export const EFFECTIVE_TAX_RATE = 0.0825 * 0.85;
+/** Plain sales-tax rate applied to the TAXABLE share of fence packages
+ *  (materials/gates/stain — labor and removal are untaxed). */
+export const FENCE_TAX_RATE = 0.0825;
 
 export function packageTotal(
   p: Package,
@@ -473,7 +476,25 @@ export function packageTotal(
   const afterMarkup = subtotal + markup;
   const safePct = Math.max(0, Math.min(50, discountPct));
   const discount = afterMarkup * (safePct / 100);
-  const tax = (afterMarkup - discount) * EFFECTIVE_TAX_RATE;
+  // Fence packages tax honestly: only the taxable share of the bill
+  // (materials/gates/stain — labor and tear-out are flagged
+  // taxable:false) at the plain sales-tax rate, pro-rated across
+  // markup/discount. Legacy gutter packages keep the historical
+  // effective rate so no already-sent proposal ever reprices itself.
+  // priceFence (the estimator rail) mirrors this exactly — parity is
+  // asserted in lib/fence/takeoff.test.mts.
+  let tax: number;
+  if (p.config.fence) {
+    const taxableBase =
+      items.reduce(
+        (acc, i) => acc + (i.taxable ? i.quantity * i.unitPrice : 0),
+        0,
+      ) + addOns;
+    const share = subtotal > 0 ? taxableBase / subtotal : 0;
+    tax = (afterMarkup - discount) * share * FENCE_TAX_RATE;
+  } else {
+    tax = (afterMarkup - discount) * EFFECTIVE_TAX_RATE;
+  }
   return {
     subtotal,
     addOns,

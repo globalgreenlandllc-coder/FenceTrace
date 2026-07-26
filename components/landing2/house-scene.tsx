@@ -12,10 +12,9 @@ import {
 
 export type SceneTab = "Detection" | "Measurement" | "Pricing" | "Proposal";
 
-const INK = "#0C1B24";
-const INK_SOFT = "#10475E";
-const WATER = "#1479B8";
-const ACCENT = "#14688C";
+const INK = "#0D1B12";
+const ACCENT = "#1E7340";
+const TRACE = "#3FA65B";
 const SANS = "var(--font-inter), sans-serif";
 
 /** White rounded chip rendered inside the SVG scene. */
@@ -62,13 +61,13 @@ function SvgChip({
 }
 
 /**
- * Animated hero scene v2: rain falls on a hip roof, water runs along the
- * gutter into the downspout with a splash — always. The active pipeline tab
- * layers its own overlay on top: Detection traces the roof perimeter,
- * Measurement pops dimension labels and the "186 LF" tag, Pricing drops
- * per-run price chips, Proposal slides a mini proposal card over the scene.
- * Pointer parallax shifts the layers by a few px (spring-damped, disabled
- * for reduced motion).
+ * Animated hero scene: a house sits inside its yard, the county property
+ * line glows around it, and a fence builds along the front with a gate —
+ * the FenceTrace story. The active pipeline tab layers its overlay on
+ * top: Detection traces the property boundary, Measurement pops dimension
+ * labels and the "186 LF" tag, Pricing drops per-run price chips,
+ * Proposal slides a mini proposal card over the scene. Pointer parallax
+ * shifts the layers by a few px (spring-damped, off for reduced motion).
  */
 export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
   const reduceMotion = useReducedMotion();
@@ -78,9 +77,9 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
   const my = useMotionValue(0);
   const sx = useSpring(mx, { stiffness: 120, damping: 16 });
   const sy = useSpring(my, { stiffness: 120, damping: 16 });
-  // Layer depths: rain drifts the most, the house barely, tags in between.
-  const rainX = useTransform(sx, (v) => v * 1.2);
-  const rainY = useTransform(sy, (v) => v * 1.2);
+  // Layer depths: the boundary drifts the most, the house barely.
+  const lineX = useTransform(sx, (v) => v * 1.2);
+  const lineY = useTransform(sy, (v) => v * 1.2);
   const houseX = useTransform(sx, (v) => v * 0.45);
   const houseY = useTransform(sy, (v) => v * 0.45);
 
@@ -99,16 +98,11 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
     my.set(0);
   }, [mx, my]);
 
-  const drops = [
-    { x: 150, d: "0s" },
-    { x: 195, d: "0.5s" },
-    { x: 240, d: "0.9s" },
-    { x: 285, d: "0.2s" },
-    { x: 330, d: "0.7s" },
-    { x: 375, d: "1.1s" },
-    { x: 420, d: "0.35s" },
-    { x: 462, d: "0.85s" },
-  ];
+  // Front fence geometry: posts every 40px with rails between; the run
+  // leaves a gate opening between x=280 and x=320.
+  const postXs = [100, 140, 180, 220, 260, 280, 320, 340, 380, 420, 460, 500];
+  const GATE_L = 280;
+  const GATE_R = 320;
 
   return (
     <div
@@ -121,67 +115,81 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
         viewBox="0 0 600 340"
         className="w-full"
         role="img"
-        aria-label="Animated demo: rain runs off a stylized house while overlays trace, measure, and price the property"
+        aria-label="Animated demo: the property line is detected around a stylized yard, a fence with a gate builds along it, and overlays measure and price the job"
       >
-        {/* rain */}
-        <motion.g style={{ x: rainX, y: rainY }}>
-          <g stroke={WATER} strokeWidth="2.5" strokeLinecap="round" opacity="0.75">
-            {drops.map((r) => (
-              <line
-                key={r.x}
-                x1={r.x}
-                y1="18"
-                x2={r.x - 5}
-                y2="34"
-                className="anim-rain"
-                style={{ animationDelay: r.d }}
-              />
-            ))}
-          </g>
+        {/* property boundary (drifts most with parallax) */}
+        <motion.g style={{ x: lineX, y: lineY }}>
+          <rect
+            x="88"
+            y="72"
+            width="424"
+            height="220"
+            rx="10"
+            fill={TRACE}
+            fillOpacity="0.05"
+            stroke={TRACE}
+            strokeWidth="2"
+            strokeDasharray="8 7"
+          />
         </motion.g>
 
         <motion.g style={{ x: houseX, y: houseY }}>
-          {/* house body */}
-          <rect x="160" y="160" width="280" height="120" fill="#ffffff" fillOpacity="0.92" stroke={INK} strokeWidth="2.5" />
-          {/* door + windows */}
-          <rect x="282" y="212" width="36" height="68" fill="none" stroke={INK} strokeWidth="2" />
-          <circle cx="311" cy="248" r="2" fill={INK} />
-          <rect x="192" y="192" width="44" height="36" fill="none" stroke={INK} strokeWidth="2" />
-          <path d="M192 210h44M214 192v36" stroke={INK} strokeWidth="1.4" />
-          <rect x="364" y="192" width="44" height="36" fill="none" stroke={INK} strokeWidth="2" />
-          <path d="M364 210h44M386 192v36" stroke={INK} strokeWidth="1.4" />
+          {/* house set back in the yard */}
+          <rect x="228" y="128" width="150" height="72" fill="#ffffff" fillOpacity="0.92" stroke={INK} strokeWidth="2.5" />
+          <path d="M214 128 L253 96 L353 96 L392 128 Z" fill="#0A2B19" />
+          <rect x="288" y="158" width="26" height="42" fill="none" stroke={INK} strokeWidth="2" />
+          <rect x="246" y="146" width="28" height="22" fill="none" stroke={INK} strokeWidth="1.8" />
+          <rect x="330" y="146" width="28" height="22" fill="none" stroke={INK} strokeWidth="1.8" />
 
-          {/* hip roof */}
-          <path d="M138 158 L212 92 L388 92 L462 158 Z" fill="#082733" />
-          <path d="M212 92 L388 92" stroke={INK_SOFT} strokeWidth="2" />
+          {/* yard path to the gate */}
+          <path d="M300 200 L300 258" stroke={INK} strokeWidth="1.6" strokeDasharray="3 5" opacity="0.5" />
 
-          {/* gutter run along the eave */}
-          <rect x="132" y="156" width="336" height="10" rx="5" fill="#ffffff" stroke={INK} strokeWidth="2.5" />
-          {/* downspout */}
-          <rect x="450" y="166" width="10" height="116" rx="4" fill="#ffffff" stroke={INK} strokeWidth="2.5" />
+          {/* ---- the fence: front run with a gate ---- */}
+          {/* rails */}
+          <path d={`M100 240 H${GATE_L} M${GATE_R} 240 H500`} stroke={INK} strokeWidth="2.5" />
+          <path d={`M100 268 H${GATE_L} M${GATE_R} 268 H500`} stroke={INK} strokeWidth="2.5" />
+          {/* pickets */}
+          {postXs.slice(0, -1).map((x, i) => {
+            const next = postXs[i + 1];
+            if (x >= GATE_L && next <= GATE_R) return null; // gate opening
+            const picks = [];
+            for (let px = x + 10; px < next - 4; px += 11) {
+              picks.push(
+                <line key={px} x1={px} y1={232} x2={px} y2={286} stroke={INK} strokeWidth="1.2" opacity="0.35" />,
+              );
+            }
+            return <g key={`p${x}`}>{picks}</g>;
+          })}
+          {/* posts */}
+          {postXs.map((x) => (
+            <rect key={x} x={x - 3.5} y={228} width={7} height={62} rx={2} fill="#ffffff" stroke={INK} strokeWidth="2.2" />
+          ))}
+          {/* gate: braced frame swinging slightly open */}
+          <g>
+            <rect x={GATE_L + 6} y={234} width={GATE_R - GATE_L - 12} height={50} rx={3} fill="#ffffff" stroke={INK} strokeWidth="2.2" />
+            <path d={`M${GATE_L + 6} 282 L${GATE_R - 6} 236`} stroke={INK} strokeWidth="1.6" />
+            <circle cx={GATE_R - 9} cy={258} r={2.2} fill={ACCENT} />
+          </g>
+          {/* ground */}
+          <path d="M84 292 H516" stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
 
-          {/* water flowing: gutter -> corner -> downspout (all tabs) */}
+          {/* the AI trace running the fence line (always on — the product motif) */}
           <path
-            d="M140 161 H452 M455 170 V276"
+            d={`M100 228 H${GATE_L} M${GATE_R} 228 H500`}
             fill="none"
-            stroke={WATER}
+            stroke={TRACE}
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray="10 14"
             className="anim-flow"
           />
-          {/* splash at the outlet */}
-          <g className="anim-splash">
-            <circle cx="455" cy="288" r="7" fill="none" stroke={WATER} strokeWidth="2.5" />
-          </g>
-          <path d="M100 292 H520" stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
 
           {/* ------ tab overlays (inside the house layer so they track it) ------ */}
           {tab === "Detection" && (
             <g key="detection">
-              {/* animated perimeter trace around the detected roof */}
+              {/* animated trace around the recorded property boundary */}
               <path
-                d="M138 158 L212 92 L388 92 L462 158 Z"
+                d="M88 72 H512 V292 H88 Z"
                 fill="none"
                 stroke={ACCENT}
                 strokeWidth="3"
@@ -190,10 +198,10 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                 className="anim-trace"
               />
               {[
-                [138, 158],
-                [212, 92],
-                [388, 92],
-                [462, 158],
+                [88, 72],
+                [512, 72],
+                [512, 292],
+                [88, 292],
               ].map(([x, y], i) => (
                 <circle
                   key={`${x}-${y}`}
@@ -207,25 +215,25 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                   style={{ animationDelay: `${0.1 + i * 0.08}s` }}
                 />
               ))}
-              <SvgChip x={230} y={116} w={140} label="Home detected" delay={0.25} />
+              <SvgChip x={218} y={36} w={164} label="Property line found" delay={0.25} />
             </g>
           )}
 
           {tab === "Measurement" && (
             <g key="measurement">
-              {/* measuring trace along the eave */}
+              {/* measuring trace along the fence run */}
               <path
-                d="M140 186 H460"
+                d="M100 214 H500"
                 fill="none"
                 stroke={ACCENT}
                 strokeWidth="2.5"
                 strokeDasharray="900"
                 className="anim-trace"
               />
-              <path d="M140 178v16M460 178v16" stroke={ACCENT} strokeWidth="2.5" />
-              {/* width dimension under the footprint */}
-              <path d="M160 314 H440" stroke={ACCENT} strokeWidth="1.5" />
-              <path d="M160 308v12M440 308v12" stroke={ACCENT} strokeWidth="1.5" />
+              <path d="M100 206v16M500 206v16" stroke={ACCENT} strokeWidth="2.5" />
+              {/* width dimension under the yard */}
+              <path d="M120 314 H480" stroke={ACCENT} strokeWidth="1.5" />
+              <path d="M120 308v12M480 308v12" stroke={ACCENT} strokeWidth="1.5" />
               <g className="ls-pop" style={{ animationDelay: "0.2s" }}>
                 <rect x="266" y="304" width="68" height="20" rx="10" fill="#ffffff" stroke={ACCENT} strokeWidth="1.5" />
                 <text x="300" y="318" textAnchor="middle" fontSize="11" fontWeight="600" fill={ACCENT} fontFamily={SANS}>
@@ -235,9 +243,9 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
               {/* floating LF tag */}
               <g className="anim-float">
                 <g className="ls-pop" style={{ animationDelay: "0.1s" }}>
-                  <rect x="242" y="118" width="116" height="30" rx="15" fill="#ffffff" stroke={INK} strokeWidth="2" />
-                  <circle cx="262" cy="133" r="4" fill={ACCENT} />
-                  <text x="274" y="138" fontSize="14" fontWeight="700" fill={INK} fontFamily={SANS}>
+                  <rect x="242" y="34" width="116" height="30" rx="15" fill="#ffffff" stroke={INK} strokeWidth="2" />
+                  <circle cx="262" cy="49" r="4" fill={ACCENT} />
+                  <text x="274" y="54" fontSize="14" fontWeight="700" fill={INK} fontFamily={SANS}>
                     186 LF
                   </text>
                 </g>
@@ -248,15 +256,15 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
           {tab === "Pricing" && (
             <g key="pricing">
               <path
-                d="M140 186 H460"
+                d="M100 214 H500"
                 fill="none"
                 stroke={ACCENT}
                 strokeWidth="2.5"
                 strokeDasharray="6 8"
               />
-              <SvgChip x={160} y={112} w={122} label="$28.50 / LF" delay={0.05} />
-              <SvgChip x={300} y={112} w={150} label="186 LF × $28.50" delay={0.18} />
-              <SvgChip x={382} y={232} w={104} label="$5,301" delay={0.32} filled />
+              <SvgChip x={128} y={34} w={122} label="$28.50 / LF" delay={0.05} />
+              <SvgChip x={268} y={34} w={150} label="186 LF × $28.50" delay={0.18} />
+              <SvgChip x={392} y={118} w={104} label="$5,301" delay={0.32} filled />
             </g>
           )}
         </motion.g>
@@ -273,7 +281,7 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
             transition={{ duration: 0.35, ease: "easeOut" }}
             className="absolute inset-0 flex items-center justify-center"
           >
-            <div className="w-[min(300px,88%)] rounded-2xl border border-zinc-200/70 bg-white/95 p-4 shadow-[0_24px_60px_-24px_rgba(12,27,36,0.35)] backdrop-blur">
+            <div className="w-[min(300px,88%)] rounded-2xl border border-zinc-200/70 bg-white/95 p-4 shadow-[0_24px_60px_-24px_rgba(13,27,18,0.35)] backdrop-blur">
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400">
                 Proposal ready
               </p>
@@ -311,36 +319,39 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
   );
 }
 
-/** Compact plan-view roof with a looping trace — used in the Engine section. */
+/** Compact plot-plan with a looping fence trace — used in the Engine section. */
 export function PlanTrace() {
   return (
     <svg viewBox="0 0 400 230" className="w-full">
-      {/* footprint */}
+      {/* parcel */}
       <path
         d="M70 50 H250 V95 H330 V190 H70 Z"
         fill="#ffffff"
         stroke="#d4d4d8"
         strokeWidth="2"
       />
-      {/* derived skeleton: hips + ridge */}
-      <path
-        d="M70 50 L110 90 L210 90 L250 50 M110 90 L110 150 L70 190 M110 150 L250 150 M250 150 L290 135 L330 95 M250 150 L250 190 M210 90 L250 150"
+      {/* house footprint inside the yard */}
+      <rect
+        x="120"
+        y="85"
+        width="90"
+        height="60"
+        fill="none"
         stroke="#d4d4d8"
         strokeWidth="1.4"
         strokeDasharray="4 5"
-        fill="none"
       />
-      {/* animated eave trace around the perimeter */}
+      {/* animated fence trace around the property line */}
       <path
         d="M70 50 H250 V95 H330 V190 H70 Z"
         fill="none"
-        stroke="#1479B8"
+        stroke={TRACE}
         strokeWidth="3.5"
         strokeLinejoin="round"
         strokeDasharray="900"
         className="anim-trace"
       />
-      {/* corner nodes */}
+      {/* corner posts */}
       {[
         [70, 50],
         [250, 50],
@@ -349,17 +360,10 @@ export function PlanTrace() {
         [330, 190],
         [70, 190],
       ].map(([x, y]) => (
-        <circle key={`${x}-${y}`} cx={x} cy={y} r="5" fill="#ffffff" stroke="#0C1B24" strokeWidth="2" />
+        <rect key={`${x}-${y}`} x={x - 4} y={y - 4} width="8" height="8" fill="#ffffff" stroke={INK} strokeWidth="2" />
       ))}
-      {/* downspout drops */}
-      {[
-        [70, 50],
-        [330, 95],
-        [70, 190],
-        [250, 190],
-      ].map(([x, y]) => (
-        <circle key={`d${x}-${y}`} cx={x} cy={y} r="2.5" fill="#14688C" />
-      ))}
+      {/* gate marker on the front run */}
+      <circle cx="160" cy="190" r="4.5" fill="#f472b6" stroke="#ffffff" strokeWidth="1.5" />
     </svg>
   );
 }

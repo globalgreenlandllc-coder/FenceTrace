@@ -25,7 +25,7 @@ export function Logo({
       </span>
       {showSubtitle && (
         <span className="mt-1 font-mono text-[9px] font-bold uppercase tracking-[0.28em] opacity-50">
-          AI Takeoff
+          Smart Takeoff
         </span>
       )}
     </div>

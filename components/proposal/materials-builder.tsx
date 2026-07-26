@@ -24,6 +24,7 @@ import {
   type Package,
 } from "@/lib/proposal-mock";
 import { useAiPricing, AiPriceSwitch } from "./ai-price-switch";
+import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import type { EstimateConfig, LineItem, Measurements } from "@/lib/types";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -55,6 +56,23 @@ const DOWNSPOUT_LABEL: Record<EstimateConfig["downspoutSize"], string> = {
  * blowing away hand-written lines (warranty, inspections, etc.).
  */
 function specChipsFromConfig(config: EstimateConfig): string[] {
+  // Fence packages describe themselves from the fence config — gutter
+  // bullets would be nonsense on a fence proposal.
+  if (config.fence) {
+    const f = config.fence;
+    const t = fenceType(f.type as FenceTypeId);
+    const chips = [
+      `${f.heightFt}' ${t.label.toLowerCase()}`,
+      `Posts set in concrete, ${t.postSpacingFt}' on center`,
+    ];
+    if (f.gatesSingle + f.gatesDouble > 0)
+      chips.push(
+        `${f.gatesSingle + f.gatesDouble} ${f.gatesSingle + f.gatesDouble === 1 ? "gate" : "gates"} — hung & latched`,
+      );
+    if (f.stain) chips.push("Stain & seal, both faces");
+    if (f.removalLf > 0) chips.push(`Old-fence tear-out (${f.removalLf} LF)`);
+    return chips;
+  }
   const chips = [
     `${config.size}" ${STYLE_LABEL[config.style]} ${MATERIAL_LABEL[config.material]} gutters`,
     `${DOWNSPOUT_LABEL[config.downspoutSize]} downspouts`,
@@ -165,8 +183,10 @@ export function MaterialsBuilder({
   const aiErr = ai.error;
   // The switch reflects the tier being edited (proposal-wide actions
   // still pull the whole ladder onto one mode).
+  // Market pricing quotes the LEGACY gutter payload — until the quote
+  // engine speaks fence, fence packages stay on the contractor's price.
   const pricingMode: "manual" | "ai" =
-    pkg.pricingMode === "ai" ? "ai" : "manual";
+    !pkg.config.fence && pkg.pricingMode === "ai" ? "ai" : "manual";
   const quote = pkg.aiQuote;
   const quoteStale = ai.isStale;
 
@@ -282,7 +302,7 @@ export function MaterialsBuilder({
             <div className="text-[11px] text-zinc-500">
               {pricingMode === "ai" ? (
                 <span className="inline-flex items-center gap-1 font-medium text-accent-700">
-                  <Sparkles className="h-3 w-3" /> AI market price
+                  <Sparkles className="h-3 w-3" /> Market price
                 </span>
               ) : (
                 `${pkg.markupPct.toFixed(1)}% markup`
@@ -477,10 +497,10 @@ export function MaterialsBuilder({
                 <span className="w-14 shrink-0 text-right">Qty</span>
                 <span className="w-6 shrink-0" />
                 <span className="w-[4.5rem] shrink-0 text-right">
-                  {pricingMode === "ai" ? "AI unit" : "Unit cost"}
+                  {pricingMode === "ai" ? "Market unit" : "Unit cost"}
                 </span>
                 <span className="w-16 shrink-0 text-right">
-                  {pricingMode === "ai" ? "AI price" : "Client price"}
+                  {pricingMode === "ai" ? "Market price" : "Client price"}
                 </span>
                 <span className="w-6 shrink-0" />
               </div>
@@ -533,7 +553,7 @@ export function MaterialsBuilder({
                       readOnly={isAiPricedLine(it.id)}
                       title={
                         isAiPricedLine(it.id)
-                          ? "AI market unit price — switch to Your price to edit"
+                          ? "Market unit price — switch to Your price to edit"
                           : undefined
                       }
                       onChange={(e) =>
@@ -642,7 +662,7 @@ export function MaterialsBuilder({
                     readOnly={isAiPricedLine(it.id)}
                     title={
                       isAiPricedLine(it.id)
-                        ? "AI market unit price — switch to Your price to edit"
+                        ? "Market unit price — switch to Your price to edit"
                         : undefined
                     }
                     onChange={(e) =>
@@ -743,10 +763,16 @@ export function MaterialsBuilder({
 
           <Section
             title="Price"
-            sub="Price it yourself, or let AI price every package for the local market — the client sees all tiers, so the switch re-prices all of them together."
+            sub="Price it yourself, or apply the going market rate for your area to every package — the client sees all tiers, so the switch re-prices all of them together."
           >
             <div className="space-y-3">
-              {/* The pricing switch */}
+              {/* The pricing switch (market quotes don't speak fence yet) */}
+              {pkg.config.fence ? (
+                <p className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs text-zinc-500">
+                  Priced from your fence rates and markup. Market-rate
+                  suggestions for fences are coming soon.
+                </p>
+              ) : (
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-zinc-200 bg-white p-1">
                 <button
                   type="button"
@@ -776,9 +802,10 @@ export function MaterialsBuilder({
                   ) : (
                     <Sparkles className="h-3.5 w-3.5" />
                   )}
-                  AI market price
+                  Market price
                 </button>
               </div>
+              )}
               {aiErr && <p className="text-xs text-rose-600">{aiErr}</p>}
 
               {/* AI panel — the quote that's applied right now */}
@@ -882,7 +909,7 @@ export function MaterialsBuilder({
                 >
                   <span className="inline-flex items-center gap-1.5 text-zinc-600">
                     <Sparkles className="h-3.5 w-3.5 text-accent-600" />
-                    AI market price for {quote.location}
+                    Market price for {quote.location}
                   </span>
                   <span className="font-semibold tabular-nums text-zinc-900">
                     {formatCurrency(quote.recommendedTotal)}

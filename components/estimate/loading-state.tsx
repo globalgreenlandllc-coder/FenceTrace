@@ -165,7 +165,7 @@ export function LoadingState({
 
         <p className="mt-4 text-center text-xs text-zinc-500">
           {mode === "plan"
-            ? "Two-stage AI: Haiku sheet inventory · Sonnet roof-plan geometry"
+            ? "Two-stage read: sheet inventory · plan geometry"
             : "Running in parallel: Solar API · Vision segmentation · Turf.js geometry"}
         </p>
 
