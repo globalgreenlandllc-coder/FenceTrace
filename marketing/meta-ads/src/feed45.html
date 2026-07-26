@@ -1,0 +1,234 @@
+<meta charset="utf-8">
+<title>GutterScan 4:5 feed video</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0C1B24; --accent:#14688C; --bright:#0E9CC3; --a300:#93C6DC; --a400:#5AA6C6; --line:rgba(255,255,255,.12); }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1350px; overflow:hidden; background:var(--ink); }
+  body { font-family:"Inter",sans-serif; color:#fff; position:relative; }
+  .grid-bg { position:absolute; inset:0;
+    background:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:54px 54px; }
+  .stripes { position:absolute; top:0; bottom:0; right:0; width:16px; z-index:40;
+    background:repeating-linear-gradient(-45deg,var(--accent) 0 8px,transparent 8px 18px); opacity:.8; }
+  .brand { position:absolute; top:64px; left:0; right:0; z-index:30; display:flex; justify-content:center; }
+  .brand .wm { font-family:"Archivo Black",sans-serif; font-size:38px; letter-spacing:.02em; display:flex; align-items:center; gap:12px; }
+  .brand .dot { width:15px; height:15px; background:var(--bright); }
+  .display { font-family:"Archivo Black",sans-serif; text-transform:uppercase; line-height:.96; letter-spacing:-0.01em; }
+  .scene { position:absolute; inset:0; z-index:10; opacity:0; }
+  .drop { position:absolute; width:4px; border-radius:3px; background:linear-gradient(180deg,transparent,var(--a400)); opacity:.5; }
+
+  /* sc1 hook */
+  #sc1 .wrap { position:absolute; left:90px; right:90px; top:420px; }
+  #sc1 .eyebrow { font-family:"Space Mono",monospace; font-weight:700; font-size:26px; letter-spacing:.14em; text-transform:uppercase; color:var(--a400); }
+  #sc1 h1 { font-size:108px; margin-top:30px; }
+  #sc1 h1 .hl { color:var(--bright); }
+  .line-item { overflow:hidden; }
+  .line-item > span { display:inline-block; }
+
+  /* sc2 address */
+  #sc2 h2 { font-size:76px; position:absolute; left:90px; right:90px; top:230px; }
+  #sc2 h2 .hl { color:var(--bright); }
+  #sc2 .card { position:absolute; left:90px; right:90px; top:490px;
+    background:#0e2230; border:1px solid var(--line); border-radius:26px; padding:48px;
+    box-shadow:0 0 0 1px rgba(20,104,140,.25), 0 40px 100px -30px rgba(0,0,0,.9); }
+  #sc2 .lbl { font-family:"Space Mono",monospace; font-weight:700; font-size:24px; letter-spacing:.14em; text-transform:uppercase; color:var(--a400); display:flex; gap:12px; align-items:center; }
+  #sc2 .lbl::before { content:""; width:13px; height:13px; background:var(--bright); }
+  #sc2 .input { margin-top:30px; background:rgba(255,255,255,.05); border:2px solid rgba(255,255,255,.18); border-radius:16px; padding:28px 32px; font-family:"Space Mono",monospace; font-size:34px; display:flex; align-items:center; min-height:104px; }
+  #sc2 .caret { display:inline-block; width:4px; height:42px; background:var(--bright); margin-left:6px; }
+  #sc2 .btn { margin-top:30px; display:flex; justify-content:center; align-items:center; gap:14px;
+    background:linear-gradient(135deg,#14688C,#0E9CC3); border-radius:16px; padding:30px;
+    font-family:"Space Mono",monospace; font-weight:700; font-size:32px; letter-spacing:.08em; text-transform:uppercase;
+    box-shadow:0 18px 60px -10px rgba(14,156,195,.5); }
+  #sc2 .prog { margin-top:30px; height:9px; border-radius:6px; background:rgba(255,255,255,.1); overflow:hidden; }
+  #sc2 .prog i { display:block; height:100%; width:0%; background:linear-gradient(90deg,#14688C,#0E9CC3); }
+
+  /* sc3 trace */
+  #sc3 h2 { font-size:64px; position:absolute; left:90px; right:90px; top:200px; }
+  #sc3 h2 .hl { color:var(--bright); }
+  #sc3 .frame { position:absolute; left:80px; right:80px; top:380px; height:620px;
+    border-radius:24px; overflow:hidden; border:1px solid var(--line);
+    box-shadow:0 0 0 1px rgba(20,104,140,.3), 0 40px 120px -30px rgba(0,0,0,.9); }
+  #sc3 .frame img { position:absolute; width:2000px; left:-248px; top:-504px; transform-origin:50% 50%; }
+  #sc3 .scanline { position:absolute; left:0; right:0; height:6px; top:0;
+    background:linear-gradient(90deg,transparent,var(--bright) 30%,var(--bright) 70%,transparent);
+    box-shadow:0 0 40px 8px rgba(14,156,195,.55); }
+  #sc3 .badge { position:absolute; left:50%; top:940px; transform:translateX(-50%);
+    background:var(--ink); border:4px solid var(--bright); border-radius:22px; padding:30px 52px; text-align:center;
+    box-shadow:0 30px 90px rgba(0,0,0,.8), 0 0 60px rgba(14,156,195,.25); }
+  #sc3 .badge .n { font-family:"Space Mono",monospace; font-weight:700; font-size:88px; color:var(--bright); white-space:nowrap; }
+  #sc3 .badge .l { font-family:"Space Mono",monospace; font-size:24px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.6); margin-top:6px; }
+
+  /* sc4 price */
+  #sc4 h2 { font-size:72px; position:absolute; left:90px; right:90px; top:230px; }
+  #sc4 h2 .hl { color:var(--bright); }
+  #sc4 .price-card { position:absolute; left:90px; right:90px; top:480px;
+    background:linear-gradient(135deg,rgba(20,104,140,.35),rgba(14,156,195,.10));
+    border:1px solid rgba(93,198,220,.4); border-radius:26px; padding:52px 48px; text-align:center; }
+  #sc4 .price { font-family:"Space Mono",monospace; font-weight:700; font-size:124px; white-space:nowrap; }
+  #sc4 .price em { font-style:normal; color:var(--bright); }
+  #sc4 .price-l { font-family:"Space Mono",monospace; font-size:25px; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.6); margin-top:14px; }
+  #sc4 .chips { position:absolute; left:90px; right:90px; top:880px; display:flex; gap:20px; justify-content:center; flex-wrap:wrap; }
+  #sc4 .chip { font-family:"Space Mono",monospace; font-weight:700; font-size:24px; letter-spacing:.06em; text-transform:uppercase;
+    border:2px solid rgba(93,166,198,.55); color:var(--a300); border-radius:12px; padding:16px 24px; }
+
+  /* sc5 cta */
+  #sc5 .wrap { position:absolute; left:90px; right:90px; top:380px; }
+  #sc5 h1 { font-size:104px; }
+  #sc5 h1 .hl { color:var(--bright); }
+  #sc5 .btn { margin-top:64px; display:inline-flex; align-items:center; gap:18px;
+    background:linear-gradient(135deg,#14688C,#0E9CC3); border-radius:20px; padding:38px 56px;
+    font-family:"Space Mono",monospace; font-weight:700; font-size:34px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    box-shadow:0 0 0 1px rgba(20,104,140,.35), 0 30px 90px -14px rgba(14,156,195,.55); }
+  #sc5 .btn::after { content:"→"; font-family:Inter; font-weight:700; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="stripes"></div>
+<div class="brand"><span class="wm">GUTTERSCAN <span class="dot"></span></span></div>
+<div id="rain"></div>
+
+<section class="scene" id="sc1">
+  <div class="wrap">
+    <div class="eyebrow line-item"><span>For gutter contractors</span></div>
+    <h1 class="display">
+      <div class="line-item"><span>How gutter pros</span></div>
+      <div class="line-item"><span>quote <span class="hl">in 2026:</span></span></div>
+    </h1>
+  </div>
+</section>
+
+<section class="scene" id="sc2">
+  <h2 class="display">Step 1 —<br>type the <span class="hl">address.</span></h2>
+  <div class="card">
+    <div class="lbl">New estimate</div>
+    <div class="input"><span id="typed"></span><span class="caret" id="caret"></span></div>
+    <div class="btn" id="analyzeBtn">⌕ &nbsp;Analyze roof</div>
+    <div class="prog"><i id="progBar"></i></div>
+  </div>
+</section>
+
+<section class="scene" id="sc3">
+  <h2 class="display">Roof traced from <span class="hl">satellite.</span></h2>
+  <div class="frame">
+    <img id="sat" src="../shots/satellite-analyzed.png">
+    <div class="scanline" id="scanline"></div>
+  </div>
+  <div class="badge" id="lfBadge">
+    <div class="n"><span id="lfNum">0.0</span> LF</div>
+    <div class="l">Total gutter run</div>
+  </div>
+</section>
+
+<section class="scene" id="sc4">
+  <h2 class="display">Priced from <span class="hl">your rates.</span></h2>
+  <div class="price-card">
+    <div class="price">$<span id="priceNum">0</span><em>.00</em></div>
+    <div class="price-l">Materials — in about a minute</div>
+  </div>
+  <div class="chips">
+    <span class="chip" id="chip1">3-tier proposal</span>
+    <span class="chip" id="chip2">E-sign</span>
+    <span class="chip" id="chip3">Payments</span>
+  </div>
+</section>
+
+<section class="scene" id="sc5">
+  <div class="wrap">
+    <h1 class="display">
+      <div class="line-item"><span>Be the</span></div>
+      <div class="line-item"><span><span class="hl">first quote.</span></span></div>
+    </h1>
+    <div><span class="btn" id="ctaBtn">Get started · gutters.app</span></div>
+  </div>
+</section>
+
+<script>
+  const clamp01=(x)=>Math.max(0,Math.min(1,x));
+  const lerp=(a,b,p)=>a+(b-a)*p;
+  const easeOutCubic=(p)=>1-Math.pow(1-p,3);
+  const easeInOutCubic=(p)=>(p<0.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2);
+  const easeOutBack=(p)=>{const c=1.70158*1.2;return 1+(c+1)*Math.pow(p-1,3)+c*Math.pow(p-1,2);};
+  const win=(t,a,b)=>clamp01((t-a)/(b-a));
+
+  const rain=document.getElementById("rain");
+  const DROPS=[];
+  for(let i=0;i<20;i++){
+    const el=document.createElement("div"); el.className="drop";
+    el.style.left=((i*397)%1080)+"px";
+    const len=50+((i*131)%80); el.style.height=len+"px";
+    rain.appendChild(el);
+    DROPS.push({el,speed:900+((i*211)%700),phase:(i*977)%2400,len});
+  }
+
+  const S=(id)=>document.getElementById(id);
+  const scenes=["sc1","sc2","sc3","sc4","sc5"].map(S);
+  const ADDRESS="1442 Maple Ave, Springfield";
+  const R=[[0,2300],[2300,6100],[6100,10500],[10500,13100],[13100,15500]];
+  const XFADE=320;
+  window.TOTAL_MS=R[R.length-1][1];
+
+  window.seek=function(t){
+    const rainOn=t<R[0][1]||t>=R[4][0];
+    for(const d of DROPS){
+      const y=((t*d.speed)/1000+d.phase)%1500-d.len;
+      d.el.style.transform=`translateY(${y}px)`;
+      d.el.style.opacity=rainOn?0.4:0;
+    }
+    scenes.forEach((sc,i)=>{
+      const[a,b]=R[i];
+      sc.style.opacity=(t>=a-XFADE&&t<=b+XFADE)?Math.min(win(t,a,a+XFADE),1-win(t,b-XFADE,b)):0;
+    });
+
+    { // sc1
+      const lt=t-R[0][0];
+      document.querySelectorAll("#sc1 .line-item > span").forEach((sp,i)=>{
+        const p=easeOutCubic(win(lt,100+i*180,620+i*180));
+        sp.style.transform=`translateY(${lerp(110,0,p)}%)`; sp.style.opacity=p;
+      });
+    }
+    { // sc2
+      const lt=t-R[1][0];
+      const n=Math.floor(win(lt,350,2050)*ADDRESS.length);
+      S("typed").textContent=ADDRESS.slice(0,n);
+      S("caret").style.opacity=Math.floor(lt/360)%2===0?1:0;
+      const press=win(lt,2200,2380), rel=win(lt,2380,2600);
+      S("analyzeBtn").style.transform=`scale(${press>0&&rel<1?lerp(1,0.965,press<1?press:1-rel):1})`;
+      S("progBar").style.width=easeInOutCubic(win(lt,2600,3600))*100+"%";
+    }
+    { // sc3
+      const lt=t-R[2][0];
+      S("sat").style.transform=`scale(${lerp(1.14,1.0,easeOutCubic(win(lt,0,2000)))})`;
+      const sp=win(lt,200,1900);
+      S("scanline").style.top=sp*620+"px";
+      S("scanline").style.opacity=sp>0&&sp<1?1:0;
+      const bp=win(lt,2000,2550);
+      S("lfBadge").style.transform=`translateX(-50%) scale(${bp===0?0:easeOutBack(bp)})`;
+      S("lfBadge").style.opacity=bp===0?0:1;
+      S("lfNum").textContent=(easeOutCubic(win(lt,2000,3300))*362.5).toFixed(1);
+    }
+    { // sc4
+      const lt=t-R[3][0];
+      S("priceNum").textContent=Math.round(easeOutCubic(win(lt,200,1300))*5070).toLocaleString("en-US");
+      ["chip1","chip2","chip3"].forEach((id,i)=>{
+        const p=easeOutCubic(win(lt,1100+i*240,1550+i*240));
+        const el=S(id);
+        el.style.opacity=p; el.style.transform=`translateY(${lerp(30,0,p)}px)`; el.style.display="inline-block";
+      });
+    }
+    { // sc5
+      const lt=t-R[4][0];
+      document.querySelectorAll("#sc5 .line-item > span").forEach((sp,i)=>{
+        const p=easeOutCubic(win(lt,100+i*160,600+i*160));
+        sp.style.transform=`translateY(${lerp(110,0,p)}%)`; sp.style.opacity=p;
+      });
+      const bp=win(lt,750,1250);
+      const pulse=1+0.015*Math.sin((lt-1250)/240);
+      S("ctaBtn").style.transform=`scale(${bp<1?(bp===0?0:easeOutBack(bp)):pulse})`;
+      S("ctaBtn").style.opacity=bp===0?0:1;
+    }
+  };
+  window.seek(0);
+</script>

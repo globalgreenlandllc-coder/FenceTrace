@@ -1,0 +1,257 @@
+<meta charset="utf-8">
+<title>GutterScan — Meta carousel slides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0C1B24;
+    --ink-2: #10242f;
+    --paper: #F7F6F2;
+    --accent: #14688C;
+    --accent-bright: #0E9CC3;
+    --accent-300: #93C6DC;
+    --accent-400: #5AA6C6;
+    --line: rgba(255, 255, 255, 0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #333; font-family: "Inter", -apple-system, sans-serif; }
+
+  .slide {
+    width: 1080px; height: 1080px;
+    position: relative; overflow: hidden;
+    background: var(--ink);
+    color: #fff;
+    margin: 24px auto;
+    display: flex; flex-direction: column;
+  }
+  /* faint blueprint grid */
+  .slide::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      linear-gradient(rgba(255,255,255,0.045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.045) 1px, transparent 1px);
+    background-size: 54px 54px;
+    mask-image: radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 100%);
+    -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 40%, transparent 100%);
+  }
+  /* right-edge brand stripes */
+  .stripes {
+    position: absolute; top: 0; bottom: 0; right: 0; width: 26px; z-index: 5;
+    background: repeating-linear-gradient(
+      -45deg,
+      var(--accent) 0 10px,
+      transparent 10px 22px
+    );
+    opacity: .85;
+  }
+
+  .mono { font-family: "Space Mono", ui-monospace, monospace; }
+  .display { font-family: "Archivo Black", Impact, sans-serif; text-transform: uppercase; line-height: .95; letter-spacing: -0.01em; }
+
+  .brandbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 56px 72px 0;
+    position: relative; z-index: 2;
+  }
+  .wordmark { font-family: "Archivo Black", sans-serif; font-size: 40px; letter-spacing: .02em; display: flex; align-items: center; gap: 14px; }
+  .wordmark .dot { width: 16px; height: 16px; background: var(--accent-bright); }
+  .chip {
+    font-family: "Space Mono", monospace; font-weight: 700; text-transform: uppercase;
+    font-size: 20px; letter-spacing: .08em;
+    border: 2px solid rgba(255,255,255,.3); border-radius: 10px;
+    padding: 10px 18px; color: #fff;
+  }
+
+  .body { position: relative; z-index: 2; flex: 1; display: flex; flex-direction: column; padding: 0 72px; }
+
+  .eyebrow {
+    font-family: "Space Mono", monospace; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .14em; font-size: 22px; color: var(--accent-400);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .eyebrow::before { content: ""; width: 14px; height: 14px; background: var(--accent-bright); }
+
+  h1 { font-size: 92px; margin-top: 26px; }
+  h1 .hl { color: var(--accent-bright); }
+  .sub { font-size: 33px; line-height: 1.42; color: rgba(255,255,255,.72); font-weight: 500; max-width: 900px; }
+
+  /* app-window screenshot frame */
+  .window {
+    background: #0a161e;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    box-shadow: 0 0 0 1px rgba(20,104,140,.25), 0 30px 80px -20px rgba(0,0,0,.8), 0 10px 30px rgba(14,156,195,.12);
+    overflow: hidden;
+  }
+  .window .bar {
+    height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 22px;
+    background: #0e1f29; border-bottom: 1px solid var(--line);
+  }
+  .window .bar i { width: 15px; height: 15px; border-radius: 50%; background: rgba(255,255,255,.16); display: block; }
+  .window .bar .url {
+    font-family: "Space Mono", monospace; font-size: 17px; color: rgba(255,255,255,.55);
+    background: rgba(255,255,255,.06); border-radius: 8px; padding: 6px 16px; margin-left: 10px;
+  }
+  .shot { display: block; width: 100%; }
+
+  .cta-btn {
+    display: inline-flex; align-items: center; gap: 16px;
+    background: linear-gradient(135deg, #14688C 0%, #0E9CC3 100%);
+    color: #fff; font-family: "Space Mono", monospace; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; font-size: 30px;
+    padding: 26px 46px; border-radius: 16px;
+    box-shadow: 0 0 0 1px rgba(20,104,140,.3), 0 18px 50px -8px rgba(14,156,195,.45);
+  }
+  .cta-btn::after { content: "→"; font-family: Inter; font-weight: 700; }
+
+  .kicker { position: absolute; bottom: 44px; left: 72px; right: 110px; display: flex; justify-content: space-between; align-items: center; z-index: 3; }
+  .kicker .url { font-family: "Space Mono", monospace; font-weight: 700; letter-spacing: .1em; font-size: 22px; color: rgba(255,255,255,.5); text-transform: uppercase; }
+  .pager { font-family: "Space Mono", monospace; font-size: 22px; color: rgba(255,255,255,.4); }
+
+  /* ---------- slide 1 ---------- */
+  #s1 .shot-wrap { margin-top: 54px; position: relative; }
+  #s1 .window { transform: rotate(-1.2deg); }
+  #s1 .crop { height: 470px; overflow: hidden; }
+  #s1 .crop img { width: 1750px; margin-left: -150px; margin-top: -450px; }
+  #s1 .badge-lf {
+    position: absolute; top: -34px; right: 4px; z-index: 4; transform: rotate(2deg);
+    background: var(--ink); border: 3px solid var(--accent-bright); border-radius: 16px;
+    padding: 18px 28px; box-shadow: 0 18px 50px rgba(0,0,0,.6);
+    text-align: right;
+  }
+  .badge-lf .n { font-family: "Space Mono", monospace; font-weight: 700; font-size: 52px; color: var(--accent-bright); }
+  .badge-lf .l { font-family: "Space Mono", monospace; font-size: 19px; letter-spacing: .1em; color: rgba(255,255,255,.6); text-transform: uppercase; }
+
+  /* ---------- slide 2 ---------- */
+  #s2 h1 { font-size: 84px; }
+  #s2 .crop { height: 496px; overflow: hidden; }
+  #s2 .crop img { width: 1650px; margin-left: -100px; margin-top: -430px; }
+  #s2 .chips { display: flex; gap: 16px; margin-top: 30px; }
+  #s2 .chips .chip { border-color: rgba(93,166,198,.55); color: var(--accent-300); font-size: 21px; }
+
+  /* ---------- slide 3 ---------- */
+  .statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 40px; }
+  .stat {
+    border: 1px solid var(--line); border-radius: 20px; padding: 28px 32px;
+    background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  }
+  .stat .n { font-family: "Space Mono", monospace; font-weight: 700; font-size: 62px; color: #fff; }
+  .stat .n em { font-style: normal; color: var(--accent-bright); }
+  .stat .l { font-family: "Space Mono", monospace; text-transform: uppercase; letter-spacing: .1em; font-size: 19px; color: rgba(255,255,255,.55); margin-top: 8px; }
+  .stat.hero { grid-column: span 2; background: linear-gradient(135deg, rgba(20,104,140,.32), rgba(14,156,195,.10)); border-color: rgba(93,166,198,.4); }
+  .stat.hero .n { font-size: 92px; }
+  .footnote { margin-top: 26px; font-size: 21px; color: rgba(255,255,255,.45); }
+
+  /* ---------- slide 4 ---------- */
+  #s4 h1 { font-size: 74px; }
+  #s4 h1 .arr { color: var(--accent-bright); }
+  .rows { margin-top: 52px; display: flex; flex-direction: column; gap: 0; border-top: 1px solid var(--line); }
+  .row { display: flex; align-items: center; gap: 28px; padding: 34px 6px; border-bottom: 1px solid var(--line); }
+  .row .num { font-family: "Space Mono", monospace; font-weight: 700; font-size: 26px; color: var(--accent-400); width: 64px; }
+  .row .t { font-size: 34px; font-weight: 700; }
+  .row .d { font-size: 24px; color: rgba(255,255,255,.55); margin-top: 4px; }
+
+  /* ---------- slide 5 ---------- */
+  #s5 { text-align: left; }
+  #s5 h1 { font-size: 108px; margin-top: 40px; }
+  #s5 .body { justify-content: center; }
+</style>
+
+<!-- ============ SLIDE 1 · HOOK ============ -->
+<section class="slide" id="s1">
+  <div class="stripes"></div>
+  <div class="brandbar">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <div class="chip">For Contractors</div>
+  </div>
+  <div class="body">
+    <h1 style="margin-top:48px">Stop driving out<br>just to <span class="hl">measure.</span></h1>
+    <p class="sub" style="margin-top:24px">GutterScan traces the roof from a satellite photo and hands you the gutter takeoff — before your competitor books the site visit.</p>
+    <div class="shot-wrap">
+      <div class="badge-lf"><div class="n">362.5 LF</div><div class="l">measured in seconds</div></div>
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span class="url">gutters.app</span></div>
+        <div class="crop"><img class="shot" src="../shots/satellite-analyzed.png"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 2 · HOW ============ -->
+<section class="slide" id="s2">
+  <div class="stripes"></div>
+  <div class="brandbar">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <div class="chip">How it works</div>
+  </div>
+  <div class="body">
+    <h1 style="margin-top:40px">Type an address.<br><span class="hl">Get the takeoff.</span></h1>
+    <div class="shot-wrap" style="margin-top:40px">
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span class="url">gutters.app · satellite takeoff</span></div>
+        <div class="crop"><img class="shot" src="../shots/satellite-analyzed.png"></div>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip">Auto-traced eaves</span>
+      <span class="chip">Downspout drops</span>
+      <span class="chip">Live linear footage</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SLIDE 3 · NUMBERS ============ -->
+<section class="slide" id="s3">
+  <div class="stripes"></div>
+  <div class="brandbar">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <div class="chip">Live readout</div>
+  </div>
+  <div class="body">
+    <div class="eyebrow" style="margin-top:38px">One address in. Numbers out.</div>
+    <h1 style="font-size:64px">The whole bid, while<br>you're <span class="hl">on the phone.</span></h1>
+    <div class="statgrid">
+      <div class="stat hero"><div class="n">$5,070<em>.00</em></div><div class="l">Materials estimate — priced from your own rates</div></div>
+      <div class="stat"><div class="n">362.5 <em>LF</em></div><div class="l">Total gutter run</div></div>
+      <div class="stat"><div class="n">4 <em>drops</em></div><div class="l">Downspouts placed</div></div>
+    </div>
+    <p class="footnote">Numbers shown from the live in-app demo. Drag any eave — footage and price update instantly.</p>
+  </div>
+  <div class="kicker"><span class="url">gutters.app</span><span class="pager">3/5</span></div>
+</section>
+
+<!-- ============ SLIDE 4 · PIPELINE ============ -->
+<section class="slide" id="s4">
+  <div class="stripes"></div>
+  <div class="brandbar">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <div class="chip">Beyond takeoff</div>
+  </div>
+  <div class="body">
+    <h1 style="margin-top:44px">Takeoff <span class="arr">→</span> Proposal <span class="arr">→</span><br>E-sign <span class="arr">→</span> <span class="hl">Paid.</span></h1>
+    <div class="rows">
+      <div class="row"><span class="num">01</span><div><div class="t">Three-tier proposals</div><div class="d">Good / better / best, branded and sent in one click.</div></div></div>
+      <div class="row"><span class="num">02</span><div><div class="t">Client portal with e-signature</div><div class="d">Homeowners review, sign, and pay from one link.</div></div></div>
+      <div class="row"><span class="num">03</span><div><div class="t">Payment schedules &amp; receipts</div><div class="d">Deposits, installments, automatic receipts.</div></div></div>
+      <div class="row"><span class="num">04</span><div><div class="t">Blueprint takeoffs too</div><div class="d">New construction? Upload the plan set instead.</div></div></div>
+    </div>
+  </div>
+  <div class="kicker"><span class="url">gutters.app</span><span class="pager">4/5</span></div>
+</section>
+
+<!-- ============ SLIDE 5 · CTA ============ -->
+<section class="slide" id="s5">
+  <div class="stripes"></div>
+  <div class="brandbar">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <div class="chip">Get started</div>
+  </div>
+  <div class="body">
+    <div class="eyebrow">The operating system for gutter contractors</div>
+    <h1>Where addresses<br>become <span class="hl">estimates.</span></h1>
+    <p class="sub" style="margin-top:34px">Measure from your desk. Quote while they're still on the phone. Win the job before anyone climbs a ladder.</p>
+    <div style="margin-top:56px"><span class="cta-btn">Get started at gutters.app</span></div>
+  </div>
+  <div class="kicker"><span class="url">gutters.app</span><span class="pager">5/5</span></div>
+</section>

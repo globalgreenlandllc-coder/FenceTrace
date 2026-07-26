@@ -1,0 +1,1506 @@
+// Gutters AI Estimator — database schema
+//
+// Conventions:
+// - All tables snake_case via @@map; field names camelCase in code.
+// - Money stored as Decimal(12,2) in USD. Never use floats for money.
+// - Soft-delete via `deletedAt` where it exists; otherwise hard delete.
+// - Timestamps default to now() and update on @updatedAt where present.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Direct (non-pooled) URL for migrations. PgBouncer-style poolers
+  // can't run schema migrations. Vercel's Neon integration auto-injects
+  // DATABASE_URL_UNPOOLED, so this name lines up zero-config.
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// -----------------------------------------------------------------------
+// Auth (Auth.js / NextAuth-compatible shape)
+// -----------------------------------------------------------------------
+
+enum UserRole {
+  CONTRACTOR
+  WORKER
+  SUPER_ADMIN
+}
+
+enum AnnouncementLevel {
+  INFO
+  SUCCESS
+  WARNING
+  CRITICAL
+}
+
+enum AnnouncementAudience {
+  ALL
+  CONTRACTORS
+  WORKERS
+}
+
+enum SupportStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+// A crew member a contractor (owner) invites to run jobs. Status tracks the
+// invite lifecycle; `userId` is null until the invited person signs up and
+// accepts (linking their own Clerk-backed User account). One person can be a
+// worker for several owners — one Worker row per (owner, worker) relationship.
+enum WorkerStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+// What the worker is being sent to do — drives the badge/label on the job card.
+enum JobKind {
+  GUTTERS_REPLACEMENT
+  GUTTERS_NEW
+  ROOF
+  REPAIR
+  OTHER
+}
+
+// Lifecycle of a job the owner hands to a worker. OFFERED → worker ACCEPTS or
+// DECLINES; an accepted job runs IN_PROGRESS → COMPLETED. The owner may CANCEL.
+enum JobAssignmentStatus {
+  OFFERED
+  ACCEPTED
+  DECLINED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id            String     @id @default(cuid())
+  clerkId       String?    @unique
+  email         String     @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          UserRole   @default(CONTRACTOR)
+  status        UserStatus @default(ACTIVE)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  contractorProfile ContractorProfile?
+  subscription      Subscription?
+  creditWallet      CreditWallet?
+  proposals         Proposal[]
+  estimateRuns      EstimateRun[]
+  transactions      Transaction[]
+  auditLogs         AuditLog[]             @relation("ActorAudits")
+  impersonations    ImpersonationSession[] @relation("AdminImpersonator")
+  impersonated      ImpersonationSession[] @relation("ImpersonatedUser")
+  leadInteractions  UserLeadInteraction[]
+  planAnalyses      PlanAnalysis[]
+  appointments      Appointment[]
+  // Workers this user (as an OWNER/contractor) has invited to run jobs.
+  workersOwned      Worker[]               @relation("WorkerOwner")
+  // Worker relationships where THIS user is the crew member (one per owner).
+  workerLinks       Worker[]               @relation("WorkerAccount")
+  // Jobs this user (as owner) has assigned out to workers.
+  jobsOwned         JobAssignment[]        @relation("JobOwner")
+  // Admin accuracy-lab runs (SUPER_ADMIN only in practice).
+  testLabRuns       TestLabRun[]
+  // Contractor money OS: recurring overhead + per-job expenses + CRM notes.
+  overheadItems     OverheadItem[]
+  jobExpenses       JobExpense[]           @relation("ExpenseOwner")
+  clientNotes       ClientNote[]
+  financialSettings FinancialSettings?
+
+  // Referral program: shareable code (lazily minted on first visit to
+  // Settings) + who referred this account (set once at creation from
+  // the ?ref cookie; doubles as the "referrer was credited" marker).
+  referralCode String? @unique
+  referredById String?
+
+  // Admin comms: announcements this user authored (SUPER_ADMIN), the
+  // announcements they've dismissed, and their support tickets.
+  announcementsAuthored  Announcement[]          @relation("AnnouncementAuthor")
+  announcementDismissals AnnouncementDismissal[]
+  supportTickets         SupportTicket[]         @relation("SupportRequester")
+
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// -----------------------------------------------------------------------
+// Contractor profile (logo + company info shown on proposals)
+// -----------------------------------------------------------------------
+
+model ContractorProfile {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  company          String
+  contractorName   String
+  email            String
+  phone            String
+  license          String
+  tagline          String?
+  logoInitials     String   @default("GU")
+  logoTone         String   @default("emerald")
+  logoUrl          String?  @db.Text
+  stripeAccountId  String?  @unique
+  // Public payment URLs the contractor pastes in (Stripe Payment Link,
+  // Square checkout link, etc). Surfaced as "Pay now" on accepted proposals.
+  stripePaymentUrl String?
+  squarePaymentUrl String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contractor_profiles")
+}
+
+// -----------------------------------------------------------------------
+// Subscriptions + credits
+// -----------------------------------------------------------------------
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  status               SubscriptionStatus @default(TRIALING)
+  planId               String             @default("pro_monthly")
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model CreditWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  included  Int      @default(12)
+  used      Int      @default(0)
+  bonus     Int      @default(0)
+  resetsAt  DateTime
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("credit_wallets")
+}
+
+// -----------------------------------------------------------------------
+// Estimate runs (one per address-time, tracks AI calls and dedup)
+// -----------------------------------------------------------------------
+
+enum EstimateRunStatus {
+  QUEUED
+  SUCCEEDED
+  FAILED
+}
+
+model EstimateRun {
+  id                String            @id @default(cuid())
+  userId            String
+  address           String
+  addressNormalized String
+  status            EstimateRunStatus @default(QUEUED)
+  creditConsumed    Boolean           @default(false)
+  reused            Boolean           @default(false)
+  errorMessage      String?           @db.Text
+  durationMs        Int?
+  apiCostCents      Int?
+  measurements      Json?
+  createdAt         DateTime          @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, addressNormalized, createdAt])
+  @@index([status])
+  @@map("estimate_runs")
+}
+
+// -----------------------------------------------------------------------
+// Plan analyses (PDF/image construction plans → AI gutter blueprint)
+//
+// A contractor uploads a roof plan and Claude returns a structured layout:
+// every gutter run + downspout + excluded rake. We store the original file
+// bytes (base64 in `originalData`) so the renderer can show the source
+// alongside the AI overlay, plus the raw AI JSON in `analysisJson`.
+//
+// `editedJson` is null until the contractor manually edits — keeping the
+// original AI output untouched lets us A/B test prompt changes against
+// real ground-truth contractor corrections.
+// -----------------------------------------------------------------------
+
+enum PlanAnalysisStatus {
+  QUEUED
+  SUCCEEDED
+  FAILED
+}
+
+model PlanAnalysis {
+  id           String             @id @default(cuid())
+  userId       String
+  status       PlanAnalysisStatus @default(QUEUED)
+  // Source file: filename, mime, raw bytes (base64). PDFs are stored as the
+  // original PDF; we also store the rasterized page images in `pageImages`.
+  filename     String
+  mimeType     String
+  originalData String?            @db.Text
+  pageImages   Json? // Array of { dataUrl, width, height, pageIndex }
+  pageCount    Int?
+  // AI output
+  analysisJson Json? // Raw Claude response (BlueprintResult)
+  editedJson   Json? // Contractor-edited version (null until edited)
+  confidence   String? // "high" | "medium" | "low"
+  // Telemetry
+  modelUsed    String? // e.g. "claude-sonnet-4-6"
+  inputTokens  Int?
+  outputTokens Int?
+  cacheHit     Boolean            @default(false)
+  durationMs   Int?
+  errorMessage String?            @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("plan_analyses")
+}
+
+// -----------------------------------------------------------------------
+// Proposals (cover, packages, photos, terms — JSON snapshot)
+// -----------------------------------------------------------------------
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  VIEWED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model Proposal {
+  id                String         @id @default(cuid())
+  userId            String
+  publicToken       String         @unique @default(cuid())
+  address           String
+  clientName        String
+  clientEmail       String
+  status            ProposalStatus @default(DRAFT)
+  selectedPackageId String?
+  totalCents        Int            @default(0)
+  paidCents         Int            @default(0)
+  data              Json
+  contractorSnap    Json
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  sentAt            DateTime?
+  acceptedAt        DateTime?
+  expiresAt         DateTime?
+  // Set when the contract is 100% collected (all installments PAID).
+  // "Done jobs" in the dashboard = ACCEPTED + completedAt != null.
+  // Cleared automatically if an approved change order reopens a balance.
+  completedAt       DateTime?
+  // Cached TTS audio summary for the client portal's "Listen" button.
+  // audioScriptHash is the hash of the spoken script the file was
+  // generated from — when the proposal content changes (price edit,
+  // negotiated discount) the hash stops matching and /api/p/[token]/audio
+  // regenerates. Both null until the first listen.
+  audioUrl          String?
+  audioScriptHash   String?
+
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events           ProposalEvent[]
+  transactions     Transaction[]
+  appointments     Appointment[]
+  jobAssignments   JobAssignment[]
+  installments     PaymentInstallment[]
+  changeOrders     ChangeOrder[]
+  discountRequests DiscountRequest[]
+  expenses         JobExpense[]
+
+  @@index([userId, status])
+  @@index([publicToken])
+  @@map("proposals")
+}
+
+enum ProposalEventKind {
+  DRAFTED
+  SENT
+  VIEWED
+  LISTENED
+  PACKAGE_SELECTED
+  SIGNED
+  ACCEPTED
+  PAID
+  DECLINED
+  EXPIRED
+  CHANGE_ORDER_SENT
+  CHANGE_ORDER_APPROVED
+  CHANGE_ORDER_DECLINED
+  COMPLETED
+  // Client-initiated price negotiation (see DiscountRequest below).
+  DISCOUNT_REQUESTED
+  DISCOUNT_COUNTERED
+  DISCOUNT_AGREED
+  DISCOUNT_DECLINED
+  DISCOUNT_WITHDRAWN
+}
+
+model ProposalEvent {
+  id         String            @id @default(cuid())
+  proposalId String
+  kind       ProposalEventKind
+  payload    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime          @default(now())
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, createdAt])
+  @@map("proposal_events")
+}
+
+// -----------------------------------------------------------------------
+// Payment schedule (installments) + change orders
+//
+// Created when a proposal is ACCEPTED: the homeowner's payment choice
+// becomes a schedule of installments (Deposit + Final, or one Full
+// payment). Contractors can edit the schedule, mark installments paid
+// (cash/check/card/bank), and every paid installment auto-emails the
+// client a receipt. When the sum of PAID installments covers the
+// contract total, the proposal's completedAt is stamped → "Done jobs".
+//
+// Change orders are extra-work requests sent mid-job. The client
+// approves/declines from the same portal link; approval appends an
+// installment and bumps the contract total — one running invoice.
+// -----------------------------------------------------------------------
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentMethod {
+  CARD
+  CASH
+  CHECK
+  BANK_TRANSFER
+  OTHER
+}
+
+model PaymentInstallment {
+  id            String            @id @default(cuid())
+  proposalId    String
+  label         String
+  sortOrder     Int               @default(0)
+  amountCents   Int
+  // null = due on completion (no calendar date). Overdue is derived:
+  // status PENDING && dueAt < now.
+  dueAt         DateTime?
+  status        InstallmentStatus @default(PENDING)
+  paidAt        DateTime?
+  method        PaymentMethod?
+  note          String?
+  receiptSentAt DateTime?
+  // Reminder throttling for the daily cron + manual "Remind" button.
+  remindedAt    DateTime?
+  reminderCount Int               @default(0)
+  // Set when this installment was created by an approved change order.
+  changeOrderId String?           @unique
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  proposal    Proposal     @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  changeOrder ChangeOrder? @relation(fields: [changeOrderId], references: [id], onDelete: SetNull)
+
+  @@index([proposalId, sortOrder])
+  @@index([status, dueAt])
+  @@map("payment_installments")
+}
+
+enum ChangeOrderStatus {
+  DRAFT
+  SENT
+  APPROVED
+  DECLINED
+}
+
+model ChangeOrder {
+  id            String            @id @default(cuid())
+  proposalId    String
+  // Sequential per proposal: CO #1, CO #2, …
+  number        Int
+  title         String
+  description   String?           @db.Text
+  amountCents   Int
+  status        ChangeOrderStatus @default(DRAFT)
+  sentAt        DateTime?
+  decidedAt     DateTime?
+  // Client-typed name captured on approval (lightweight e-sign).
+  approvedName  String?
+  declineReason String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  proposal    Proposal            @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  installment PaymentInstallment?
+
+  @@unique([proposalId, number])
+  @@index([proposalId, status])
+  @@map("change_orders")
+}
+
+// -----------------------------------------------------------------------
+// Discount requests — client-initiated price negotiation
+//
+// The mirror of a change order: instead of the contractor asking the
+// client for more money, the CLIENT (from the token-gated /p/[token]
+// portal, before accepting) asks for a lower price. The contractor can
+// agree, counter, or decline; on a counter the client can accept,
+// counter back, or withdraw — a full multi-round back-and-forth, each
+// move recorded as a DiscountOffer so the thread renders both sides.
+//
+// A negotiation is always anchored to ONE reference package (the tier
+// the client was looking at). When a deal is struck (status AGREED) the
+// resolved price is converted to a proposal-wide discountPct written
+// into the proposal's `data` blob — the SAME lever the pricing pipeline,
+// acceptance flow and payment schedule already read, so nothing else in
+// the money path changes. `currentCents` is the amount on the table from
+// whoever moved last; `turn` says whose move it is.
+// -----------------------------------------------------------------------
+
+enum DiscountRequestStatus {
+  OPEN // client asked (or countered back) → contractor's move
+  COUNTERED // contractor countered → client's move
+  AGREED // deal struck → discount applied to the proposal
+  DECLINED // contractor declined; list price stands
+  WITHDRAWN // client walked away; list price stands
+  EXPIRED
+}
+
+enum DiscountTurn {
+  CONTRACTOR // waiting on the contractor to respond
+  CLIENT // waiting on the client to respond
+  NONE // resolved (agreed / declined / withdrawn / expired)
+}
+
+enum DiscountOfferParty {
+  CLIENT
+  CONTRACTOR
+}
+
+model DiscountRequest {
+  id            String                @id @default(cuid())
+  proposalId    String
+  // Reference package the negotiation is anchored to.
+  packageId     String
+  packageName   String
+  // Snapshot of the reference package's listed total (post-discount, at
+  // request time) in cents — the "before" number the thread shows.
+  listedCents   Int
+  // Contractor cost basis (pre-markup subtotal) for the reference
+  // package, snapshotted so the margin coach is stable even if the
+  // proposal is edited mid-negotiation. cents.
+  costCents     Int
+  // Lowest price the discount lever can represent = 50% off the
+  // UNDISCOUNTED base (packageTotal clamps discountPct to [0,50]).
+  // Snapshotted so a promo-discounted proposal can't let a client agree
+  // to a price the lever would silently clamp up. cents.
+  floorCents    Int                   @default(0)
+  // Current amount on the table (whoever moved last). cents.
+  currentCents  Int
+  status        DiscountRequestStatus @default(OPEN)
+  turn          DiscountTurn          @default(CONTRACTOR)
+  // Set when AGREED — the resolved price + the proposal-wide discountPct
+  // it was converted into.
+  resolvedCents Int?
+  resolvedPct   Float?
+  declineReason String?               @db.Text
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  decidedAt     DateTime?
+  expiresAt     DateTime?
+
+  proposal Proposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  offers   DiscountOffer[]
+
+  @@index([proposalId, status])
+  @@map("discount_requests")
+}
+
+model DiscountOffer {
+  id          String             @id @default(cuid())
+  requestId   String
+  party       DiscountOfferParty
+  // The price this party is proposing for the reference package. cents.
+  amountCents Int
+  message     String?            @db.Text
+  createdAt   DateTime           @default(now())
+
+  request DiscountRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@map("discount_offers")
+}
+
+// -----------------------------------------------------------------------
+// Transactions (Stripe Billing for SaaS, Stripe Connect for proposal pay)
+// -----------------------------------------------------------------------
+
+enum TransactionType {
+  SUBSCRIPTION
+  PROPOSAL_DEPOSIT
+  PROPOSAL_FINAL
+  REFUND
+  CREDIT_TOPUP
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+model Transaction {
+  id                    String            @id @default(cuid())
+  userId                String
+  proposalId            String?
+  type                  TransactionType
+  status                TransactionStatus @default(PENDING)
+  grossCents            Int
+  platformFeeCents      Int               @default(0)
+  netCents              Int
+  currency              String            @default("usd")
+  stripePaymentIntentId String?           @unique
+  stripeChargeId        String?
+  stripeInvoiceId       String?
+  description           String?
+  createdAt             DateTime          @default(now())
+  settledAt             DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  proposal Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([proposalId])
+  @@index([status])
+  @@map("transactions")
+}
+
+// -----------------------------------------------------------------------
+// Admin: audit log + impersonation
+// -----------------------------------------------------------------------
+
+enum AuditAction {
+  USER_SUSPENDED
+  USER_UNSUSPENDED
+  USER_CREDITS_ADJUSTED
+  USER_IMPERSONATED
+  USER_IMPERSONATION_ENDED
+  REFUND_ISSUED
+  API_KEY_CREATED
+  API_KEY_ROTATED
+  API_KEY_REVOKED
+  API_KEY_VIEWED
+  PRICING_UPDATED
+  MATERIAL_DEFAULTS_UPDATED
+  PROMPT_TEMPLATE_UPDATED
+  USER_ROLE_CHANGED
+  USER_PLAN_CHANGED
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  action     AuditAction
+  targetType String?
+  targetId   String?
+  payload    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  actor User @relation("ActorAudits", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+model ImpersonationSession {
+  id        String    @id @default(cuid())
+  adminId   String
+  userId    String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  reason    String?
+
+  admin User @relation("AdminImpersonator", fields: [adminId], references: [id], onDelete: Cascade)
+  user  User @relation("ImpersonatedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([userId])
+  @@map("impersonation_sessions")
+}
+
+// -----------------------------------------------------------------------
+// Admin: API key vault (encrypted at rest)
+// -----------------------------------------------------------------------
+
+enum ApiKeyProvider {
+  GOOGLE_MAPS
+  REGRID
+  GOOGLE_SOLAR
+  MAPBOX
+  OPENAI
+  FAL
+  NEARMAP
+  EAGLEVIEW
+  RESEND
+  STRIPE_SECRET
+  STRIPE_WEBHOOK
+  SOCRATA
+  ANTHROPIC
+  GEMINI
+}
+
+model ApiKey {
+  id             String         @id @default(cuid())
+  provider       ApiKeyProvider
+  label          String
+  encryptedValue String         @db.Text
+  fingerprint    String
+  active         Boolean        @default(true)
+  lastUsedAt     DateTime?
+  rotatedAt      DateTime?
+  createdAt      DateTime       @default(now())
+  createdBy      String
+
+  // Same Google Cloud key may legitimately power both GOOGLE_MAPS and
+  // GOOGLE_SOLAR slots, so uniqueness is scoped to the provider.
+  @@unique([provider, fingerprint])
+  @@index([provider, active])
+  @@map("api_keys")
+}
+
+// -----------------------------------------------------------------------
+// Admin: pricing CMS + global material defaults
+// -----------------------------------------------------------------------
+
+enum PricingPlanInterval {
+  MONTHLY
+  YEARLY
+  ONE_TIME
+}
+
+model PricingPlan {
+  id                    String              @id @default(cuid())
+  slug                  String              @unique
+  name                  String
+  tagline               String?
+  priceCents            Int
+  interval              PricingPlanInterval @default(MONTHLY)
+  includedCredits       Int                 @default(0)
+  extraCreditPriceCents Int                 @default(500)
+  features              Json
+  active                Boolean             @default(true)
+  stripePriceId         String?             @unique
+  stripeProductId       String?
+  sortOrder             Int                 @default(0)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@map("pricing_plans")
+}
+
+model MaterialDefault {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  label       String
+  category    String
+  unit        String
+  priceCents  Int
+  description String?
+  sortOrder   Int      @default(0)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  @@map("material_defaults")
+}
+
+/// Admin-editable AI prompt overrides. Keyed by a stable prompt key
+/// (see lib/ai/prompts.ts). When a row exists, the pipeline uses its
+/// `content`; otherwise it falls back to the hardcoded default in code.
+model PromptTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  category  String // "address" | "blueprint"
+  content   String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("prompt_templates")
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("platform_settings")
+}
+
+// -----------------------------------------------------------------------
+// Leads / Permits Tracking
+// -----------------------------------------------------------------------
+
+enum LeadStatus {
+  APPLIED
+  UNDER_REVIEW
+  ISSUED
+  INSPECTION
+  FINALED
+  UNKNOWN
+}
+
+model Lead {
+  id                  String     @id @default(cuid())
+  sourceId            String // The ID from the city API
+  sourceCity          String // e.g. "Seattle", "Kirkland"
+  address             String
+  originalDescription String     @db.Text
+  categorizedTrade    String? // e.g. "Roofing", "Gutters", "Framing"
+  buildingType        String? // "Residential", "Commercial", "Multi-family", …
+  projectKind         String? // "New Construction" | "Remodel/Addition" | "Tenant Improvement" | "Demolition" | "Other"
+  contractorName      String? // Company doing the permitted work, if disclosed
+  ownerName           String? // Property owner, when the feed publishes it
+  fixtures            String? // Comma-separated work items / fixtures
+  workClass           String? // Raw work-class from source (e.g. "New Structure")
+  aiSummary           String?    @db.Text // Plain-English one-liner from the AI
+  aiRelevance         String? // "high" | "medium" | "low" — gutter-business relevance
+  status              LeadStatus @default(UNKNOWN)
+  latitude            Float
+  longitude           Float
+  projectValue        Int? // raw dollars, as reported by the source permit feed
+  issuedDate          DateTime? // When the municipality issued the permit (from source feed)
+  housingUnits        Int? // # of dwelling units the permit creates / affects
+  developmentType     String? // "Single Family" | "Duplex" | "Townhouse" | "Condo" | "Multifamily" | "Plat" | "Short Plat" | "ADU" | …
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  interactions UserLeadInteraction[]
+  appointments Appointment[]
+
+  @@unique([sourceCity, sourceId]) // Prevents duplicate imports from the same city
+  @@index([latitude, longitude])
+  @@index([categorizedTrade, status])
+  @@index([buildingType])
+  @@index([projectKind])
+  @@index([issuedDate])
+  @@index([developmentType])
+  @@map("leads")
+}
+
+enum InteractionStatus {
+  UNREAD
+  VISITED
+  CONTACTED
+  BIDDING
+  NOT_INTERESTED
+}
+
+model UserLeadInteraction {
+  id        String            @id @default(cuid())
+  userId    String
+  leadId    String
+  status    InteractionStatus @default(UNREAD)
+  notes     String?           @db.Text
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leadId])
+  @@map("user_lead_interactions")
+}
+
+enum AppointmentType {
+  LEAD_VISIT
+  JOB_INSTALL
+  PROPOSAL_MEETING
+  FOLLOW_UP
+  OTHER
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+// Calendar entry. Powers /dashboard/calendar — lead site visits, gutter
+// installs scheduled off a sent proposal, and ad-hoc follow-ups all
+// share this table. leadId / proposalId are optional links back to the
+// source row so the calendar can show "Site visit for X permit" or
+// "Install for Y proposal" with a deep link.
+model Appointment {
+  id          String            @id @default(cuid())
+  userId      String
+  title       String
+  type        AppointmentType   @default(OTHER)
+  status      AppointmentStatus @default(SCHEDULED)
+  startsAt    DateTime
+  endsAt      DateTime
+  address     String?
+  notes       String?           @db.Text
+  // Optional per-event color override. When null the UI picks by type.
+  colorHex    String?
+  // Cached client contact so the calendar tile can show name/phone
+  // without joining; pre-filled from lead/proposal when present.
+  clientName  String?
+  clientPhone String?
+  clientEmail String?
+
+  leadId     String?
+  proposalId String?
+  // Crew member (worker/contractor) this appointment is assigned to.
+  workerId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  proposal Proposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  worker   Worker?   @relation("AppointmentWorker", fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+  @@index([leadId])
+  @@index([proposalId])
+  @@index([workerId])
+  @@map("appointments")
+}
+
+// -----------------------------------------------------------------------
+// Abuse protection: rate-limit counters, spend ledger, abuse events
+//
+// RateLimitBucket is a fixed-window counter — one row per
+// (policy, identity, window). Rows expire and are swept by the daily
+// cron. Postgres is the source of truth (no Redis in this stack); the
+// in-memory per-IP limiter in middleware.ts is a separate first line.
+//
+// SpendEvent is a cost LEDGER for capping, not billing: every AI /
+// external-API action appends a conservative cost estimate (actual
+// token math where usage is captured, flat estimates elsewhere).
+// Hour/day aggregates over this table drive the spend circuit breaker.
+// -----------------------------------------------------------------------
+
+model RateLimitBucket {
+  key       String   @id // "<policy>|<identity>|<windowSec>|<windowStart>"
+  count     Int      @default(0)
+  expiresAt DateTime
+
+  @@index([expiresAt])
+  @@map("rate_limit_buckets")
+}
+
+enum SpendKind {
+  SATELLITE_ESTIMATE
+  BLUEPRINT_ANALYSIS
+  LEAD_SYNC
+  EMAIL_SEND
+}
+
+// Deliberately no FK to users — the ledger must survive user deletion
+// and a spend write must never fail on referential integrity.
+model SpendEvent {
+  id           String    @id @default(cuid())
+  userId       String? // null = system (cron / unattributed)
+  kind         SpendKind
+  provider     String? // "anthropic" | "openai" | "gemini" | "fal" | "google" | "resend"
+  costCents    Int // conservative estimate — for capping, not invoicing
+  inputTokens  Int?
+  outputTokens Int?
+  meta         Json?
+  createdAt    DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([kind, createdAt])
+  @@map("spend_events")
+}
+
+enum AbuseEventKind {
+  RATE_LIMITED
+  QUOTA_EXCEEDED
+  SPEND_CAP_USER
+  CIRCUIT_OPENED
+  CIRCUIT_CLOSED
+  ALERT_SENT
+}
+
+model AbuseEvent {
+  id        String         @id @default(cuid())
+  kind      AbuseEventKind
+  policy    String? // which limit tripped, e.g. "estimate.run"
+  scopeKey  String? // "user:<id>" | "ip:<addr>" | "token:<..>" | "global"
+  userId    String?
+  ip        String?
+  route     String?
+  detail    Json?
+  createdAt DateTime       @default(now())
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+  @@index([scopeKey, createdAt])
+  @@map("abuse_events")
+}
+
+// -----------------------------------------------------------------------
+// Web analytics: first-party traffic tracking (sessions + pageviews)
+//
+// Written by the public beacon endpoint /api/track (client tracker in
+// components/analytics/tracker.tsx), read only by /admin/analytics.
+// One VisitorSession row per browsing session (30-min inactivity
+// rollover on the client); heartbeats bump lastSeenAt so "online now"
+// = lastSeenAt within the live window. Referrer/UTM/channel are
+// first-touch: written on session create, never overwritten.
+//
+// Deliberately no FK to users (SpendEvent precedent) — a beacon write
+// must never fail on referential integrity, and traffic history must
+// survive user deletion. `userId` is linked lazily when a signed-in
+// pageview arrives, which is what powers signup attribution.
+// -----------------------------------------------------------------------
+
+model VisitorSession {
+  id           String   @id // client-generated, validated ^[A-Za-z0-9_-]{8,64}$
+  visitorId    String // persistent anonymous id (localStorage), same charset
+  userId       String? // DB user id once signed in — no FK by design
+  // Segment of the ENTRY page: marketing | app | portal | admin.
+  // The live view derives the CURRENT segment from lastPath instead.
+  segment      String   @default("marketing")
+  entryPath    String
+  lastPath     String
+  referrer     String? // full document.referrer of the entry view
+  referrerHost String?
+  // direct | organic | paid | social | email | referral (lib/analytics.ts)
+  channel      String   @default("direct")
+  utmSource    String?
+  utmMedium    String?
+  utmCampaign  String?
+  utmTerm      String?
+  utmContent   String?
+  device       String? // desktop | mobile | tablet
+  browser      String?
+  os           String?
+  country      String? // ISO-3166 alpha-2 from x-vercel-ip-country
+  region       String?
+  city         String?
+  pageviews    Int      @default(1)
+  startedAt    DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+
+  @@index([lastSeenAt])
+  @@index([startedAt])
+  @@index([visitorId, startedAt])
+  @@index([userId, startedAt])
+  @@map("visitor_sessions")
+}
+
+model PageView {
+  id        String   @id @default(cuid())
+  sessionId String
+  visitorId String
+  userId    String?
+  path      String
+  createdAt DateTime @default(now())
+
+  // page_views is insert-heavy and read only by the admin dashboard, which
+  // queries by createdAt (time buckets) and path (top pages) — never by
+  // sessionId. Every extra index here is pure write amplification.
+  @@index([createdAt])
+  @@index([path, createdAt])
+  @@map("page_views")
+}
+
+// High-intent custom events (distinct from raw pageviews) — e.g. a click on
+// "Upgrade to Pro". Written by the beacon on `type:"event"`; read by the
+// admin live activity feed, which classifies intent (lib/analytics.ts
+// classifyIntent) and flags subscribe attempts. Kept separate from
+// page_views so it never inflates pageview/bounce counts.
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  sessionId String
+  visitorId String
+  userId    String?
+  name      String // e.g. "subscribe_click"
+  path      String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([name, createdAt])
+  @@map("analytics_events")
+}
+
+// A crew member an owner (contractor) invites. Before the person signs up,
+// `userId` is null and only email/inviteToken exist; when they open the invite
+// link and accept, their Clerk-backed User is linked and status flips to ACTIVE.
+// One (owner, email) pair is unique — re-inviting updates the same row.
+model Worker {
+  id          String       @id @default(cuid())
+  ownerId     String
+  userId      String? // the worker's own account, null until they accept
+  email       String
+  name        String?
+  phone       String?
+  trade       String? // e.g. "Gutter installer", "Roofer"
+  kind        WorkerKind   @default(CREW) // CREW installs; SALES runs visits/meetings
+  status      WorkerStatus @default(INVITED)
+  inviteToken String       @unique
+  invitedAt   DateTime     @default(now())
+  acceptedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  owner        User                 @relation("WorkerOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  account      User?                @relation("WorkerAccount", fields: [userId], references: [id], onDelete: SetNull)
+  jobs         JobAssignment[]
+  expenses     JobExpense[]
+  availability WorkerAvailability[]
+  appointments Appointment[]        @relation("AppointmentWorker")
+
+  @@unique([ownerId, email])
+  @@index([ownerId])
+  @@index([userId])
+  @@index([inviteToken])
+  @@map("workers")
+}
+
+// CREW = installers/subcontractors who take JobAssignments.
+// SALES = reps/designers who take Appointments (visits, meetings) — no job
+// files or pay math, they just get their stops on their own calendar.
+enum WorkerKind {
+  CREW
+  SALES
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  UNAVAILABLE
+}
+
+// A worker's self-declared day availability, shown on the owner's calendar so
+// scheduling happens on days the crew actually works — no phone tag. One row
+// per (worker, day); a day with no row is "unknown" (neutral). The worker
+// edits this from the crew portal; the owner only reads it.
+model WorkerAvailability {
+  id        String             @id @default(cuid())
+  workerId  String
+  date      DateTime           @db.Date
+  status    AvailabilityStatus
+  note      String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  // The unique index on (workerId, date) already serves every read (owner
+  // range scan + the upsert lookup), so no separate @@index is needed.
+  @@unique([workerId, date])
+  @@map("worker_availability")
+}
+
+// A job an owner hands to a worker. This table is the ONLY thing a worker ever
+// reads about a job, so it deliberately carries NO owner pricing — `workerPayCents`
+// is the worker's own pay (owner-set), and `roofSnapshot` is a price-free copy of
+// the takeoff geometry. Client price (Proposal.totalCents / data.packages) is
+// never copied here. Schedule window drives both the owner's and worker's calendars.
+model JobAssignment {
+  id             String              @id @default(cuid())
+  ownerId        String
+  workerId       String
+  proposalId     String? // source job, when assigned off a proposal
+  title          String
+  address        String
+  clientName     String?
+  clientPhone    String? // owner opts in — the worker may need to reach the client
+  kind           JobKind             @default(GUTTERS_REPLACEMENT)
+  scope          String?             @db.Text // "what needs to be done", owner-written
+  workerPayCents Int                 @default(0) // the WORKER's pay — never the client price
+  roofSnapshot   Json? // price-free takeoff geometry + measurements for the worker
+  // Owner-attached job file (design / invoice PDF or photo) stored in Blob.
+  // Attaching it is the owner's explicit choice to share it with the worker.
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String? // mime type
+  // Pay audit trio. payBaseCents = the base amount the assignment was priced
+  // against — the source proposal's estimate total (payBasis="estimate") or
+  // the AI-read uploaded invoice total (payBasis="invoice"). payPct is set
+  // ONLY when the pay actually equals payPct% of that base (server-verified);
+  // a hand-typed pay keeps the base for reference with payPct null. Audit
+  // only — workerPayCents stays the single source of truth for what the
+  // worker is owed, and none of this trio is ever sent to the worker.
+  payBaseCents Int?
+  payPct       Float?
+  payBasis     String? // 'estimate' | 'invoice' (server-whitelisted) | null
+  startsAt       DateTime
+  endsAt         DateTime
+  status         JobAssignmentStatus @default(OFFERED)
+  declineReason  String?             @db.Text
+  respondedAt    DateTime?
+  startedAt      DateTime? // worker tapped "Start job" → IN_PROGRESS
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  owner    User         @relation("JobOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  worker   Worker       @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  proposal Proposal?    @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  expenses JobExpense[]
+
+  @@index([ownerId, startsAt])
+  @@index([workerId, startsAt])
+  @@index([proposalId])
+  @@map("job_assignments")
+}
+
+// ---------------------------------------------------------------------------
+// Contractor money OS: recurring overhead, per-job expenses (owner-logged or
+// worker-submitted), and CRM notes. All owner-tenanted by userId/ownerId.
+
+enum OverheadCadence {
+  MONTHLY
+  YEARLY // amortized as amountCents / 12 in the monthly overhead rollup
+}
+
+// One recurring business cost (truck, insurance, software, shop rent…).
+// The financials page sums these into "monthly overhead" and shows a
+// coverage meter: month-to-date job profit vs this total.
+model OverheadItem {
+  id          String          @id @default(cuid())
+  userId      String
+  label       String
+  amountCents Int
+  cadence     OverheadCadence @default(MONTHLY)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("overhead_items")
+}
+
+// Business-wide profit plan: what share of a month's revenue goes to the
+// crew and to the salesperson, with overhead fixed and the remainder =
+// the owner's profit. One row per contractor; the financials page profit
+// planner reads/writes it. Percentages are 0–100.
+model FinancialSettings {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  crewPct   Float    @default(0)
+  salesPct  Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("financial_settings")
+}
+
+enum JobExpenseSource {
+  OWNER // logged by the contractor
+  WORKER // submitted from the worker portal, needs owner approval
+}
+
+enum JobExpenseStatus {
+  PENDING // worker-submitted, awaiting owner decision
+  APPROVED // counts toward the job's cost
+  DECLINED
+}
+
+// An extra cost on a specific job beyond the estimated materials+labor
+// basis: dump fees, extra downspout run, a worker's receipt for sealant.
+// Worker-submitted rows start PENDING and only count into profit once the
+// owner approves. Never visible to the client.
+model JobExpense {
+  id           String           @id @default(cuid())
+  ownerId      String
+  proposalId   String?
+  assignmentId String? // the JobAssignment a worker submitted through
+  workerId     String?
+  source       JobExpenseSource @default(OWNER)
+  status       JobExpenseStatus @default(APPROVED)
+  label        String
+  amountCents  Int
+  note         String?          @db.Text
+  createdAt    DateTime         @default(now())
+  decidedAt    DateTime?
+
+  owner      User           @relation("ExpenseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  proposal   Proposal?      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  assignment JobAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  worker     Worker?        @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, status])
+  @@index([proposalId])
+  @@index([workerId])
+  @@map("job_expenses")
+}
+
+// Free-form CRM note pinned to a client. Clients are grouped by their
+// lowercased email (clientKey) — there is no separate Client table; the
+// directory is derived from proposals.
+model ClientNote {
+  id        String   @id @default(cuid())
+  userId    String
+  clientKey String // lowercased client email (fallback: name slug)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, clientKey])
+  @@map("client_notes")
+}
+
+// ---------------------------------------------------------------------------
+// Admin accuracy lab. One row per test run of the address→gutters engine:
+// the engine's raw output, the admin-corrected ground truth, click-tagged
+// failure causes, the computed diff, and (when the solar path ran) the
+// serialized raster layers so the run can be REPLAYED offline against a
+// newer engine and scored against the ground truth. Admin-only surface;
+// never visible to contractors and never charged.
+enum TestLabRunStatus {
+  PENDING // engine ran; admin hasn't finalized yet
+  APPROVED // admin confirmed the engine output as-is (clean pass)
+  CORRECTED // admin edited; correctedJson is the ground truth
+}
+
+model TestLabRun {
+  id      String           @id @default(cuid())
+  userId  String
+  address String
+  lat     Float?
+  lng     Float?
+  status  TestLabRunStatus @default(PENDING)
+
+  // Engine output at run time: { measurements, eaves, rakes, downspouts,
+  // suggestedEaves, roofStructure, magnetPath, magnetRingCount,
+  // canvasPxPerFt, traceQuality, source }
+  engineJson    Json?
+  // Admin ground truth: { eaves, rakes, downspouts, measurements }
+  correctedJson Json?
+  // [{ key, action, tag, note?, lengthFt?, at:{x,y} }] — click-tagged causes
+  tagsJson      Json?
+  // Diff computed at finalize: summary + per-change classification + feedback
+  diffJson      Json?
+  // Engine stage notes (admin runs keep them)
+  notesJson     Json?
+
+  // Cropped orthophoto the canvas draws over (data URL; same capture as mask/DSM)
+  aerialData    String? @db.Text
+  aerialW       Int?
+  aerialH       Int?
+  canvasPxPerFt Float?
+
+  // gzip+base64 SolarLayers snapshot (mask+DSM+RGB+grid) for pure replay.
+  // Null when the run came from the legacy fallback path (not replayable).
+  layersData   String? @db.Text
+  // BuildingInsights JSON captured at run time (replay input)
+  insightsJson Json?
+
+  engineVersion String? // git sha of the engine that produced engineJson
+  runDurationMs Int?
+
+  // Latest re-test result: { scorePct, eavePrecision, eaveRecall, lfErrorPct,
+  // downspouts:{engine,truth,matched}, clean, engineVersion, scoredAt }
+  lastScoreJson Json?
+  lastScoredAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scores TestLabScore[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("test_lab_runs")
+}
+
+// Score history — one row per re-test of a lab run, so engine accuracy
+// can be graphed over time / per engine version instead of only keeping
+// the latest number (TestLabRun.lastScoreJson stays the quick-read copy).
+model TestLabScore {
+  id                 String   @id @default(cuid())
+  runId              String
+  scorePct           Int
+  eaveF1             Float
+  eavePrecision      Float
+  eaveRecall         Float
+  lfErrorPct         Float
+  clean              Boolean  @default(false)
+  engineReturnedNull Boolean  @default(false)
+  engineVersion      String?
+  createdAt          DateTime @default(now())
+
+  run TestLabRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([createdAt])
+  @@map("test_lab_scores")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Admin comms: broadcast announcements (super-admin → users) + a support
+// inbox (users → super-admin). Both AI-assisted (draft copy, triage, reply).
+// ─────────────────────────────────────────────────────────────────────────
+
+model Announcement {
+  id          String               @id @default(cuid())
+  title       String
+  body        String
+  level       AnnouncementLevel    @default(INFO)
+  audience    AnnouncementAudience @default(ALL)
+  createdById String
+  createdBy   User                 @relation("AnnouncementAuthor", fields: [createdById], references: [id], onDelete: Cascade)
+  // null = draft; set when published (shown in-app to the audience).
+  publishedAt DateTime?
+  // Email broadcast bookkeeping — when it went out and to how many.
+  emailedAt   DateTime?
+  emailCount  Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  dismissals AnnouncementDismissal[]
+
+  @@index([publishedAt])
+  @@map("announcements")
+}
+
+model AnnouncementDismissal {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dismissedAt    DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+  @@map("announcement_dismissals")
+}
+
+model SupportTicket {
+  id            String        @id @default(cuid())
+  userId        String
+  user          User          @relation("SupportRequester", fields: [userId], references: [id], onDelete: Cascade)
+  subject       String
+  status        SupportStatus @default(OPEN)
+  // AI-triaged bucket (billing / bug / how-to / feature / other) — nullable.
+  category      String?
+  // True when the most recent message was from the admin (drives the
+  // user's "you have a reply" dot and the admin inbox "awaiting you" sort).
+  lastFromAdmin Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  messages SupportMessage[]
+
+  @@index([status])
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  // Author user id (requester or admin); null for a system note. No FK so
+  // deleting a user leaves the thread intact for the audit trail.
+  authorId  String?
+  fromAdmin Boolean       @default(false)
+  body      String
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@map("support_messages")
+}

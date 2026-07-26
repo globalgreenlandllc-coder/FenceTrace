@@ -1,0 +1,167 @@
+<meta charset="utf-8">
+<title>GutterScan UGC chat reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0C1B24; --accent:#14688C; --bright:#0E9CC3; --bubble-me:#14688C; --bubble-them:#E9E9EB; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1920px; overflow:hidden; background:#F2F1EC; }
+  body { font-family:"Inter",-apple-system,sans-serif; position:relative; }
+
+  /* creator-style hook caption */
+  .hook { position:absolute; top:150px; left:70px; right:70px; z-index:30; text-align:center; }
+  .hook span { display:inline; font-weight:800; font-size:52px; line-height:1.28; color:#111;
+    background:#fff; box-shadow:0 4px 24px rgba(0,0,0,.10);
+    box-decoration-break:clone; -webkit-box-decoration-break:clone; padding:8px 22px; border-radius:14px; }
+
+  /* chat header */
+  .chat-head { position:absolute; top:380px; left:60px; right:60px; z-index:20;
+    background:#fff; border-radius:28px 28px 0 0; border-bottom:1px solid #e5e4df;
+    display:flex; align-items:center; gap:22px; padding:28px 34px; }
+  .avatar { width:84px; height:84px; border-radius:50%; background:linear-gradient(135deg,#14688C,#0E9CC3);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:34px; color:#fff; }
+  .chat-head .who { font-size:34px; font-weight:700; color:#111; }
+  .chat-head .status { font-size:24px; color:#7a7a76; margin-top:4px; }
+
+  .thread { position:absolute; top:520px; bottom:340px; left:60px; right:60px; z-index:10;
+    background:#fff; border-radius:0 0 28px 28px; padding:40px 36px; overflow:hidden; }
+  .scroll { display:flex; flex-direction:column; gap:26px; }
+
+  .msg { max-width:78%; padding:26px 32px; border-radius:30px; font-size:33px; line-height:1.38; position:relative;
+    opacity:0; transform:scale(.6) translateY(24px); }
+  .msg .ts { display:block; font-size:21px; opacity:.55; margin-top:10px; }
+  .them { align-self:flex-start; background:var(--bubble-them); color:#111; border-bottom-left-radius:8px; transform-origin:0% 100%; }
+  .me { align-self:flex-end; background:var(--bubble-me); color:#fff; border-bottom-right-radius:8px; transform-origin:100% 100%; }
+  .msg.img { padding:10px; max-width:82%; }
+  .msg.img .shot { width:700px; height:430px; border-radius:22px; display:block;
+    background-image:url("../shots/satellite-analyzed.png");
+    background-size:1600px auto; background-position:-187px -442px; }
+  .msg.img .cap { font-size:26px; color:#fff; padding:14px 16px 8px; }
+
+  .typing { position:absolute; right:36px; bottom:36px; background:var(--bubble-me); border-radius:30px; border-bottom-right-radius:8px;
+    padding:30px 36px; display:flex; gap:12px; opacity:0; transform-origin:100% 100%; z-index:5; }
+  .typing i { width:16px; height:16px; border-radius:50%; background:rgba(255,255,255,.85); display:block; }
+
+  /* bottom brand bar */
+  .brandbar { position:absolute; bottom:180px; left:0; right:0; z-index:20; text-align:center; }
+  .brandbar .t { font-family:"Space Mono",monospace; font-weight:700; font-size:28px; letter-spacing:.12em; text-transform:uppercase; color:#5b5a55; }
+
+  /* end card */
+  .endcard { position:absolute; inset:0; z-index:50; background:var(--ink); opacity:0;
+    display:flex; flex-direction:column; justify-content:center; padding:0 100px; color:#fff; }
+  .endcard::before { content:""; position:absolute; inset:0;
+    background:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:54px 54px; }
+  .endcard .wm { font-family:"Archivo Black",sans-serif; font-size:44px; display:flex; align-items:center; gap:14px; }
+  .endcard .wm b { width:17px; height:17px; background:var(--bright); }
+  .endcard h1 { font-family:"Archivo Black",sans-serif; text-transform:uppercase; line-height:.96; font-size:120px; margin-top:56px; }
+  .endcard h1 .hl { color:var(--bright); }
+  .endcard .sub { font-size:40px; line-height:1.4; color:rgba(255,255,255,.72); font-weight:500; margin-top:40px; }
+  .endcard .btn { margin-top:70px; display:inline-flex; align-self:flex-start; align-items:center; gap:18px;
+    background:linear-gradient(135deg,#14688C,#0E9CC3); border-radius:20px; padding:40px 58px;
+    font-family:"Space Mono",monospace; font-weight:700; font-size:36px; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    box-shadow:0 0 0 1px rgba(20,104,140,.35), 0 30px 90px -14px rgba(14,156,195,.55); }
+  .endcard .btn::after { content:"→"; font-family:Inter; font-weight:700; }
+</style>
+
+<div class="hook"><span>POV: you found the gutter guy<br>who quotes in 3 minutes 👀</span></div>
+
+<div class="chat-head">
+  <div class="avatar">M</div>
+  <div>
+    <div class="who">Mike · Gutter Pro</div>
+    <div class="status">usually replies fast</div>
+  </div>
+</div>
+
+<div class="thread">
+  <div class="scroll" id="scroll">
+    <div class="msg them" id="m1">Hey! Can you give me a quote for gutters? 1442 Maple Ave <span class="ts">9:41 AM</span></div>
+    <div class="msg me" id="m2">On it — gimme 2 min 👍 <span class="ts">9:41 AM</span></div>
+    <div class="msg me img" id="m3"><span class="shot"></span><span class="cap">Roof traced from satellite ✅</span></div>
+    <div class="msg me" id="m4">362.5 LF, 4 downspouts — $5,070 in materials. Full proposal is in your email 📬 <span class="ts">9:44 AM</span></div>
+    <div class="msg them" id="m5">Wait, that was 3 minutes?? Everyone else said "sometime next week" 😂 <span class="ts">9:45 AM</span></div>
+  </div>
+  <div class="typing" id="ty1"><i></i><i></i><i></i></div>
+</div>
+
+<div class="brandbar"><span class="t">Made with GutterScan · gutters.app</span></div>
+
+<div class="endcard" id="end">
+  <div class="wm">GUTTERSCAN <b></b></div>
+  <h1>The first quote usually <span class="hl">wins.</span></h1>
+  <div class="sub">Satellite takeoffs, live pricing, and proposals your clients can e-sign — from one app.</div>
+  <div><span class="btn" id="ctaBtn">Get started · gutters.app</span></div>
+</div>
+
+<script>
+  const clamp01=(x)=>Math.max(0,Math.min(1,x));
+  const lerp=(a,b,p)=>a+(b-a)*p;
+  const easeOutCubic=(p)=>1-Math.pow(1-p,3);
+  const easeOutBack=(p)=>{const c=1.70158*1.2;return 1+(c+1)*Math.pow(p-1,3)+c*Math.pow(p-1,2);};
+  const win=(t,a,b)=>clamp01((t-a)/(b-a));
+  const S=(id)=>document.getElementById(id);
+
+  // message schedule: [id, tIn]
+  const MSGS=[["m1",500],["m2",2300],["m3",5600],["m4",8000],["m5",10800]];
+  const TYPING=[["ty1",3700,5400]]; // visible window before the image lands
+  const END_AT=13600;
+  window.TOTAL_MS=18500;
+
+  // scroll targets: keep the newest message's bottom edge in view
+  const thread=document.querySelector(".thread");
+  const scrollEl=S("scroll");
+  const TARGETS=MSGS.map(([id])=>{
+    const el=S(id);
+    return Math.max(0,(el.offsetTop+el.offsetHeight)-(thread.clientHeight-40));
+  });
+
+  window.seek=function(t){
+    let sc=0;
+    MSGS.forEach(([id,at],i)=>{
+      if(t>=at){
+        const prev=i>0?TARGETS[i-1]:0;
+        sc=lerp(prev,TARGETS[i],easeOutCubic(win(t,at,at+500)));
+      }
+    });
+    scrollEl.style.transform=`translateY(${-sc}px)`;
+    for(const [id,at] of MSGS){
+      const p=win(t,at,at+430);
+      const el=S(id);
+      const s=p===0?0.6:lerp(0.6,1,easeOutBack(p));
+      el.style.opacity=p===0?0:Math.min(1,p*2);
+      el.style.transform=`scale(${s}) translateY(${lerp(24,0,easeOutCubic(p))}px)`;
+    }
+    for(const [id,a,b] of TYPING){
+      const el=S(id);
+      const on=t>=a&&t<b;
+      el.style.opacity=on?1:0;
+      el.style.position=on?"static":"absolute"; // collapse out of flow when hidden
+      el.style.visibility=on?"visible":"hidden";
+      if(on){
+        el.querySelectorAll("i").forEach((dot,i)=>{
+          dot.style.transform=`translateY(${Math.sin((t-a)/160+i*1.1)*6}px)`;
+          dot.style.opacity=.55+.45*Math.abs(Math.sin((t-a)/300+i*1.0));
+        });
+      }
+    }
+    // end card
+    const ep=win(t,END_AT,END_AT+450);
+    const end=S("end");
+    end.style.opacity=ep;
+    const items=end.querySelectorAll("h1, .sub, .wm");
+    items.forEach((el,i)=>{
+      const p=easeOutCubic(win(t,END_AT+200+i*160,END_AT+750+i*160));
+      el.style.transform=`translateY(${lerp(50,0,p)}px)`;
+      el.style.opacity=p;
+    });
+    const bp=win(t,END_AT+1000,END_AT+1500);
+    const pulse=1+0.015*Math.sin((t-END_AT-1500)/240);
+    const btn=S("ctaBtn");
+    btn.style.transform=`scale(${bp<1?(bp===0?0:easeOutBack(bp)):pulse})`;
+    btn.style.opacity=bp===0?0:1;
+    btn.style.display="inline-flex";
+  };
+  window.seek(0);
+</script>

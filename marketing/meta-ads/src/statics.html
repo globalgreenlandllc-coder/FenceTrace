@@ -1,0 +1,156 @@
+<meta charset="utf-8">
+<title>GutterScan — extra statics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0C1B24; --accent:#14688C; --bright:#0E9CC3; --a300:#93C6DC; --a400:#5AA6C6; --line:rgba(255,255,255,.12); }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#333; font-family:"Inter",sans-serif; }
+  .canvas { position:relative; overflow:hidden; margin:24px auto; background:var(--ink); color:#fff; display:flex; flex-direction:column; }
+  .grid::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+    background-size:54px 54px;
+    mask-image:radial-gradient(120% 90% at 50% 0%,#000 40%,transparent 100%);
+    -webkit-mask-image:radial-gradient(120% 90% at 50% 0%,#000 40%,transparent 100%); }
+  .stripes { position:absolute; top:0; bottom:0; right:0; width:24px; z-index:5;
+    background:repeating-linear-gradient(-45deg,var(--accent) 0 10px,transparent 10px 22px); opacity:.85; }
+  .display { font-family:"Archivo Black",sans-serif; text-transform:uppercase; line-height:.95; letter-spacing:-0.01em; }
+  .mono { font-family:"Space Mono",monospace; }
+  .wordmark { font-family:"Archivo Black",sans-serif; letter-spacing:.02em; display:flex; align-items:center; gap:14px; }
+  .wordmark .dot { width:16px; height:16px; background:var(--bright); }
+  .window { background:#0a161e; border:1px solid var(--line); border-radius:22px;
+    box-shadow:0 0 0 1px rgba(20,104,140,.25), 0 30px 80px -20px rgba(0,0,0,.8); overflow:hidden; }
+  .window .bar { height:50px; display:flex; align-items:center; gap:10px; padding:0 22px; background:#0e1f29; border-bottom:1px solid var(--line); }
+  .window .bar i { width:14px; height:14px; border-radius:50%; background:rgba(255,255,255,.16); display:block; }
+  .window .bar .url { font-family:"Space Mono",monospace; font-size:16px; color:rgba(255,255,255,.55);
+    background:rgba(255,255,255,.06); border-radius:8px; padding:5px 15px; margin-left:8px; }
+  .cta-btn { display:inline-flex; align-items:center; gap:16px;
+    background:linear-gradient(135deg,#14688C,#0E9CC3); color:#fff;
+    font-family:"Space Mono",monospace; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    border-radius:16px; white-space:nowrap;
+    box-shadow:0 0 0 1px rgba(20,104,140,.3), 0 18px 50px -8px rgba(14,156,195,.45); }
+  .cta-btn::after { content:"→"; font-family:Inter; font-weight:700; }
+  .chip { font-family:"Space Mono",monospace; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    border:2px solid rgba(93,166,198,.55); color:var(--a300); border-radius:12px; }
+
+  /* ---------- A: 4:5 hook ---------- */
+  #a45 { width:1080px; height:1350px; }
+  #a45 .top { display:flex; justify-content:space-between; align-items:center; padding:60px 72px 0; position:relative; z-index:2; }
+  #a45 .wordmark { font-size:38px; }
+  #a45 .tag { font-family:"Space Mono",monospace; font-weight:700; font-size:19px; letter-spacing:.08em; text-transform:uppercase;
+    border:2px solid rgba(255,255,255,.3); border-radius:10px; padding:9px 16px; }
+  #a45 .bodyc { position:relative; z-index:2; padding:0 72px; flex:1; }
+  #a45 h1 { font-size:96px; margin-top:44px; }
+  #a45 h1 .hl { color:var(--bright); }
+  #a45 .sub { font-size:31px; line-height:1.42; color:rgba(255,255,255,.72); font-weight:500; margin-top:22px; max-width:880px; }
+  #a45 .shotwrap { margin-top:42px; position:relative; }
+  #a45 .crop { height:430px; overflow:hidden; }
+  #a45 .crop img { width:1750px; margin-left:-150px; margin-top:-470px; display:block; }
+  #a45 .badge { position:absolute; top:-30px; right:0; z-index:4; transform:rotate(2deg);
+    background:var(--ink); border:3px solid var(--bright); border-radius:16px; padding:16px 26px;
+    box-shadow:0 18px 50px rgba(0,0,0,.6); text-align:right; }
+  #a45 .badge .n { font-family:"Space Mono",monospace; font-weight:700; font-size:46px; color:var(--bright); }
+  #a45 .badge .l { font-family:"Space Mono",monospace; font-size:17px; letter-spacing:.1em; color:rgba(255,255,255,.6); text-transform:uppercase; }
+  #a45 .ctarow { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; padding:34px 72px 0; }
+  #a45 .cta-btn { font-size:27px; padding:24px 38px; }
+  #a45 .chips { display:flex; gap:14px; }
+  #a45 .chip { font-size:19px; padding:12px 18px; }
+
+  /* ---------- B: UGC notes app ---------- */
+  #notes { width:1080px; height:1350px; background:#FAF9F4; color:#1c1c1e; font-family:-apple-system,"Inter",sans-serif; }
+  #notes .nav { display:flex; justify-content:space-between; align-items:center; padding:44px 48px 0; color:#C7A02B; font-size:34px; }
+  #notes .nav .back { display:flex; align-items:center; gap:8px; }
+  #notes .nav .dots { letter-spacing:4px; font-weight:700; }
+  #notes .paper { padding:40px 84px 0; }
+  #notes .when { text-align:center; color:#8e8e93; font-size:24px; }
+  #notes h1 { font-size:58px; font-weight:800; margin-top:36px; letter-spacing:-.01em; }
+  #notes .item { display:flex; gap:26px; margin-top:38px; font-size:37px; line-height:1.35; align-items:flex-start; }
+  #notes .item .box { width:44px; height:44px; border-radius:50%; border:3px solid #c7c7cc; flex:none; margin-top:4px; position:relative; }
+  #notes .item.done .box { background:#C7A02B; border-color:#C7A02B; }
+  #notes .item.done .box::after { content:"✓"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:28px; font-weight:700; }
+  #notes .item.done span { }
+  #notes .em { background:linear-gradient(180deg, transparent 62%, rgba(14,156,195,.35) 62%); font-weight:700; }
+  #notes .divider { border-top:2px solid #e5e5ea; margin:44px 0 0; }
+  #notes .foot { margin-top:40px; font-size:30px; color:#8e8e93; }
+  #notes .foot b { color:#14688C; font-weight:800; }
+
+  /* ---------- C: 9:16 story ---------- */
+  #story { width:1080px; height:1920px; }
+  #story .top { display:flex; justify-content:center; padding:110px 72px 0; position:relative; z-index:2; }
+  #story .wordmark { font-size:42px; }
+  #story .bodyc { position:relative; z-index:2; padding:0 90px; flex:1; }
+  #story h1 { font-size:118px; margin-top:90px; }
+  #story h1 .hl { color:var(--bright); }
+  #story .sub { font-size:37px; line-height:1.45; color:rgba(255,255,255,.72); font-weight:500; margin-top:36px; }
+  #story .shotwrap { margin-top:64px; position:relative; }
+  #story .crop { height:560px; overflow:hidden; }
+  #story .crop img { width:1600px; margin-left:-330px; margin-top:-420px; display:block; }
+  #story .badge { position:absolute; top:-36px; right:-12px; z-index:4; transform:rotate(2deg);
+    background:var(--ink); border:3px solid var(--bright); border-radius:16px; padding:18px 28px;
+    box-shadow:0 18px 50px rgba(0,0,0,.6); text-align:right; }
+  #story .badge .n { font-family:"Space Mono",monospace; font-weight:700; font-size:52px; color:var(--bright); }
+  #story .badge .l { font-family:"Space Mono",monospace; font-size:19px; letter-spacing:.1em; color:rgba(255,255,255,.6); text-transform:uppercase; }
+  #story .ctarow { position:relative; z-index:2; padding:70px 90px 0; }
+  #story .cta-btn { font-size:34px; padding:36px 54px; }
+</style>
+
+<!-- ============ A · 4:5 feed static ============ -->
+<section class="canvas grid" id="a45">
+  <div class="stripes"></div>
+  <div class="top">
+    <div class="wordmark">GUTTERSCAN <span class="dot"></span></div>
+    <span class="tag">For Contractors</span>
+  </div>
+  <div class="bodyc">
+    <h1 class="display">The first quote<br>usually <span class="hl">wins.</span></h1>
+    <p class="sub">GutterScan measures the roof from a satellite photo and prices the job from your rates — while the homeowner is still on the phone.</p>
+    <div class="shotwrap">
+      <div class="badge"><div class="n">362.5 LF</div><div class="l">in about a minute</div></div>
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span class="url">gutters.app</span></div>
+        <div class="crop"><img src="../shots/satellite-analyzed.png"></div>
+      </div>
+    </div>
+  </div>
+  <div class="ctarow" style="padding-bottom:56px">
+    <span class="cta-btn">Get started · gutters.app</span>
+    <div class="chips"><span class="chip">Takeoff</span><span class="chip">Proposal</span><span class="chip">Paid</span></div>
+  </div>
+</section>
+
+<!-- ============ B · UGC notes-app static ============ -->
+<section class="canvas" id="notes">
+  <div class="nav"><span class="back">‹ Notes</span><span class="dots">•••</span></div>
+  <div class="paper">
+    <div class="when">July 8 at 7:12 AM</div>
+    <h1>why we stopped doing free estimate drives</h1>
+    <div class="item done"><span class="box"></span><span>every quote used to cost us <span class="em">2 hrs + gas</span> before we earned a dime</span></div>
+    <div class="item done"><span class="box"></span><span>now: type the address → app traces the roof <span class="em">from satellite</span></span></div>
+    <div class="item done"><span class="box"></span><span>eaves + downspouts measured, <span class="em">priced from our own rates</span>, in ~1 min</span></div>
+    <div class="item done"><span class="box"></span><span>3-tier proposal sent <span class="em">same call</span> — client e-signs &amp; pays from one link</span></div>
+    <div class="item done"><span class="box"></span><span>we only drive to jobs that are <span class="em">already signed</span></span></div>
+    <div class="divider"></div>
+    <div class="foot">the app: <b>gutters.app</b> (GutterScan)</div>
+  </div>
+</section>
+
+<!-- ============ C · 9:16 story static ============ -->
+<section class="canvas grid" id="story">
+  <div class="stripes"></div>
+  <div class="top"><div class="wordmark">GUTTERSCAN <span class="dot"></span></div></div>
+  <div class="bodyc">
+    <h1 class="display">Quote it before<br>they hang <span class="hl">up.</span></h1>
+    <p class="sub">Satellite roof takeoff, live linear footage, and a price from your own rates — in about a minute.</p>
+    <div class="shotwrap">
+      <div class="badge"><div class="n">$5,070</div><div class="l">materials · 362.5 LF</div></div>
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span class="url">gutters.app · satellite takeoff</span></div>
+        <div class="crop"><img src="../shots/satellite-analyzed.png"></div>
+      </div>
+    </div>
+  </div>
+  <div class="ctarow" style="padding-bottom:120px">
+    <span class="cta-btn">Get started · gutters.app</span>
+  </div>
+</section>

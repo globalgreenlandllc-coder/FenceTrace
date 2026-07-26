@@ -1,0 +1,175 @@
+/**
+ * Fence material takeoff — layout in, bill of materials out. Pure math,
+ * no imports beyond the catalog, fully unit-tested.
+ *
+ * Model (see catalog.ts): sections between posts every `postSpacingFt`;
+ * a post at every section boundary plus corners/ends; gates hang between
+ * two gate posts and consume their opening from the run length.
+ */
+import {
+  fenceType,
+  heightFactor,
+  TERRAIN_FACTOR,
+  type FenceTypeId,
+  type Terrain,
+} from "./catalog";
+
+export type FenceLayoutInput = {
+  type: FenceTypeId;
+  heightFt: number;
+  /** Total drawn fence length, feet (gate openings included). */
+  totalLf: number;
+  /** Corner count (run direction changes) and open ends. */
+  corners: number;
+  ends: number;
+  gatesSingle: number; // 4' walk gates
+  gatesDouble: number; // ~10' drive gates
+  terrain: Terrain;
+  /** Extra material percentage, default 10. */
+  wastePct?: number;
+  /** Tear-out of an existing fence, LF (0 = none). */
+  removalLf?: number;
+  /** Stain/seal both faces after install (wood only). */
+  stain?: boolean;
+};
+
+export type BomLine = {
+  key: string;
+  label: string;
+  qty: number;
+  unit: "ea" | "lf" | "bag" | "lb" | "box" | "sqft";
+};
+
+export type FenceTakeoff = {
+  netFenceLf: number; // fence fabric length (gates excluded)
+  sections: number;
+  posts: {
+    line: number;
+    corner: number;
+    end: number;
+    gate: number;
+    total: number;
+  };
+  bom: BomLine[];
+  /** Labor hours estimate (for the crew scheduler). */
+  laborHours: number;
+};
+
+const GATE_SINGLE_OPENING_FT = 4;
+const GATE_DOUBLE_OPENING_FT = 10;
+
+/** Concrete bags per set post — deeper holes for taller fences. */
+function concreteBagsPerPost(heightFt: number): number {
+  return heightFt >= 8 ? 3 : heightFt >= 6 ? 2 : 1.5;
+}
+
+export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
+  const t = fenceType(input.type);
+  const waste = 1 + Math.min(30, Math.max(0, input.wastePct ?? 10)) / 100;
+  const hf = heightFactor(t, input.heightFt);
+
+  const gateOpenings =
+    input.gatesSingle * GATE_SINGLE_OPENING_FT +
+    input.gatesDouble * GATE_DOUBLE_OPENING_FT;
+  const netFenceLf = Math.max(0, input.totalLf - gateOpenings);
+
+  const sections = Math.ceil(netFenceLf / t.postSpacingFt);
+  // Posts: one per section boundary (sections+1 on a single straight run),
+  // corners already sit on boundaries but need the heavier set (counted as
+  // upgrades, not extra posts), ends terminate runs, gates add a pair each.
+  const linePosts = Math.max(0, sections - 1 - input.corners);
+  const cornerPosts = input.corners;
+  const endPosts = Math.max(2, input.ends); // a run has two ends minimum
+  const gatePosts = (input.gatesSingle + input.gatesDouble) * 2;
+  const totalPosts = linePosts + cornerPosts + endPosts + gatePosts;
+
+  const bom: BomLine[] = [];
+  const add = (key: string, label: string, qty: number, unit: BomLine["unit"]) => {
+    if (qty > 0) bom.push({ key, label, qty: Math.ceil(qty), unit });
+  };
+
+  add("post-line", `Line posts (${t.postSpacingFt}' o.c.)`, linePosts * waste, "ea");
+  add("post-corner", "Corner posts", cornerPosts, "ea");
+  add("post-end", "End posts", endPosts, "ea");
+  add("post-gate", "Gate posts (heavy-set)", gatePosts, "ea");
+  add(
+    "concrete",
+    "Concrete (60 lb bags)",
+    totalPosts * concreteBagsPerPost(input.heightFt),
+    "bag",
+  );
+
+  if (t.build === "stick") {
+    const rails = sections * t.railsPerSection(input.heightFt);
+    add("rail", `Rails (${t.postSpacingFt}')`, rails * waste, "ea");
+    const w = t.picketWidthIn ?? 5.5;
+    const gap = t.picketGapIn ?? 0;
+    const pitch = Math.max(1.5, w + gap); // board-on-board overlap floors at 1.5"
+    let pickets = (netFenceLf * 12) / pitch;
+    if (input.type === "shadowbox") pickets *= 2; // both faces
+    add("picket", "Pickets", pickets * waste * hf, "ea");
+    add(
+      "fasteners",
+      "Fasteners (5 lb boxes)",
+      (pickets * waste) / 350,
+      "box",
+    );
+  } else if (t.build === "panel") {
+    add("panel", `${t.label} panels (${t.postSpacingFt}')`, sections * waste, "ea");
+    add("bracket", "Panel brackets (pairs)", sections * 2, "ea");
+  } else if (t.build === "mesh") {
+    add("mesh", "Chain-link fabric", netFenceLf * waste, "lf");
+    add("top-rail", "Top rail", netFenceLf * waste, "lf");
+    add("tension-bar", "Tension bars", input.ends + input.corners + gatePosts, "ea");
+    add("tension-band", "Tension bands", totalPosts * (input.heightFt / 1.2), "ea");
+    add("tie-wire", "Aluminum ties (100 ct bags)", netFenceLf / 60, "box");
+  } else if (t.build === "rail") {
+    const rails = sections * t.railsPerSection(input.heightFt);
+    add("rail", "Rails", rails * waste, "ea");
+  }
+
+  add("post-cap", "Post caps", totalPosts, "ea");
+  add("gate-single", "Walk gate kit (4')", input.gatesSingle, "ea");
+  add("gate-double", "Drive gate kit (10')", input.gatesDouble, "ea");
+  add(
+    "gate-hardware",
+    "Gate hinge + latch sets",
+    input.gatesSingle + input.gatesDouble,
+    "ea",
+  );
+  if (input.stain && t.stainable) {
+    // Two faces; a gallon covers ~150 sq ft on rough-sawn wood.
+    add(
+      "stain",
+      "Stain / seal (gallons)",
+      (netFenceLf * input.heightFt * 2) / 150,
+      "ea",
+    );
+  }
+  if ((input.removalLf ?? 0) > 0) {
+    add("removal", "Existing fence tear-out & haul-away", input.removalLf!, "lf");
+  }
+
+  // Crew-hours: base rate ≈ 2.5 LF/hour/person for stick builds on flat
+  // ground, faster for mesh/panels; terrain multiplies dig time.
+  const lfPerHour =
+    t.build === "mesh" ? 4.5 : t.build === "panel" ? 3.5 : t.build === "rail" ? 5 : 2.5;
+  const laborHours =
+    (netFenceLf / lfPerHour) * TERRAIN_FACTOR[input.terrain] * hf +
+    (input.gatesSingle + input.gatesDouble) * 1.5 +
+    (input.removalLf ?? 0) / 12;
+
+  return {
+    netFenceLf: Math.round(netFenceLf),
+    sections,
+    posts: {
+      line: linePosts,
+      corner: cornerPosts,
+      end: endPosts,
+      gate: gatePosts,
+      total: totalPosts,
+    },
+    bom,
+    laborHours: Math.round(laborHours * 10) / 10,
+  };
+}

@@ -1,0 +1,407 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f7f6f2;
+  --paper: #f7f6f2;
+  --surface: #ffffff;
+  --surface-soft: #f4f5f8;
+  --border: #e4e5ea;
+  --border-subtle: #f0f1f4;
+  --text: #0d1b12;
+  --text-muted: #4b4e57;
+  --text-subtle: #6f7280;
+  --accent-green: #1e7340;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(30, 115, 64, 0.16);
+  color: #114026;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(13, 27, 18, 0.08);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(13, 27, 18, 0.18);
+}
+
+@layer components {
+  .surface {
+    @apply bg-white border border-zinc-200/70 rounded-2xl shadow-card;
+  }
+  .surface-soft {
+    @apply bg-zinc-50 border border-zinc-200 rounded-xl;
+  }
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-zinc-200/70;
+  }
+  .glass-strong {
+    @apply bg-white/85 backdrop-blur-2xl border border-zinc-200/80;
+  }
+  .text-gradient {
+    background: linear-gradient(135deg, #1e7340 0%, #3fa65b 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  /* Tiny uppercase microlabel — section eyebrows, nav groups, card labels */
+  .microlabel {
+    @apply font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-400;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(rgba(13, 27, 18, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13, 27, 18, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .ring-focus {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+  .input {
+    @apply h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition focus:border-accent-500 focus:ring-2 focus:ring-accent-500/15;
+  }
+  .num-input {
+    @apply tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none;
+  }
+  /* Mono uppercase label — nav links, chips, table headers, button text */
+  .font-label {
+    @apply font-mono text-[13px] font-bold uppercase tracking-[0.08em];
+  }
+  /* Ultra-heavy uppercase display headline */
+  .display-hero {
+    @apply font-display uppercase leading-[0.95] tracking-[-0.01em];
+  }
+  /* Gradient CTA button background (deep water blue) */
+  .btn-gradient {
+    background-image: linear-gradient(135deg, #1e7340 0%, #3fa65b 100%);
+  }
+}
+
+/* ---- Landing v2 gutter-scene animations ---- */
+@keyframes rain-fall {
+  0% {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(96px);
+    opacity: 0;
+  }
+}
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -120;
+  }
+}
+@keyframes trace-draw {
+  0% {
+    stroke-dashoffset: 900;
+  }
+  55% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+@keyframes splash-pop {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.anim-rain {
+  animation: rain-fall 1.5s linear infinite;
+}
+.anim-flow {
+  animation: dash-flow 1.4s linear infinite;
+}
+.anim-trace {
+  animation: trace-draw 3.2s ease-in-out infinite;
+}
+.anim-float {
+  animation: float-y 3.4s ease-in-out infinite;
+}
+.anim-splash {
+  animation: splash-pop 1.5s ease-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.anim-orbit {
+  animation: orbit-spin 28s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@media (prefers-reduced-motion: reduce) {
+  .anim-rain,
+  .anim-flow,
+  .anim-trace,
+  .anim-float,
+  .anim-splash,
+  .anim-orbit {
+    animation: none;
+  }
+}
+
+/* Full-height vertical column lines over the light landing canvas */
+.hl-grid {
+  background-image: linear-gradient(90deg, rgba(13, 13, 18, 0.06) 1px, transparent 1px);
+  background-size: clamp(160px, 16.66vw, 340px) 100%;
+}
+
+/* Stacked decorative color bands (violet / blue / coral) on a dark background */
+.hl-stripes {
+  background-color: #0d0d12;
+  background-image: repeating-linear-gradient(
+    180deg,
+    #9d5cf6 0px,
+    #9d5cf6 64px,
+    #0d0d12 64px,
+    #0d0d12 78px,
+    #4353ff 78px,
+    #4353ff 142px,
+    #0d0d12 142px,
+    #0d0d12 156px,
+    #f8717e 156px,
+    #f8717e 220px,
+    #0d0d12 220px,
+    #0d0d12 234px
+  );
+}
+
+.dot-pattern {
+  background-image: radial-gradient(rgba(13, 13, 18, 0.1) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@media print {
+  html,
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  body {
+    background-image: none !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  .text-gradient {
+    color: #1e7340 !important;
+    -webkit-text-fill-color: initial !important;
+    background: none !important;
+  }
+}
+
+/* ================================================================
+   Motion utility layer — app-wide UI polish (append-only)
+   Rules: animate transform/opacity only · core UI 150–300ms ·
+   ease-out, no overshoot · everything in this section is neutralized
+   by the prefers-reduced-motion block at its end.
+   ================================================================ */
+
+/* Standard smooth transition for interactive elements (buttons, rows,
+   chips, nav items). Covers color swaps + transform + shadow. */
+.transition-smooth {
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+/* Hover lift for interactive cards / tiles / tappable rows.
+   Transform + shadow only — safe on server components. */
+.hover-lift {
+  transition:
+    transform 200ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.hover-lift:hover {
+  @apply shadow-elevated;
+  transform: translateY(-2px);
+}
+
+/* Press feedback for buttons/cards. Declared after .hover-lift so the
+   press wins over the lift while active. */
+.press-scale {
+  transition: transform 150ms ease;
+}
+.press-scale:active {
+  transform: scale(0.98);
+}
+
+/* ---- Entrance animations (one-shot, fill both) ---- */
+@keyframes m-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes m-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes m-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes m-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Section/card entrance: fade + 12px rise */
+.anim-enter {
+  animation: m-fade-in-up 0.4s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+/* Opacity-only entrance for dense rows/lists */
+.anim-enter-fade {
+  animation: m-fade-in 0.3s ease-out both;
+}
+/* Popover/dropdown pop-in — pair with an origin-* class
+   (e.g. origin-top-right) to anchor the scale */
+.anim-pop {
+  animation: m-scale-in 0.15s ease-out both;
+}
+/* Progress/meter bar draw-in — scaleX, never animate width */
+.anim-grow-x {
+  animation: m-grow-x 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+  transform-origin: left;
+}
+
+/* Stagger helpers for .anim-enter / .anim-enter-fade lists (50ms steps).
+   For dynamic lists use style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }} */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+.stagger-6 { animation-delay: 300ms; }
+.stagger-7 { animation-delay: 350ms; }
+.stagger-8 { animation-delay: 400ms; }
+
+/* ---- Skeleton shimmer (the one permitted infinite animation) ----
+   Gray placeholder block with a translateX gradient sweep.
+   Size/shape it with normal Tailwind classes (h-4 w-32 rounded-md …). */
+@keyframes m-shimmer-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.skeleton {
+  @apply relative overflow-hidden rounded-lg bg-zinc-200/60;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: m-shimmer-sweep 1.6s ease-in-out infinite;
+}
+
+/* Focus-visible ring for dark panels (accent-950 surfaces, topbars).
+   Light-surface standard remains the existing .ring-focus utility. */
+.ring-focus-dark {
+  @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-accent-950;
+}
+
+/* ---- Reduced motion: transitions collapse, entrances render final
+   state (animation removed → natural styles = end state) ---- */
+@media (prefers-reduced-motion: reduce) {
+  .transition-smooth,
+  .hover-lift,
+  .press-scale {
+    transition: none;
+  }
+  .hover-lift:hover,
+  .press-scale:active {
+    transform: none;
+  }
+  .anim-enter,
+  .anim-enter-fade,
+  .anim-pop,
+  .anim-grow-x,
+  .skeleton::after {
+    animation: none;
+  }
+}
