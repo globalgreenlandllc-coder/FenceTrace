@@ -20,6 +20,7 @@ import {
   FenceCanvas,
   type FenceLayout,
 } from "@/components/fence/fence-canvas";
+import { Fence3D } from "@/components/fence/fence-3d";
 import {
   FENCE_TYPES,
   fenceType,
@@ -83,6 +84,7 @@ export function FenceEstimator() {
   const [terrain, setTerrain] = useState<Terrain>("flat");
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
+  const [view3d, setView3d] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const ranFor = useRef<string | null>(null);
@@ -315,7 +317,39 @@ export function FenceEstimator() {
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
             {/* Canvas column */}
             <div>
-              <FenceCanvas scan={scan} layout={layout} onChange={setLayout} />
+              <div className="mb-2 inline-flex rounded-full bg-zinc-100 p-0.5">
+                {([
+                  { id: false, label: "Layout" },
+                  { id: true, label: "3D preview" },
+                ] as { id: boolean; label: string }[]).map((v) => (
+                  <button
+                    key={String(v.id)}
+                    type="button"
+                    onClick={() => setView3d(v.id)}
+                    className={cn(
+                      "transition-smooth ring-focus rounded-full px-3 py-1.5 text-xs font-semibold",
+                      view3d === v.id
+                        ? "bg-white text-zinc-900 shadow-sm"
+                        : "text-zinc-500 hover:text-zinc-800",
+                    )}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              {view3d ? (
+                <Fence3D
+                  runs={layout.runs}
+                  gates={layout.gates}
+                  heightFt={heightFt}
+                  typeId={typeId}
+                  pxPerFt={scan.canvasPxPerFt}
+                  parcelRings={scan.parcelRings}
+                  className="aspect-[16/10]"
+                />
+              ) : (
+                <FenceCanvas scan={scan} layout={layout} onChange={setLayout} />
+              )}
               {scan.parcel && (
                 <p className="mt-2 text-xs text-zinc-400">
                   Property boundary from county records

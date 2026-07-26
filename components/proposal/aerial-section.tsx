@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Sparkles, Image as ImageIcon, DraftingCompass } from "lucide-react";
+import { Pencil, Sparkles, Image as ImageIcon, DraftingCompass, Box } from "lucide-react";
 import { lineLengthFt } from "@/components/estimate/aerial-canvas";
 import { AerialReadonly } from "@/components/estimate/aerial-shared";
 import { GutterDiagram } from "@/components/estimate/gutter-diagram";
 import { PresentationCanvas } from "./presentation-canvas";
+import { Fence3D } from "@/components/fence/fence-3d";
 import { GutterSystemBreakdown } from "./gutter-system-breakdown";
 import { ManualMeasurementsCard } from "./manual-measurements-card";
 import { sampleEaves, sampleDownspouts } from "@/lib/mock-estimate";
@@ -37,7 +38,11 @@ export function AerialSection({
   // sheet is the default deliverable. Plan takeoffs already render as a
   // blueprint diagram inside PresentationCanvas, so no toggle there.
   const isSatellite = !!takeoff?.aerial?.imageDataUrl;
-  const [view, setView] = useState<"diagram" | "photo">("diagram");
+  // Fence proposals add a 3D preview tab — the fence as designed, at the
+  // selected package's type/height, visible to the client in the portal.
+  const fenceCfg = proposal.packages.find((p) => p.config.fence)?.config.fence;
+  const [view, setView] = useState<"diagram" | "photo" | "3d">("diagram");
+  const show3d = !!fenceCfg && hasRealTakeoff && view === "3d";
   const showDiagram = isSatellite && view === "diagram";
 
   // Recompute total LF from the live edited eaves so the badge stays in
@@ -125,7 +130,9 @@ export function AerialSection({
           title="What we measured"
           sub={
             hasRealTakeoff
-              ? showDiagram
+              ? show3d
+                ? "The fence as designed, to scale — height, gates and corners exactly as priced."
+                : showDiagram
                 ? "Fence layout drawn from the satellite image at true scale — fence runs in blue with lengths, numbered gates."
                 : editable
                   ? "Live takeoff from the satellite image. Drag any handle to refine — totals update instantly."
@@ -161,13 +168,37 @@ export function AerialSection({
               <ImageIcon className="h-3.5 w-3.5" />
               Photo
             </button>
+            {fenceCfg && (
+              <button
+                type="button"
+                onClick={() => setView("3d")}
+                className={
+                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
+                  (view === "3d"
+                    ? "bg-accent-600 text-white"
+                    : "text-ink/55 hover:text-ink")
+                }
+              >
+                <Box className="h-3.5 w-3.5" />
+                3D
+              </button>
+            )}
           </div>
         )}
       </div>
       <div className="space-y-3">
         <div className="relative overflow-hidden rounded-2xl">
           {hasRealTakeoff ? (
-            showDiagram ? (
+            show3d ? (
+              <Fence3D
+                runs={takeoff!.eaves}
+                gates={takeoff!.downspouts}
+                heightFt={fenceCfg!.heightFt}
+                typeId={fenceCfg!.type}
+                pxPerFt={takeoff!.canvasPxPerFt}
+                className="aspect-[16/10]"
+              />
+            ) : showDiagram ? (
               <div className="aspect-[16/10]">
                 <GutterDiagram
                   eaves={takeoff!.eaves}
