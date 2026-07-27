@@ -154,6 +154,10 @@ export type ProposalTakeoff = {
    *  full canvas) — the proposal 3D renders the yard as a shaded terrain
    *  surface from it. ~200 numbers; absent on older drafts. */
   topoGridFt?: number[][];
+  /** FenceTrace: the 3D camera the contractor froze when building the
+   *  proposal — the client's portal opens on this exact angle (and they
+   *  can spin it from there). */
+  view3d?: { yawDeg: number; squash: number };
 };
 
 export type Proposal = {

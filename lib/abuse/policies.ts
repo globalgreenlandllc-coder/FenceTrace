@@ -59,6 +59,21 @@ export const POLICIES = {
     "You've hit the hourly estimate limit — please try again in a bit.",
   ),
 
+  /** Elevation reads (terrain + topo lattice) — cheap batched Google
+   *  Elevation calls that fire on every layout edit, so they get their
+   *  own generous bucket instead of riding the scan limit (sharing the
+   *  10/hr scan budget silently killed all terrain after ~8 edits). */
+  fenceTopo: make(
+    "fence.topo",
+    "ABUSE_LIMIT_FENCE_TOPO",
+    [
+      { limit: 120, windowSec: HOUR },
+      { limit: 600, windowSec: DAY },
+    ],
+    "open",
+    "Terrain is busy — try again in a minute.",
+  ),
+
   /** Blueprint analyze / re-analyze — the most expensive action in the app (3× Opus + ensemble). */
   blueprintAnalyze: make(
     "blueprint.analyze",

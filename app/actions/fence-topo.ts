@@ -35,9 +35,11 @@ export async function sampleFenceElevations(
   if (total > MAX_POINTS)
     return { ok: false, reason: "Layout too large for one elevation pass" };
 
-  // Shares the scan's hourly budget — terrain reads ride along with scans.
+  // Elevation reads are cheap and fire on every layout edit — they get
+  // their own generous bucket (riding the 10/hr scan budget used to
+  // silently kill all terrain mid-session).
   const rl = await consumeLimit({
-    policy: POLICIES.estimateRun,
+    policy: POLICIES.fenceTopo,
     key: `fence-topo:${me.user.id}`,
     context: { userId: me.user.id, route: "fence-topo" },
   });

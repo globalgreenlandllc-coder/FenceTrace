@@ -41,7 +41,12 @@ export function AerialSection({
   // Fence proposals add a 3D preview tab — the fence as designed, at the
   // selected package's type/height, visible to the client in the portal.
   const fenceCfg = proposal.packages.find((p) => p.config.fence)?.config.fence;
-  const [view, setView] = useState<"diagram" | "photo" | "3d">("diagram");
+  // Fence proposals open on the PHOTO — the client's own house with the
+  // fence lines drawn on it ("that's my yard") — with Diagram/3D a tap
+  // away. Gutter proposals keep the drafting-sheet default.
+  const [view, setView] = useState<"diagram" | "photo" | "3d">(
+    fenceCfg && isSatellite ? "photo" : "diagram",
+  );
   const show3d = !!fenceCfg && hasRealTakeoff && view === "3d";
   const showDiagram = isSatellite && view === "diagram";
 
@@ -200,6 +205,7 @@ export function AerialSection({
                 elevationSpacingPx={takeoff!.elevationSpacingPx}
                 topoGridFt={takeoff!.topoGridFt ?? null}
                 retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
+                initialView={takeoff!.view3d}
                 className="aspect-[16/10]"
               />
             ) : showDiagram ? (

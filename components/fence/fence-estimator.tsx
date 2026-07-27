@@ -118,7 +118,15 @@ export function FenceEstimator() {
   // Elevation call per scan; toggleable, on by default.
   const [topoGrid, setTopoGrid] = useState<number[][] | null>(null);
   const [showTopo, setShowTopo] = useState(true);
+  const [topoError, setTopoError] = useState<string | null>(null);
+  const [topoNonce, setTopoNonce] = useState(0);
   const [view3d, setView3d] = useState(false);
+  // The 3D camera the contractor last set — frozen into the proposal as
+  // the client's opening view.
+  const [cam3d, setCam3d] = useState<{ yawDeg: number; squash: number }>({
+    yawDeg: -28,
+    squash: 0.52,
+  });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const ranFor = useRef<string | null>(null);
@@ -164,9 +172,9 @@ export function FenceEstimator() {
       setTopoGrid(null);
       return;
     }
-    const rows = [];
+    const rows: { lat: number; lng: number }[][] = [];
     for (let r = 0; r < TOPO_ROWS; r++) {
-      const row = [];
+      const row: { lat: number; lng: number }[] = [];
       for (let c = 0; c < TOPO_COLS; c++) {
         row.push(
           canvasToLatLng(
@@ -182,18 +190,28 @@ export function FenceEstimator() {
       rows.push(row);
     }
     let cancelled = false;
-    void sampleFenceElevations(rows).then((res) => {
-      if (cancelled) return;
-      setTopoGrid(
-        res.ok && res.runElevationsFt.every((r) => r.length === TOPO_COLS)
-          ? res.runElevationsFt
-          : null,
-      );
-    });
+    let retryTimer: number | null = null;
+    const attempt = (n: number) => {
+      void sampleFenceElevations(rows).then((res) => {
+        if (cancelled) return;
+        if (res.ok && res.runElevationsFt.every((r) => r.length === TOPO_COLS)) {
+          setTopoGrid(res.runElevationsFt);
+          setTopoError(null);
+        } else if (n < 2) {
+          // transient failure — one quiet retry before surfacing it
+          retryTimer = window.setTimeout(() => attempt(n + 1), 5000);
+        } else {
+          setTopoGrid(null);
+          setTopoError(res.ok ? "incomplete terrain data" : res.reason);
+        }
+      });
+    };
+    attempt(1);
     return () => {
       cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
     };
-  }, [scan]);
+  }, [scan, topoNonce]);
 
   // Terrain from the sky: sample elevation at every post position along
   // the drawn runs (debounced — one batched request per layout change).
@@ -407,6 +425,7 @@ export function FenceEstimator() {
       runElevationsFt: runElevRaw?.elevations,
       elevationSpacingPx: runElevRaw?.spacingPx,
       topoGridFt: topoGrid ?? undefined,
+      view3d: cam3d,
       jobType,
       fence: {
         type: typeId,
@@ -549,6 +568,22 @@ export function FenceEstimator() {
                     Topo {showTopo ? "on" : "off"}
                   </button>
                 )}
+                {!topoGrid && topoError && (
+                  <button
+                    type="button"
+                    title={topoError}
+                    onClick={() => setTopoNonce((n) => n + 1)}
+                    className="transition-smooth ring-focus rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+                  >
+                    Terrain read failed — retry
+                  </button>
+                )}
+                {view3d && (
+                  <span className="hidden text-[11px] font-medium text-zinc-400 sm:inline">
+                    Drag to spin — the angle you leave it at becomes the
+                    client&apos;s opening view.
+                  </span>
+                )}
               </div>
               {view3d ? (
                 <Fence3D
@@ -562,6 +597,8 @@ export function FenceEstimator() {
                   elevationSpacingPx={runElevRaw?.spacingPx}
                   topoGridFt={topoGrid}
                   retainingWall={effWallLf > 0}
+                  initialView={cam3d}
+                  onViewChange={setCam3d}
                   className="aspect-[16/10]"
                 />
               ) : (

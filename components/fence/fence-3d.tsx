@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import { rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
@@ -39,17 +39,12 @@ type GateIn = Pt & {
 
 const VIEW_W = 900;
 const VIEW_H = 560;
-const ROT = (-28 * Math.PI) / 180;
-const SQUASH = 0.52;
+const DEFAULT_YAW_DEG = -28;
+const DEFAULT_SQUASH = 0.52;
 const HEIGHT_EXAGGERATION = 1.3; // readability: fences are long + short
 const GATE_SNAP_PX = 30; // gates farther than this from every run are ignored
 
-/** Rotate + foreshorten a plan point, then lift by z (screen px). */
-function proj(p: Pt, z: number): Pt {
-  const rx = p.x * Math.cos(ROT) - p.y * Math.sin(ROT);
-  const ry = p.x * Math.sin(ROT) + p.y * Math.cos(ROT);
-  return { x: rx, y: ry * SQUASH - z };
-}
+export type Fence3DView = { yawDeg: number; squash: number };
 
 type Face = {
   kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground";
@@ -150,6 +145,8 @@ export function Fence3D({
   elevationSpacingPx,
   topoGridFt = null,
   retainingWall = false,
+  initialView,
+  onViewChange,
   className,
 }: {
   /** Fence runs in canvas space ({points} is all that's read). */
@@ -175,9 +172,75 @@ export function Fence3D({
    *  drops render as a masonry wall face with the fence anchored on top
    *  (instead of an earth bank), and get a summary chip. */
   retainingWall?: boolean;
+  /** Starting camera (yaw + tilt). The contractor's saved angle becomes
+   *  the client's opening view; both can drag to orbit from there. */
+  initialView?: Fence3DView;
+  /** Fires when the user releases a drag — the estimator stores the
+   *  angle so "Build the proposal" freezes it as the client's view. */
+  onViewChange?: (v: Fence3DView) => void;
   className?: string;
 }) {
+  const [view, setView] = useState<Fence3DView>({
+    yawDeg: initialView?.yawDeg ?? DEFAULT_YAW_DEG,
+    squash: Math.min(0.8, Math.max(0.3, initialView?.squash ?? DEFAULT_SQUASH)),
+  });
+  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; moved: boolean } | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<Fence3DView | null>(null);
+
+  const applyPending = useCallback(() => {
+    rafRef.current = null;
+    if (pendingRef.current) {
+      setView(pendingRef.current);
+      pendingRef.current = null;
+    }
+  }, []);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = { sx: e.clientX, sy: e.clientY, yaw0: view.yawDeg, sq0: view.squash, moved: false };
+    },
+    [view],
+  );
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.sx;
+      const dy = e.clientY - d.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      pendingRef.current = {
+        yawDeg: d.yaw0 + dx * 0.35,
+        squash: Math.min(0.8, Math.max(0.3, d.sq0 + dy * 0.0022)),
+      };
+      if (rafRef.current === null) {
+        rafRef.current = requestAnimationFrame(applyPending);
+      }
+    },
+    [applyPending],
+  );
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const onPointerUp = useCallback(() => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    if (d?.moved) {
+      onViewChange?.(pendingRef.current ?? viewRef.current);
+    }
+  }, [onViewChange]);
   const scene = useMemo(() => {
+    const rot = (view.yawDeg * Math.PI) / 180;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    const squash = view.squash;
+    /** Rotate + foreshorten a plan point, then lift by z (screen px). */
+    const proj = (p: Pt, z: number): Pt => ({
+      x: p.x * cosR - p.y * sinR,
+      y: (p.x * sinR + p.y * cosR) * squash - z,
+    });
+
     const t = fenceType(typeId as FenceTypeId);
     const style = STYLES[t.category] ?? STYLES.wood;
     const scale = pxPerFt && pxPerFt > 0 ? pxPerFt : 2.4;
@@ -556,7 +619,7 @@ export function Fence3D({
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall, view.yawDeg, view.squash]);
 
   if (!scene) {
     return (
@@ -570,9 +633,23 @@ export function Fence3D({
   const quadPath = (q: Face["quad"]) =>
     `M${q[0].x.toFixed(1)} ${q[0].y.toFixed(1)} L${q[1].x.toFixed(1)} ${q[1].y.toFixed(1)} L${q[2].x.toFixed(1)} ${q[2].y.toFixed(1)} L${q[3].x.toFixed(1)} ${q[3].y.toFixed(1)} Z`;
 
+  const isDefaultView =
+    Math.abs(view.yawDeg - DEFAULT_YAW_DEG) < 0.5 &&
+    Math.abs(view.squash - DEFAULT_SQUASH) < 0.005;
+
   return (
     <div className={cn("relative overflow-hidden rounded-2xl border border-zinc-200", className)}>
-      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block h-full w-full" role="img" aria-label={`3D preview of the ${label} fence as designed`}>
+      <svg
+        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+        className="block h-full w-full cursor-grab active:cursor-grabbing"
+        style={{ touchAction: "none" }}
+        role="img"
+        aria-label={`3D preview of the ${label} fence as designed — drag to orbit`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+      >
         {/* sky→lawn backdrop */}
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
@@ -827,6 +904,26 @@ export function Fence3D({
           </g>
         )}
       </svg>
+
+      {/* orbit affordance + reset */}
+      <div className="absolute right-3 top-3 flex items-center gap-1.5">
+        {!isDefaultView && (
+          <button
+            type="button"
+            onClick={() => {
+              const v = { yawDeg: DEFAULT_YAW_DEG, squash: DEFAULT_SQUASH };
+              setView(v);
+              onViewChange?.(v);
+            }}
+            className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+          >
+            Reset view
+          </button>
+        )}
+        <span className="pointer-events-none rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+          ↻ Drag to spin
+        </span>
+      </div>
 
       {/* client-readable summary chips */}
       <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">

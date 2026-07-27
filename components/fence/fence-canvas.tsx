@@ -12,6 +12,19 @@ import {
 import type { FenceScanResult } from "@/app/actions/fence-scan";
 import type { ContourLine } from "@/lib/fence/contours";
 
+/** Keep the camera inside the aerial: zoom 1–5×, center clamped so the
+ *  view never shows past the image edge. */
+function clampCam(c: { cx: number; cy: number; k: number }) {
+  const k = Math.min(5, Math.max(1, c.k));
+  const vw = CANVAS_W / k;
+  const vh = CANVAS_H / k;
+  return {
+    k,
+    cx: Math.min(CANVAS_W - vw / 2, Math.max(vw / 2, c.cx)),
+    cy: Math.min(CANVAS_H - vh / 2, Math.max(vh / 2, c.cy)),
+  };
+}
+
 /**
  * FenceCanvas — draw fence runs over the satellite tile with the Regrid
  * parcel boundary as a guide. Controlled component: the page owns
@@ -116,14 +129,69 @@ export function FenceCanvas({
 
   const pxPerFt = scan.canvasPxPerFt;
 
+  /* ---- camera: pan + zoom over the aerial ---- */
+  const [cam, setCam] = useState({ cx: CANVAS_W / 2, cy: CANVAS_H / 2, k: 1 });
+  const camRef = useRef(cam);
+  camRef.current = cam;
+  const panRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
+
+  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const r = svg.getBoundingClientRect();
+    setCam((c0) => {
+      const k = Math.min(5, Math.max(1, c0.k * factor));
+      if (k === c0.k) return c0;
+      const vw0 = CANVAS_W / c0.k;
+      const vh0 = CANVAS_H / c0.k;
+      // world point under the cursor stays fixed while zooming
+      const wx = c0.cx - vw0 / 2 + ((clientX - r.left) / r.width) * vw0;
+      const wy = c0.cy - vh0 / 2 + ((clientY - r.top) / r.height) * vh0;
+      return clampCam({
+        k,
+        cx: wx - (wx - c0.cx) * (c0.k / k),
+        cy: wy - (wy - c0.cy) * (c0.k / k),
+      });
+    });
+  }, []);
+
+  // Wheel must be a NATIVE non-passive listener (React root wheel
+  // handlers are passive, so preventDefault would be ignored and the
+  // page would scroll). Pinch/ctrl+wheel zooms; plain wheel pans.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0022));
+      } else {
+        const r = svg.getBoundingClientRect();
+        setCam((c0) => {
+          const s = CANVAS_W / c0.k / r.width;
+          return clampCam({
+            k: c0.k,
+            cx: c0.cx + e.deltaX * s,
+            cy: c0.cy + e.deltaY * s,
+          });
+        });
+      }
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, [zoomAt]);
+
   /* ---- coordinate + snapping helpers ---- */
 
-  const toCanvas = useCallback((e: React.MouseEvent): Pt => {
+  const toCanvas = useCallback((e: { clientX: number; clientY: number }): Pt => {
     const svg = svgRef.current!;
     const r = svg.getBoundingClientRect();
+    const c = camRef.current;
+    const vw = CANVAS_W / c.k;
+    const vh = CANVAS_H / c.k;
     return {
-      x: ((e.clientX - r.left) / r.width) * CANVAS_W,
-      y: ((e.clientY - r.top) / r.height) * CANVAS_H,
+      x: c.cx - vw / 2 + ((e.clientX - r.left) / r.width) * vw,
+      y: c.cy - vh / 2 + ((e.clientY - r.top) / r.height) * vh,
     };
   }, []);
 
@@ -392,10 +460,10 @@ export function FenceCanvas({
       </div>
 
       {/* Canvas */}
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950">
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+          viewBox={`${cam.cx - CANVAS_W / 2 / cam.k} ${cam.cy - CANVAS_H / 2 / cam.k} ${CANVAS_W / cam.k} ${CANVAS_H / cam.k}`}
           className={cn(
             "block h-auto w-full select-none",
             tool === "draw" || tool === "gate" ? "cursor-crosshair" : "cursor-default",
@@ -404,6 +472,31 @@ export function FenceCanvas({
           onDoubleClick={(e) => {
             e.preventDefault();
             if (tool === "draw") finishDraft();
+            else zoomAt(e.clientX, e.clientY, 1.6);
+          }}
+          onPointerDown={(e) => {
+            // middle-button drag pans in any tool
+            if (e.button === 1) {
+              e.preventDefault();
+              e.currentTarget.setPointerCapture(e.pointerId);
+              panRef.current = { sx: e.clientX, sy: e.clientY, cx: cam.cx, cy: cam.cy };
+            }
+          }}
+          onPointerMove={(e) => {
+            const pan = panRef.current;
+            if (!pan) return;
+            const r = svgRef.current!.getBoundingClientRect();
+            const s = CANVAS_W / camRef.current.k / r.width;
+            setCam(
+              clampCam({
+                k: camRef.current.k,
+                cx: pan.cx - (e.clientX - pan.sx) * s,
+                cy: pan.cy - (e.clientY - pan.sy) * s,
+              }),
+            );
+          }}
+          onPointerUp={() => {
+            panRef.current = null;
           }}
           onMouseMove={(e) => {
             if (tool === "draw") setHover(snap(toCanvas(e)));
@@ -637,6 +730,41 @@ export function FenceCanvas({
             );
           })}
         </svg>
+
+        {/* zoom controls — pinch / ctrl+scroll zooms, scroll pans,
+            middle-drag pans, double-click (select tool) zooms in */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-1">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            onClick={() => {
+              const r = svgRef.current?.getBoundingClientRect();
+              if (r) zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.45);
+            }}
+            className="transition-smooth ring-focus h-7 w-7 rounded-full bg-white/90 text-sm font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+          >
+            −
+          </button>
+          <button
+            type="button"
+            title="Reset view"
+            onClick={() => setCam({ cx: CANVAS_W / 2, cy: CANVAS_H / 2, k: 1 })}
+            className="transition-smooth ring-focus h-7 rounded-full bg-white/90 px-2 text-[11px] font-bold tabular-nums text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+          >
+            {cam.k === 1 ? "100%" : `${Math.round(cam.k * 100)}% ⤺`}
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            onClick={() => {
+              const r = svgRef.current?.getBoundingClientRect();
+              if (r) zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.45);
+            }}
+            className="transition-smooth ring-focus h-7 w-7 rounded-full bg-white/90 text-sm font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {notice && (
