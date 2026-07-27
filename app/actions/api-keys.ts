@@ -734,12 +734,15 @@ export async function testApiKey(
           };
         }
         if (body.status === "REQUEST_DENIED") {
+          const referer = /referer/i.test(body.error_message ?? "");
           return {
             ok: false,
             status:
               row.provider === "GOOGLE_SOLAR"
                 ? "Geocoding API denied this key — may just mean it's restricted to the Solar API only"
-                : "Google rejected the key",
+                : referer
+                  ? "This key is browser-restricted (HTTP referrers) — that's fine for the Leads map, and scans/terrain automatically use the server key from the environment instead. To pass every check with ONE key: in Google Cloud console → Credentials → this key, set Application restrictions to “None” and use API restrictions (Geocoding, Maps Static, Elevation, Maps JavaScript) as the guard."
+                  : "Google rejected the key",
             error: body.error_message ?? body.status,
             testedFingerprint: fp,
             reason: row.provider === "GOOGLE_SOLAR" ? "unknown_error" : "invalid_key",
