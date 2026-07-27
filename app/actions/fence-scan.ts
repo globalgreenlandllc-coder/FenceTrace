@@ -48,40 +48,55 @@ export type FenceScanResult = {
 
 export type FenceScanError = { ok: false; reason: string };
 
-async function googleMapsKey(): Promise<string | null> {
-  return (
-    (await getActiveApiKey("GOOGLE_MAPS")) ??
+/** Candidate keys in priority order. The vault key may be a
+ *  browser-restricted key (right for the Leads map, refused by Google
+ *  for server calls) — every server call here must fall back to the
+ *  environment key when a key is denied. */
+async function googleMapsKeys(): Promise<string[]> {
+  const vault = await getActiveApiKey("GOOGLE_MAPS");
+  const env =
     process.env.GOOGLE_MAPS_API_KEY ??
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ??
-    null
-  );
+    null;
+  return [...new Set([vault, env].filter(Boolean))] as string[];
 }
 
 type GeocodeOutcome =
   | { ok: true; loc: LatLng; formatted: string }
   | { ok: false; kind: "not_found" | "service" };
 
-async function geocode(address: string, key: string): Promise<GeocodeOutcome> {
-  try {
-    const u = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-    u.searchParams.set("address", address);
-    u.searchParams.set("key", key);
-    const res = await fetch(u, { signal: AbortSignal.timeout(10_000) });
-    if (!res.ok) return { ok: false, kind: "service" };
-    const body = (await res.json()) as any;
-    // ZERO_RESULTS = bad address; anything else non-OK (OVER_QUERY_LIMIT,
-    // REQUEST_DENIED…) is OUR problem and must not read as a typo.
-    if (body?.status && body.status !== "OK") {
-      return { ok: false, kind: body.status === "ZERO_RESULTS" ? "not_found" : "service" };
+async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome> {
+  let outcome: GeocodeOutcome = { ok: false, kind: "service" };
+  for (const key of keys) {
+    try {
+      const u = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+      u.searchParams.set("address", address);
+      u.searchParams.set("key", key);
+      const res = await fetch(u, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) {
+        outcome = { ok: false, kind: "service" };
+        continue;
+      }
+      const body = (await res.json()) as any;
+      // ZERO_RESULTS = bad address. REQUEST_DENIED = this key can't do
+      // server calls (browser-restricted) — try the next key. Anything
+      // else non-OK is a service problem.
+      if (body?.status && body.status !== "OK") {
+        if (body.status === "ZERO_RESULTS") return { ok: false, kind: "not_found" };
+        outcome = { ok: false, kind: "service" };
+        if (body.status === "REQUEST_DENIED") continue;
+        return outcome;
+      }
+      const hit = body?.results?.[0];
+      const loc = hit?.geometry?.location;
+      if (typeof loc?.lat !== "number" || typeof loc?.lng !== "number")
+        return { ok: false, kind: "not_found" };
+      return { ok: true, loc: { lat: loc.lat, lng: loc.lng }, formatted: hit.formatted_address ?? address };
+    } catch {
+      outcome = { ok: false, kind: "service" };
     }
-    const hit = body?.results?.[0];
-    const loc = hit?.geometry?.location;
-    if (typeof loc?.lat !== "number" || typeof loc?.lng !== "number")
-      return { ok: false, kind: "not_found" };
-    return { ok: true, loc: { lat: loc.lat, lng: loc.lng }, formatted: hit.formatted_address ?? address };
-  } catch {
-    return { ok: false, kind: "service" };
   }
+  return outcome;
 }
 
 /** Rough meters between two points (equirectangular — fine at parcel scale). */
@@ -108,14 +123,14 @@ export async function runFenceScan(
   });
   if (!rl.ok) return { ok: false, reason: rl.reason };
 
-  const key = await googleMapsKey();
-  if (!key)
+  const keys = await googleMapsKeys();
+  if (keys.length === 0)
     return {
       ok: false,
       reason: "Google Maps key missing — add it in Admin → API keys.",
     };
 
-  const geo = await geocode(address, key);
+  const geo = await geocode(address, keys);
   if (!geo.ok)
     return {
       ok: false,
@@ -155,21 +170,26 @@ export async function runFenceScan(
   const zoom = allPts.length >= 3 ? zoomToFit(allPts) : 19;
 
   // Satellite tile → data URL (same shape the proposal aerial expects).
-  const mapUrl = new URL("https://maps.googleapis.com/maps/api/staticmap");
-  mapUrl.searchParams.set("center", `${center.lat},${center.lng}`);
-  mapUrl.searchParams.set("zoom", String(zoom));
-  mapUrl.searchParams.set("size", `${MAP_W}x${MAP_H}`);
-  mapUrl.searchParams.set("scale", String(MAP_SCALE));
-  mapUrl.searchParams.set("maptype", "satellite");
-  mapUrl.searchParams.set("key", key);
-  let imageDataUrl: string;
-  try {
-    const img = await fetch(mapUrl, { signal: AbortSignal.timeout(15_000) });
-    if (!img.ok) throw new Error(`static map HTTP ${img.status}`);
-    const buf = Buffer.from(await img.arrayBuffer());
-    imageDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
-  } catch (e) {
-    console.error("[fence-scan] static map failed", e);
+  let imageDataUrl: string | null = null;
+  for (const key of keys) {
+    const mapUrl = new URL("https://maps.googleapis.com/maps/api/staticmap");
+    mapUrl.searchParams.set("center", `${center.lat},${center.lng}`);
+    mapUrl.searchParams.set("zoom", String(zoom));
+    mapUrl.searchParams.set("size", `${MAP_W}x${MAP_H}`);
+    mapUrl.searchParams.set("scale", String(MAP_SCALE));
+    mapUrl.searchParams.set("maptype", "satellite");
+    mapUrl.searchParams.set("key", key);
+    try {
+      const img = await fetch(mapUrl, { signal: AbortSignal.timeout(15_000) });
+      if (!img.ok) continue; // denied/quota on this key — try the next
+      const buf = Buffer.from(await img.arrayBuffer());
+      imageDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+      break;
+    } catch (e) {
+      console.error("[fence-scan] static map failed", e);
+    }
+  }
+  if (!imageDataUrl) {
     return { ok: false, reason: "Couldn't fetch satellite imagery for that address." };
   }
 
