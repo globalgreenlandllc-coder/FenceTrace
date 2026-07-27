@@ -27,30 +27,30 @@ const CATEGORY_META: Record<
   Cat,
   { label: string; sub: string; tone: Parameters<typeof Badge>[0]["tone"] }
 > = {
-  gutter: {
-    label: "Gutters",
-    sub: "Per linear foot",
+  fence: {
+    label: "Fence systems",
+    sub: "Installed material per LF at the standard height — install labor noted per row",
     tone: "accent",
   },
-  downspout: {
-    label: "Downspouts",
-    sub: "Per linear foot",
+  gate: {
+    label: "Gates",
+    sub: "Walk gate (4') kit by fence type — drive gates (10') ≈ 2.4×, custom widths scale by width",
     tone: "sky",
   },
-  accessory: {
-    label: "Accessories",
-    sub: "Hangers, corners, end caps, guards",
+  hardware: {
+    label: "Install hardware & components",
+    sub: "Posts, concrete, rails, pickets, chain-link parts, gate hardware, anchors",
     tone: "violet",
   },
   labor: {
-    label: "Labor",
-    sub: "Mobilization, removal, install",
+    label: "Labor & job rates",
+    sub: "Mobilization, tear-out, stain, slope steps, wall mounting",
     tone: "amber",
   },
 };
 
-const CATEGORIES: Cat[] = ["gutter", "downspout", "accessory", "labor"];
-const UNITS: Unit[] = ["LF", "ea", "lot"];
+const CATEGORIES: Cat[] = ["fence", "gate", "hardware", "labor"];
+const UNITS: Unit[] = ["LF", "ea", "lot", "sq ft"];
 
 type DraftRow = MaterialDefaultRow & {
   _dirty?: boolean;
@@ -94,7 +94,7 @@ export function MaterialDefaultsEditor({
         key: `custom-${Date.now()}`,
         label: "New material",
         category,
-        unit: category === "labor" ? "lot" : category === "downspout" ? "LF" : "ea",
+        unit: category === "fence" ? "LF" : category === "labor" ? "lot" : "ea",
         priceCents: 0,
         description: null,
         sortOrder,
