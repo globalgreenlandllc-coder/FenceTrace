@@ -43,30 +43,49 @@ export async function sampleFenceElevations(
   });
   if (!rl.ok) return { ok: false, reason: rl.reason };
 
-  const key =
-    (await getActiveApiKey("GOOGLE_MAPS")) ??
-    process.env.GOOGLE_MAPS_API_KEY ??
-    null;
-  if (!key) return { ok: false, reason: "Google Maps key missing" };
+  // The vault key may be a browser-restricted key (added for the leads
+  // map) that Google denies for server calls — try it first, then fall
+  // back to the env key when they differ.
+  const vaultKey = await getActiveApiKey("GOOGLE_MAPS");
+  const envKey = process.env.GOOGLE_MAPS_API_KEY ?? null;
+  const keys = [...new Set([vaultKey, envKey].filter(Boolean))] as string[];
+  if (keys.length === 0) return { ok: false, reason: "Google Maps key missing" };
 
   const flat = runs.flat();
-  const u = new URL("https://maps.googleapis.com/maps/api/elevation/json");
-  u.searchParams.set(
-    "locations",
-    flat.map((p) => `${p.lat.toFixed(7)},${p.lng.toFixed(7)}`).join("|"),
-  );
-  u.searchParams.set("key", key);
+  let body: any = null;
+  let lastStatus: string | null = null;
+  for (const key of keys) {
+    const u = new URL("https://maps.googleapis.com/maps/api/elevation/json");
+    u.searchParams.set(
+      "locations",
+      flat.map((p) => `${p.lat.toFixed(7)},${p.lng.toFixed(7)}`).join("|"),
+    );
+    u.searchParams.set("key", key);
+    try {
+      const res = await fetch(u, { signal: AbortSignal.timeout(12_000) });
+      if (!res.ok) {
+        lastStatus = `HTTP ${res.status}`;
+        continue;
+      }
+      const parsed = (await res.json()) as any;
+      if (parsed?.status === "OK" && Array.isArray(parsed.results)) {
+        body = parsed;
+        break;
+      }
+      lastStatus = parsed?.status ?? "no response";
+      if (lastStatus !== "REQUEST_DENIED") break; // real error — don't spam keys
+    } catch {
+      lastStatus = "network";
+    }
+  }
   try {
-    const res = await fetch(u, { signal: AbortSignal.timeout(12_000) });
-    if (!res.ok) return { ok: false, reason: `Elevation HTTP ${res.status}` };
-    const body = (await res.json()) as any;
-    if (body?.status !== "OK" || !Array.isArray(body.results)) {
+    if (!body) {
       return {
         ok: false,
         reason:
-          body?.status === "REQUEST_DENIED"
-            ? "Elevation API not enabled on this Google key — enable it in the Cloud console."
-            : `Elevation unavailable (${body?.status ?? "no response"})`,
+          lastStatus === "REQUEST_DENIED"
+            ? "Google denied the elevation call — enable the “Elevation API” service on your Maps key in the Google Cloud console (APIs & Services → Library), and make sure the key isn’t restricted to browser referrers."
+            : `Elevation unavailable (${lastStatus ?? "no response"})`,
       };
     }
     const metersToFt = 3.28084;

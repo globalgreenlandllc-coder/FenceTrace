@@ -88,6 +88,7 @@ export function FenceEstimator() {
   // Terrain follows the measured grade until the contractor overrides it.
   const [terrainAuto, setTerrainAuto] = useState(true);
   const [slope, setSlope] = useState<SlopeSummary | null>(null);
+  const [slopeError, setSlopeError] = useState<string | null>(null);
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
   const [view3d, setView3d] = useState(false);
@@ -140,7 +141,13 @@ export function FenceEstimator() {
     );
     const timer = window.setTimeout(async () => {
       const res = await sampleFenceElevations(runsLatLng);
-      if (!res.ok) return; // keep last good analysis; picker stays manual
+      if (!res.ok) {
+        // Say WHY there's no terrain readout — a silent blank reads as
+        // broken (and hides a fixable key/setup problem).
+        setSlopeError(res.reason);
+        return;
+      }
+      setSlopeError(null);
       const summary = summarizeSlopes(
         res.runElevationsFt,
         t.postSpacingFt,
@@ -459,6 +466,11 @@ export function FenceEstimator() {
                       </option>
                     ))}
                   </select>
+                  {slopeError && (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200">
+                      Terrain reading unavailable: {slopeError}
+                    </p>
+                  )}
                   {slope && slope.runs.length > 0 && (
                     <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-600 ring-1 ring-inset ring-zinc-200">
                       <Mountain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-600" />
