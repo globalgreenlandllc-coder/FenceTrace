@@ -183,10 +183,8 @@ export function MaterialsBuilder({
   const aiErr = ai.error;
   // The switch reflects the tier being edited (proposal-wide actions
   // still pull the whole ladder onto one mode).
-  // Market pricing quotes the LEGACY gutter payload — until the quote
-  // engine speaks fence, fence packages stay on the contractor's price.
   const pricingMode: "manual" | "ai" =
-    !pkg.config.fence && pkg.pricingMode === "ai" ? "ai" : "manual";
+    pkg.pricingMode === "ai" ? "ai" : "manual";
   const quote = pkg.aiQuote;
   const quoteStale = ai.isStale;
 
@@ -766,13 +764,8 @@ export function MaterialsBuilder({
             sub="Price it yourself, or apply the going market rate for your area to every package — the client sees all tiers, so the switch re-prices all of them together."
           >
             <div className="space-y-3">
-              {/* The pricing switch (market quotes don't speak fence yet) */}
-              {pkg.config.fence ? (
-                <p className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs text-zinc-500">
-                  Priced from your fence rates and markup. Market-rate
-                  suggestions for fences are coming soon.
-                </p>
-              ) : (
+              {/* The pricing switch — the quote engine speaks fence and
+                  gutter; one call prices the whole ladder. */}
               <div className="grid grid-cols-2 gap-1 rounded-xl border border-zinc-200 bg-white p-1">
                 <button
                   type="button"
@@ -805,7 +798,6 @@ export function MaterialsBuilder({
                   Market price
                 </button>
               </div>
-              )}
               {aiErr && <p className="text-xs text-rose-600">{aiErr}</p>}
 
               {/* AI panel — the quote that's applied right now */}

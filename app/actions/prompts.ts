@@ -15,10 +15,14 @@ import {
 // with what the pipeline actually falls back to.
 // TODO(fence): the address.* / blueprint.* engine prompts were removed with
 // the roof measuring engine; the fence engine will add its defaults here.
-import { PRICING_SYSTEM as PROPOSAL_PRICING_DEFAULT } from "@/lib/ai/price-suggestion";
+import {
+  PRICING_SYSTEM as PROPOSAL_PRICING_DEFAULT,
+  FENCE_PRICING_SYSTEM as FENCE_PRICING_DEFAULT,
+} from "@/lib/ai/price-suggestion";
 
 const DEFAULTS: Record<PromptKey, string> = {
   "proposal.pricing.system": PROPOSAL_PRICING_DEFAULT,
+  "proposal.pricing.fence.system": FENCE_PRICING_DEFAULT,
 };
 
 export type PromptRow = {

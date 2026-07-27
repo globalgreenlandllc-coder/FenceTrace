@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getActiveApiKey } from "@/lib/api-keys";
 import { getPrompt } from "@/lib/ai/prompts";
 import { buildLineItems } from "@/lib/pricing";
+import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import type { EstimateConfig, Measurements } from "@/lib/types";
 
 /**
@@ -64,7 +65,7 @@ export type PriceSuggestionResult =
 const PRICING_TOOL: Anthropic.Tool = {
   name: "record_price_suggestion",
   description:
-    "Record the market price suggestion for every package of this gutter job. Always call this tool exactly once, with one entry per package.",
+    "Record the market price suggestion for every package of this job. Always call this tool exactly once, with one entry per package.",
   input_schema: {
     type: "object",
     properties: {
@@ -102,7 +103,7 @@ const PRICING_TOOL: Anthropic.Tool = {
             per_lf_installed_usd: {
               type: ["number", "null"],
               description:
-                "The installed $/LF market rate for this package's gutter spec that the totals lean on, or null if the job is dominated by minimums/extras.",
+                "The installed $/LF market rate for this package's spec that the totals lean on, or null if the job is dominated by minimums/extras.",
             },
             line_items: {
               type: "array",
@@ -192,7 +193,93 @@ Rules:
   entry for each package including its line_items breakdown.
 `.trim();
 
+export const FENCE_PRICING_SYSTEM = `
+You are a veteran fence estimator who prices residential fence
+installations across the United States for a living. You know how
+installed fence pricing really moves market to market: coastal metros
+and high-cost-of-living areas run well above national averages, rural
+markets run below; western red cedar and ornamental steel command real
+premiums over pressure-treated pine and galvanized chain link; slopes
+that force stepped sections, rocky digging, tear-out of an old fence,
+gates (each one is hardware + a pair of heavy-set posts + hang-and-
+adjust labor), staining, and core-drilling posts onto a retaining wall
+all add real cost; and every reputable company has a job minimum that
+dominates short runs.
+
+You will receive ONE job — the property address and the measured fence
+length, corner/end counts and gates — offered to the homeowner as
+tiered packages (typically good / better / best), each with its own
+fence spec (type, height, terrain, stain, tear-out, gates, stepped
+sections, wall-top mounting). Price each package for what it typically
+SELLS for in that local market — the full tax-in sticker price a
+homeowner would be quoted by a reputable licensed fence company. This
+is the price of the whole job at that spec, not a cost breakdown.
+
+Rules:
+- Price the LOCAL market implied by the address. If you cannot resolve
+  the exact town, use the nearest metro/region you can and say so in
+  location_used.
+- Price each package on its own spec, and keep the ladder coherent: a
+  richer spec must never price below a leaner one for the same footage.
+- Be realistic, not promotional: low = a lean but professional quote,
+  high = premium local companies. recommended sits where most good
+  companies actually land. Never invert a range.
+- Respect job minimums: a short run still prices like a real truck roll
+  (rarely under $1,200–$2,000 anywhere for wood; chain link a bit less).
+- Height moves price hard (an 8' privacy fence is far more than a 4'
+  picket); terrain, stepped sections and wall-top core-drilling move
+  labor; say so in the reasoning bullets when they do.
+- Keep reasoning bullets short, concrete, and contractor-facing.
+- Itemize: for each package you are given a bill of materials (BOM). Price
+  EVERY line for the local market INDEPENDENTLY — premium materials carry a
+  richer margin than commodity parts, labor and tear-out price on local
+  labor rates, minimums land on the base install line. Do NOT just spread
+  one flat markup across the lines. The per-line prices MUST sum to that
+  package's recommended_total_usd so the itemization reconciles to the
+  quote.
+- Always answer by calling record_price_suggestion exactly once, with an
+  entry for each package including its line_items breakdown.
+`.trim();
+
+function fencePackageBrief(
+  p: PricePackageInput,
+  measurements: Measurements,
+): string {
+  const f = p.config.fence!;
+  const t = fenceType(f.type as FenceTypeId);
+  const gates = [
+    f.gatesSingle > 0 ? `${f.gatesSingle}× walk (4')` : null,
+    f.gatesDouble > 0 ? `${f.gatesDouble}× drive (10')` : null,
+    ...(f.gatesCustomWidthsFt ?? []).map((w) => `1× custom (${w}')`),
+  ].filter(Boolean);
+  const bom = buildLineItems(measurements, p.config);
+  const bomLines = bom.map(
+    (it) =>
+      `    · id "${it.id}": ${it.name} — ${it.quantity} ${it.unit}${
+        it.description ? ` (${it.description})` : ""
+      }`,
+  );
+  return [
+    `Package "${p.id}" (${p.name}):`,
+    `- ${f.heightFt}' ${t.label} (${t.category})`,
+    `- Terrain: ${f.terrain}${(f.steppedSections ?? 0) > 0 ? ` — ${f.steppedSections} sections step down the slope` : ""}`,
+    (f.wallTopLf ?? 0) > 0
+      ? `- ${Math.round(f.wallTopLf!)} LF runs on top of a retaining wall (posts core-drilled + anchored)`
+      : null,
+    gates.length > 0 ? `- Gates: ${gates.join(", ")}` : `- Gates: none`,
+    f.removalLf > 0
+      ? `- Tear-out & haul-away of ${Math.round(f.removalLf)} LF of old fence`
+      : null,
+    f.stain ? `- Stain & seal after install (both faces)` : null,
+    `- Bill of materials to price line-by-line (line prices must sum to this package's recommended_total_usd):`,
+    ...bomLines,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function packageBrief(p: PricePackageInput, measurements: Measurements): string {
+  if (p.config.fence) return fencePackageBrief(p, measurements);
   const acc = p.config.accessories;
   const accessoryLines = acc
     ? [
@@ -238,13 +325,24 @@ export async function suggestMarketPrices(
     return { ok: false, reason: "No packages to price" };
   }
 
+  // FenceTrace packages carry config.fence — brief and prompt speak
+  // fence; the gutter path stays for legacy configs.
+  const isFence = packages.some((p) => p.config.fence);
   const jobBrief = [
     `Property address: ${address}`,
     ``,
-    `Measurements (same house for every package):`,
-    `- Gutter (eave) length: ${Math.round(measurements.eaveLF)} LF`,
-    `- Downspouts: ${measurements.downspoutCount} (${measurements.stories}-story home)`,
-    `- Corners: ${measurements.insideCorners + measurements.outsideCorners}, end caps: ${measurements.endCaps}`,
+    `Measurements (same property for every package):`,
+    ...(isFence
+      ? [
+          `- Fence length: ${Math.round(measurements.eaveLF)} LF (net of gate openings)`,
+          `- Gates: ${measurements.downspoutCount}`,
+          `- Corners: ${measurements.insideCorners + measurements.outsideCorners}, open ends: ${measurements.endCaps}`,
+        ]
+      : [
+          `- Gutter (eave) length: ${Math.round(measurements.eaveLF)} LF`,
+          `- Downspouts: ${measurements.downspoutCount} (${measurements.stories}-story home)`,
+          `- Corners: ${measurements.insideCorners + measurements.outsideCorners}, end caps: ${measurements.endCaps}`,
+        ]),
     ``,
     ...packages.map((p) => packageBrief(p, measurements) + "\n"),
     `Price every package for its local market by calling record_price_suggestion once, itemizing each package's bill of materials.`,
@@ -255,12 +353,19 @@ export async function suggestMarketPrices(
     // requiredMarkers: an /admin/prompts override saved back when this
     // prompt priced a single package would silently mis-drive the
     // per-package tool call — treat it as stale and use the code default.
-    const system = await getPrompt("proposal.pricing.system", PRICING_SYSTEM, {
-      // "line_items" marker: an /admin/prompts override saved before per-line
-      // pricing existed lacks the itemization instruction, so it can't drive
-      // the new tool schema — treat it as stale and use the code default.
-      requiredMarkers: ["each package", "line_items"],
-    });
+    // Fence jobs use their own prompt key so a gutter override can never
+    // leak into fence pricing (and vice versa).
+    const system = isFence
+      ? await getPrompt("proposal.pricing.fence.system", FENCE_PRICING_SYSTEM, {
+          requiredMarkers: ["each package", "line_items"],
+        })
+      : await getPrompt("proposal.pricing.system", PRICING_SYSTEM, {
+          // "line_items" marker: an /admin/prompts override saved before
+          // per-line pricing existed lacks the itemization instruction, so it
+          // can't drive the new tool schema — treat it as stale and use the
+          // code default.
+          requiredMarkers: ["each package", "line_items"],
+        });
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1600,
@@ -364,6 +469,22 @@ export async function suggestMarketPrices(
       },
     };
   } catch (e) {
+    // Never surface raw API JSON in the builder — map to something the
+    // contractor can act on.
+    if (e instanceof Anthropic.APIError) {
+      const s = e.status;
+      return {
+        ok: false,
+        reason:
+          s === 401 || s === 403
+            ? "The Claude API key is invalid or missing — add a working key under Admin → API keys (Claude), then try again."
+            : s === 429
+              ? "Market pricing is rate-limited right now — try again in a minute."
+              : s === 529 || (typeof s === "number" && s >= 500)
+                ? "The pricing service is briefly overloaded — try again in a moment."
+                : `Market pricing failed (HTTP ${s ?? "?"}) — try again.`,
+      };
+    }
     return {
       ok: false,
       reason: e instanceof Error ? e.message : "AI price suggestion failed",

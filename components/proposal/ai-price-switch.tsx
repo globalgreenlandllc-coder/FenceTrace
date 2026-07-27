@@ -19,6 +19,25 @@ export function aiPriceInputKey(
   config: EstimateConfig,
   m: Measurements,
 ): string {
+  if (config.fence) {
+    const f = config.fence;
+    return JSON.stringify([
+      "fence",
+      address.trim().toLowerCase(),
+      f.type,
+      f.heightFt,
+      f.terrain,
+      f.stain,
+      Math.round(f.removalLf),
+      f.gatesSingle,
+      f.gatesDouble,
+      (f.gatesCustomWidthsFt ?? []).join(","),
+      f.steppedSections ?? 0,
+      Math.round(f.wallTopLf ?? 0),
+      Math.round(m.eaveLF),
+      m.downspoutCount,
+    ]);
+  }
   return JSON.stringify([
     address.trim().toLowerCase(),
     config.size,

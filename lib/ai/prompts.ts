@@ -21,9 +21,14 @@ import { db } from "@/lib/db";
 // will register its own keys here. Stale rows for old keys may linger in the
 // prompt_templates table — listPromptTemplates only surfaces PROMPT_KEYS, so
 // they are ignored.
-export type PromptKey = "proposal.pricing.system";
+export type PromptKey =
+  | "proposal.pricing.system"
+  | "proposal.pricing.fence.system";
 
-export const PROMPT_KEYS: PromptKey[] = ["proposal.pricing.system"];
+export const PROMPT_KEYS: PromptKey[] = [
+  "proposal.pricing.system",
+  "proposal.pricing.fence.system",
+];
 
 export type PromptCategory = "address" | "blueprint" | "proposal";
 
@@ -32,11 +37,18 @@ export const PROMPT_META: Record<
   { label: string; category: PromptCategory; model: string; description: string }
 > = {
   "proposal.pricing.system": {
-    label: "AI market price (by location)",
+    label: "Market price — legacy gutter configs",
     category: "proposal",
     model: "Claude Sonnet 5",
     description:
-      "Drives the 'AI recommended price' switch in the proposal builder: given the job's address, measurements, and EVERY package's fence spec, one call prices all tiers (good/better/best) for the local market with a low–high range per tier and short reasoning. Contractor-facing only — never shown to the client. ⚠ An override saved here SHADOWS the code default — reset after engine updates.",
+      "Drives the 'Market price' switch for LEGACY gutter-spec packages only (fence packages use the fence prompt below). One call prices all tiers for the local market with a low–high range per tier. Contractor-facing only. ⚠ An override saved here SHADOWS the code default — reset after engine updates.",
+  },
+  "proposal.pricing.fence.system": {
+    label: "Market price (by location)",
+    category: "proposal",
+    model: "Claude Sonnet 5",
+    description:
+      "Drives the 'Market price' switch in the proposal builder: given the job's address, fence length/gates, and EVERY package's fence spec (type, height, terrain, tear-out, stain, wall mounting), one call prices all tiers (good/better/best) for the local market with a low–high range per tier and short reasoning. Contractor-facing only — never shown to the client. ⚠ An override saved here SHADOWS the code default — reset after engine updates.",
   },
 };
 
