@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import { rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
@@ -12,21 +12,24 @@ import {
 } from "@/lib/fence/geo";
 
 /**
- * Fence3D — a to-scale isometric preview of the drawn fence, hand-rolled
- * in SVG (no 3D library: deterministic, fast, prints cleanly in the
- * proposal PDF and the client portal).
+ * Fence3D — a to-scale preview of the drawn fence, hand-rolled in SVG
+ * (no 3D library: deterministic, fast, prints cleanly in the proposal
+ * PDF and the client portal).
  *
- * Ground: when the scan's topo lattice is available the whole yard
- * renders as a slope-shaded terrain surface and the fence stands on it;
- * without it (legacy proposals) each run gets a shallow earth ribbon.
- * Extreme lots are vertically softened past 5× the fence height so an
- * 80 ft hillside still reads as a yard with a fence, not a cliff.
- * Sections rack (tilt) up to the build kind's limit and STEP beyond it —
- * level panels cascading downhill on extended posts. Gates render at
- * their real width as framed, braced leaves with a size label.
+ * One WORLD model (fence faces, terrain cells, trees — all in plan px +
+ * height px), two cameras:
+ *  - ORBIT: axonometric bird's-eye. Drag spins/tilts, wheel zooms
+ *    toward the cursor, double-click zooms a spot.
+ *  - WALK: click any spot on the ground to stand there — a simple
+ *    first-person perspective renderer. WASD/arrows walk & turn, drag
+ *    looks around, Esc (or the chip) exits.
+ * The ground renders as a slope-shaded lawn with natural tone variation
+ * and decorative trees outside the fence; big lots are vertically
+ * softened past 5× the fence height so hillsides stay readable.
  */
 
 type Pt = { x: number; y: number };
+type V3 = { x: number; y: number; z: number };
 
 /** Gates from the estimator carry kind/widthFt; proposal takeoffs carry
  *  gateKind/gateWidthFt on downspouts; legacy blobs carry only x/y. */
@@ -43,28 +46,39 @@ const DEFAULT_YAW_DEG = -28;
 const DEFAULT_SQUASH = 0.52;
 const HEIGHT_EXAGGERATION = 1.3; // readability: fences are long + short
 const GATE_SNAP_PX = 30; // gates farther than this from every run are ignored
+const EYE_FT = 5.5; // walk-mode eye height
+const WALK_FT_PER_S = 16;
+const TURN_RAD_PER_S = 2.0;
+const FOCAL = 640; // walk-mode focal length, screen px
+const NEAR_PX = 4; // walk-mode near plane, plan px
 
 export type Fence3DView = { yawDeg: number; squash: number };
 
-type Face = {
-  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground";
-  /** Painter depth — projected plan-y of the base midpoint (+bias). */
-  depth: number;
-  /** Quad corners in projected space: baseA, baseB, topB, topA. */
-  quad: [Pt, Pt, Pt, Pt];
-  /** Faces whose outward normal points left get the shade tone. */
+type WFace = {
+  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree";
+  /** World corners (plan x/y in canvas px, z up in screen px). Trees
+   *  store [base, top]. */
+  pts: V3[];
+  /** Painter bias: negative draws earlier among coplanar faces. */
+  bias: number;
   shaded: boolean;
-  /** Plan-space base segment (for picket/bar spacing). */
   baseLenPx: number;
-  /** Gate faces: 2 for a double gate's split leaves. */
   leaves?: 1 | 2;
-  /** Posts: gate posts render heavier. */
   heavy?: boolean;
-  /** Ground cells: pre-computed lawn fill from the slope shading. */
   fill?: string;
+  /** Trees: canopy tone index. */
+  tone?: number;
 };
 
-type GateLabel = { anchor: Pt; text: string };
+type WLabel = { anchor: V3; text: string };
+
+type ProjFace = {
+  face: WFace;
+  poly: Pt[];
+  /** True when the projection kept the original 4 corners (details safe). */
+  isQuad: boolean;
+  depth: number;
+};
 
 const STYLES: Record<
   string,
@@ -78,7 +92,12 @@ const STYLES: Record<
   "split-rail": { face: "#B98F5C", shade: "#9A7344", post: "#7E5730", stroke: "#5F421F", lines: "rails" },
 };
 
-/** Cumulative arc lengths of a polyline (same length as points). */
+const TREE_TONES = [
+  ["#4C7A45", "#3B6136"],
+  ["#557F42", "#436639"],
+  ["#47714B", "#38593B"],
+];
+
 function cumLengths(pts: Pt[]): number[] {
   const cum = [0];
   for (let i = 1; i < pts.length; i++) {
@@ -87,7 +106,6 @@ function cumLengths(pts: Pt[]): number[] {
   return cum;
 }
 
-/** Plan point at arc distance d along a polyline. */
 function pointAt(pts: Pt[], cum: number[], d: number): Pt {
   const total = cum[cum.length - 1];
   if (d <= 0) return pts[0];
@@ -102,7 +120,6 @@ function pointAt(pts: Pt[], cum: number[], d: number): Pt {
   };
 }
 
-/** Nearest point on a polyline: arc distance + perpendicular offset. */
 function nearestOnPolyline(p: Pt, pts: Pt[], cum: number[]): { dist: number; perp: number } {
   let best = { dist: 0, perp: Infinity };
   for (let i = 1; i < pts.length; i++) {
@@ -124,13 +141,21 @@ function nearestOnPolyline(p: Pt, pts: Pt[], cum: number[]): { dist: number; per
 
 const fmtFt = (w: number) => `${Math.round(w * 10) / 10}`;
 
-/** Lawn color for a ground cell from its slope (light from the NW). */
-function lawnFill(gxFt: number, gyFt: number): string {
-  // gx: ft rise per plan px eastward; gy: ft rise per plan px southward.
-  const b = Math.max(0.66, Math.min(1.06, 0.88 - gxFt * 2.4 + gyFt * 1.2));
-  const r = Math.round(178 * b);
-  const g = Math.round(208 * b);
-  const bl = Math.round(160 * b);
+/** Deterministic 0..1 hash — grass tone jitter + tree placement. */
+function hash2(r: number, c: number): number {
+  const n = Math.sin(r * 127.1 + c * 311.7) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+/** Lawn color for a ground cell from its slope (light from the NW) with
+ *  a touch of natural tone variation. */
+function lawnFill(gxFt: number, gyFt: number, jitter: number): string {
+  const b =
+    Math.max(0.64, Math.min(1.08, 0.88 - gxFt * 2.4 + gyFt * 1.2)) *
+    (0.97 + jitter * 0.07);
+  const r = Math.round(172 * b);
+  const g = Math.round(206 * b);
+  const bl = Math.round(152 * b);
   return `rgb(${r},${g},${bl})`;
 }
 
@@ -184,63 +209,40 @@ export function Fence3D({
     yawDeg: initialView?.yawDeg ?? DEFAULT_YAW_DEG,
     squash: Math.min(0.8, Math.max(0.3, initialView?.squash ?? DEFAULT_SQUASH)),
   });
-  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; moved: boolean } | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const pendingRef = useRef<Fence3DView | null>(null);
+  // Screen zoom over the orbit view: screen = world*k + t (an SVG group
+  // transform, so zooming never rebuilds the scene).
+  const [zoomCam, setZoomCam] = useState({ k: 1, tx: 0, ty: 0 });
+  const [mode, setMode] = useState<"orbit" | "walk">("orbit");
+  const [walkCam, setWalkCam] = useState({ x: 450, y: 300, heading: 0, pitch: 0 });
 
-  const applyPending = useCallback(() => {
-    rafRef.current = null;
-    if (pendingRef.current) {
-      setView(pendingRef.current);
-      pendingRef.current = null;
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean } | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pendingRef = useRef<(() => void) | null>(null);
+  const keysRef = useRef<Set<string>>(new Set());
+  const walkRafRef = useRef<number | null>(null);
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const walkCamRef = useRef(walkCam);
+  walkCamRef.current = walkCam;
+  const zoomRef = useRef(zoomCam);
+  zoomRef.current = zoomCam;
+
+  const scheduleFrame = useCallback((apply: () => void) => {
+    pendingRef.current = apply;
+    if (rafRef.current === null) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        pendingRef.current?.();
+        pendingRef.current = null;
+      });
     }
   }, []);
 
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
-      if (e.button !== 0) return;
-      e.currentTarget.setPointerCapture(e.pointerId);
-      dragRef.current = { sx: e.clientX, sy: e.clientY, yaw0: view.yawDeg, sq0: view.squash, moved: false };
-    },
-    [view],
-  );
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
-      const d = dragRef.current;
-      if (!d) return;
-      const dx = e.clientX - d.sx;
-      const dy = e.clientY - d.sy;
-      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-      pendingRef.current = {
-        yawDeg: d.yaw0 + dx * 0.35,
-        squash: Math.min(0.8, Math.max(0.3, d.sq0 + dy * 0.0022)),
-      };
-      if (rafRef.current === null) {
-        rafRef.current = requestAnimationFrame(applyPending);
-      }
-    },
-    [applyPending],
-  );
-  const viewRef = useRef(view);
-  viewRef.current = view;
-  const onPointerUp = useCallback(() => {
-    const d = dragRef.current;
-    dragRef.current = null;
-    if (d?.moved) {
-      onViewChange?.(pendingRef.current ?? viewRef.current);
-    }
-  }, [onViewChange]);
-  const scene = useMemo(() => {
-    const rot = (view.yawDeg * Math.PI) / 180;
-    const cosR = Math.cos(rot);
-    const sinR = Math.sin(rot);
-    const squash = view.squash;
-    /** Rotate + foreshorten a plan point, then lift by z (screen px). */
-    const proj = (p: Pt, z: number): Pt => ({
-      x: p.x * cosR - p.y * sinR,
-      y: (p.x * sinR + p.y * cosR) * squash - z,
-    });
-
+  /* ================= world model (camera-independent) ================ */
+  const world = useMemo(() => {
     const t = fenceType(typeId as FenceTypeId);
     const style = STYLES[t.category] ?? STYLES.wood;
     const scale = pxPerFt && pxPerFt > 0 ? pxPerFt : 2.4;
@@ -248,7 +250,6 @@ export function Fence3D({
     const spacingPx = t.postSpacingFt * scale;
     const rackFt = rackingLimitFt(t.build);
 
-    // ---- ground sources ----------------------------------------------
     const grid =
       topoGridFt &&
       topoGridFt.length >= 2 &&
@@ -269,8 +270,6 @@ export function Fence3D({
       runDistanceModel(r.points, sampleSpacing, runElevationsFt?.[i] ?? []),
     );
 
-    // Shared datum + relief softening: past 5× the fence height, extra
-    // relief renders at 35% so big hillsides stay readable.
     let minElev = Infinity;
     let maxElev = -Infinity;
     const noteElev = (v: number) => {
@@ -298,21 +297,18 @@ export function Fence3D({
       const r0 = Math.floor(fy);
       const sx = fx - c0;
       const sy = fy - r0;
-      const v00 = grid[r0][c0];
-      const v01 = grid[r0][c0 + 1];
-      const v10 = grid[r0 + 1][c0];
-      const v11 = grid[r0 + 1][c0 + 1];
       return (
-        v00 * (1 - sx) * (1 - sy) +
-        v01 * sx * (1 - sy) +
-        v10 * (1 - sx) * sy +
-        v11 * sx * sy
+        grid[r0][c0] * (1 - sx) * (1 - sy) +
+        grid[r0][c0 + 1] * sx * (1 - sy) +
+        grid[r0 + 1][c0] * (1 - sx) * sy +
+        grid[r0 + 1][c0 + 1] * sx * sy
       );
     };
+    const zAtPlan = (x: number, y: number): number =>
+      soften(bilinear(x, y) - minElev) * scale * HEIGHT_EXAGGERATION;
 
     const geo = runs.map((r) => ({ pts: r.points, cum: cumLengths(r.points) }));
     const hasGroundFor = (ri: number) => !!grid || !!models[ri];
-    /** Raw ground elevation (ft, absolute) under a run point. */
     const elevAt = (ri: number, d: number): number => {
       if (grid) {
         const p = pointAt(geo[ri].pts, geo[ri].cum, d);
@@ -321,13 +317,10 @@ export function Fence3D({
       const m = models[ri];
       return m ? m.atDistPx(d) : minElev;
     };
-    /** Screen-z of the ground under a run point (softened + scaled). */
     const zOf = (ri: number, d: number): number =>
       soften(elevAt(ri, d) - minElev) * scale * HEIGHT_EXAGGERATION;
-    const zOfPlan = (x: number, y: number): number =>
-      soften(bilinear(x, y) - minElev) * scale * HEIGHT_EXAGGERATION;
 
-    // Assign each gate to its nearest run as a span of arc distance.
+    // Gates → spans per run.
     const spansByRun: { c: number; w: number; kind: "single" | "double" | "custom" }[][] =
       runs.map(() => []);
     let gateCount = 0;
@@ -347,7 +340,7 @@ export function Fence3D({
       if (bestRun < 0 || best.perp > GATE_SNAP_PX) continue;
       const total = geo[bestRun].cum[geo[bestRun].cum.length - 1];
       const wPx = widthFt * scale;
-      if (total <= wPx + 2) continue; // run shorter than the gate
+      if (total <= wPx + 2) continue;
       spansByRun[bestRun].push({
         c: Math.max(wPx / 2, Math.min(total - wPx / 2, best.dist)),
         w: wPx,
@@ -356,14 +349,12 @@ export function Fence3D({
       gateCount++;
     }
 
-    const faces: Face[] = [];
-    const labels: GateLabel[] = [];
+    const faces: WFace[] = [];
+    const labels: WLabel[] = [];
     let steppedCount = 0;
     let wallCount = 0;
 
-    // ---- terrain surface (topo lattice) ------------------------------
-    // Rendered at 2× the lattice density via bilinear interpolation so
-    // the lawn reads as rolling ground, not a patchwork of flat tiles.
+    // Terrain surface at 2× lattice density (smooth rolling lawn).
     if (grid) {
       const SUB = 2;
       const stepX = cellW / SUB;
@@ -376,29 +367,57 @@ export function Fence3D({
           const y0 = r * stepY;
           const x1 = x0 + stepX;
           const y1 = y0 + stepY;
-          const mid = { x: x0 + stepX / 2, y: y0 + stepY / 2 };
-          const gx = (bilinear(x1, mid.y) - bilinear(x0, mid.y)) / stepX;
-          const gy = (bilinear(mid.x, y1) - bilinear(mid.x, y0)) / stepY;
+          const mx = x0 + stepX / 2;
+          const my = y0 + stepY / 2;
+          const gx = (bilinear(x1, my) - bilinear(x0, my)) / stepX;
+          const gy = (bilinear(mx, y1) - bilinear(mx, y0)) / stepY;
           faces.push({
             kind: "ground",
-            depth: proj(mid, 0).y - 0.5, // before any co-located fence
-            quad: [
-              proj({ x: x0, y: y0 }, zOfPlan(x0, y0)),
-              proj({ x: x1, y: y0 }, zOfPlan(x1, y0)),
-              proj({ x: x1, y: y1 }, zOfPlan(x1, y1)),
-              proj({ x: x0, y: y1 }, zOfPlan(x0, y1)),
+            bias: -0.5,
+            pts: [
+              { x: x0, y: y0, z: zAtPlan(x0, y0) },
+              { x: x1, y: y0, z: zAtPlan(x1, y0) },
+              { x: x1, y: y1, z: zAtPlan(x1, y1) },
+              { x: x0, y: y1, z: zAtPlan(x0, y1) },
             ],
             shaded: false,
             baseLenPx: stepX,
-            fill: lawnFill(gx, gy),
+            fill: lawnFill(gx, gy, hash2(r, c)),
           });
+        }
+      }
+      // Decorative trees on open ground, clear of the fence lines.
+      let treeCount = 0;
+      for (let r = 1; r < gridRows - 1 && treeCount < 14; r++) {
+        for (let c = 1; c < gridCols - 1 && treeCount < 14; c++) {
+          const h = hash2(r * 3 + 7, c * 5 + 11);
+          if (h < 0.8) continue;
+          const x = (c + (hash2(r, c + 99) - 0.5) * 0.8) * cellW;
+          const y = (r + (hash2(r + 99, c) - 0.5) * 0.8) * cellH;
+          const clear = geo.every(
+            (rg) =>
+              rg.pts.length < 2 || nearestOnPolyline({ x, y }, rg.pts, rg.cum).perp > 60,
+          );
+          if (!clear) continue;
+          const hFt = 14 + h * 16;
+          const z0 = zAtPlan(x, y);
+          faces.push({
+            kind: "tree",
+            bias: 0.02,
+            pts: [
+              { x, y, z: z0 },
+              { x, y, z: z0 + hFt * scale * HEIGHT_EXAGGERATION },
+            ],
+            shaded: false,
+            baseLenPx: hFt * scale,
+            tone: Math.floor(h * 997) % TREE_TONES.length,
+          });
+          treeCount++;
         }
       }
     }
 
-    // Posts merge by (run, rounded distance): ground at the lowest read,
-    // top at the tallest adjacent panel — extended posts fall out free.
-    // Wall-mounted sections override the base to the wall cap.
+    // Posts merge by (run, rounded distance).
     const posts = new Map<string, { plan: Pt; zGround: number; zPostTop: number; heavy: boolean }>();
     const notePost = (ri: number, d: number, panelTopZ: number, heavy = false, zBase?: number) => {
       const key = `${ri}:${Math.round(d)}`;
@@ -417,7 +436,6 @@ export function Fence3D({
       const total = rg.cum[rg.cum.length - 1];
       if (rg.pts.length < 2 || total < 1) return;
 
-      // Cut the run into fence intervals and gate intervals.
       const spans = spansByRun[ri].sort((a, b) => a.c - b.c);
       type Interval = { s: number; e: number; gate?: { kind: "single" | "double" | "custom"; w: number } };
       const intervals: Interval[] = [];
@@ -425,7 +443,7 @@ export function Fence3D({
       for (const sp of spans) {
         let s = sp.c - sp.w / 2;
         const e = Math.min(total, sp.c + sp.w / 2);
-        if (s < cursor) s = cursor; // overlapping gates shrink, never overlap
+        if (s < cursor) s = cursor;
         if (e - s < 4) continue;
         if (s - cursor > 0.5) intervals.push({ s: cursor, e: s });
         intervals.push({ s, e, gate: { kind: sp.kind, w: sp.w } });
@@ -441,17 +459,20 @@ export function Fence3D({
         const shaded = -uy < 0;
 
         if (iv.gate) {
-          // ---- gate: level leaf(s) with ground clearance + a label ----
           const zA = zOf(ri, iv.s);
           const zB = zOf(ri, iv.e);
           const base = Math.max(zA, zB) + 0.12 * scale;
           const top = base + zTop - 0.12 * scale;
           const mid = { x: (A0.x + B0.x) / 2, y: (A0.y + B0.y) / 2 };
-          const depth = proj(mid, 0).y;
           faces.push({
             kind: "gate",
-            depth,
-            quad: [proj(A0, base), proj(B0, base), proj(B0, top), proj(A0, top)],
+            bias: 0,
+            pts: [
+              { ...A0, z: base },
+              { ...B0, z: base },
+              { ...B0, z: top },
+              { ...A0, z: top },
+            ],
             shaded,
             baseLenPx: len,
             leaves: iv.gate.kind === "double" ? 2 : 1,
@@ -459,13 +480,12 @@ export function Fence3D({
           notePost(ri, iv.s, top + 0.55 * scale, true);
           notePost(ri, iv.e, top + 0.55 * scale, true);
           labels.push({
-            anchor: proj(mid, top + 2.6 * scale),
+            anchor: { x: mid.x, y: mid.y, z: top + 2.6 * scale },
             text: `${fmtFt(iv.gate.w / scale)}′ gate`,
           });
           continue;
         }
 
-        // ---- fence: post-spaced sections, racked or stepped ----
         const sections = Math.max(1, Math.ceil(len / spacingPx));
         for (let c = 0; c < sections; c++) {
           const d0 = iv.s + (len * c) / sections;
@@ -474,7 +494,6 @@ export function Fence3D({
           const B = pointAt(rg.pts, rg.cum, d1);
           const zA = zOf(ri, d0);
           const zB = zOf(ri, d1);
-          // Rack/step decisions use REAL feet (not the softened screen z).
           const riseFt = hasGroundFor(ri) ? elevAt(ri, d1) - elevAt(ri, d0) : 0;
           const wallish =
             retainingWall && hasGroundFor(ri) && Math.abs(riseFt) >= WALL_RISE_FT;
@@ -484,40 +503,47 @@ export function Fence3D({
           const bzB = level ? Math.max(zA, zB) : zB;
           if (stepped) steppedCount++;
           if (wallish) wallCount++;
-          const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
-          const depth = proj(mid, 0).y;
+          const segLen = Math.hypot(B.x - A.x, B.y - A.y);
           if (wallish) {
             const zLo = Math.min(zA, zB);
             faces.push({
               kind: "wall",
-              depth: depth - 0.02,
-              quad: [proj(A, bzA), proj(B, bzB), proj(B, zLo), proj(A, zLo)],
+              bias: -0.02,
+              pts: [
+                { ...A, z: bzA },
+                { ...B, z: bzB },
+                { ...B, z: zLo },
+                { ...A, z: zLo },
+              ],
               shaded,
-              baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+              baseLenPx: segLen,
             });
           } else if (!grid && models[ri] && (zA > 0.5 || zB > 0.5)) {
-            // Legacy ground (no lattice): a shallow earth ribbon under
-            // the run — bounded, so big lots never become green cliffs.
             const ribbon = 4 * scale * HEIGHT_EXAGGERATION;
             faces.push({
               kind: "skirt",
-              depth: depth - 0.02,
-              quad: [
-                proj(A, zA),
-                proj(B, zB),
-                proj(B, Math.max(0, zB - ribbon)),
-                proj(A, Math.max(0, zA - ribbon)),
+              bias: -0.02,
+              pts: [
+                { ...A, z: zA },
+                { ...B, z: zB },
+                { ...B, z: Math.max(0, zB - ribbon) },
+                { ...A, z: Math.max(0, zA - ribbon) },
               ],
               shaded,
-              baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+              baseLenPx: segLen,
             });
           }
           faces.push({
             kind: "panel",
-            depth,
-            quad: [proj(A, bzA), proj(B, bzB), proj(B, bzB + zTop), proj(A, bzA + zTop)],
+            bias: 0,
+            pts: [
+              { ...A, z: bzA },
+              { ...B, z: bzB },
+              { ...B, z: bzB + zTop },
+              { ...A, z: bzA + zTop },
+            ],
             shaded,
-            baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+            baseLenPx: segLen,
           });
           notePost(ri, d0, bzA + zTop + 0.4 * scale, false, wallish ? bzA : undefined);
           notePost(ri, d1, bzB + zTop + 0.4 * scale, false, wallish ? bzB : undefined);
@@ -525,33 +551,30 @@ export function Fence3D({
       }
     });
 
-    // Posts as thin quads: ground → tallest adjacent panel, with a cap.
     const postW = Math.max(3, 0.55 * scale);
     for (const p of posts.values()) {
       const w = p.heavy ? postW * 1.6 : postW;
-      const depth = proj(p.plan, 0).y + 0.01; // draw just after coplanar panels
       faces.push({
         kind: "post",
-        depth,
-        quad: [
-          proj({ x: p.plan.x - w / 2, y: p.plan.y }, p.zGround),
-          proj({ x: p.plan.x + w / 2, y: p.plan.y }, p.zGround),
-          proj({ x: p.plan.x + w / 2, y: p.plan.y }, p.zPostTop),
-          proj({ x: p.plan.x - w / 2, y: p.plan.y }, p.zPostTop),
+        bias: 0.01,
+        pts: [
+          { x: p.plan.x - w / 2, y: p.plan.y, z: p.zGround },
+          { x: p.plan.x + w / 2, y: p.plan.y, z: p.zGround },
+          { x: p.plan.x + w / 2, y: p.plan.y, z: p.zPostTop },
+          { x: p.plan.x - w / 2, y: p.plan.y, z: p.zPostTop },
         ],
         shaded: false,
         baseLenPx: w,
         heavy: p.heavy,
       });
-      // cap: a slightly wider sliver on top of the post
       faces.push({
         kind: "post",
-        depth: depth + 0.005,
-        quad: [
-          proj({ x: p.plan.x - w * 0.75, y: p.plan.y }, p.zPostTop),
-          proj({ x: p.plan.x + w * 0.75, y: p.plan.y }, p.zPostTop),
-          proj({ x: p.plan.x + w * 0.75, y: p.plan.y }, p.zPostTop + 0.16 * scale),
-          proj({ x: p.plan.x - w * 0.75, y: p.plan.y }, p.zPostTop + 0.16 * scale),
+        bias: 0.015,
+        pts: [
+          { x: p.plan.x - w * 0.75, y: p.plan.y, z: p.zPostTop },
+          { x: p.plan.x + w * 0.75, y: p.plan.y, z: p.zPostTop },
+          { x: p.plan.x + w * 0.75, y: p.plan.y, z: p.zPostTop + 0.16 * scale },
+          { x: p.plan.x - w * 0.75, y: p.plan.y, z: p.zPostTop + 0.16 * scale },
         ],
         shaded: false,
         baseLenPx: w,
@@ -559,25 +582,80 @@ export function Fence3D({
       });
     }
 
-    faces.sort((f1, f2) => f1.depth - f2.depth);
-
-    // Property line, draped on the terrain when we have it.
-    const groundPaths = parcelRings.map((ring) =>
-      ring.map((p) => proj(p, grid ? zOfPlan(p.x, p.y) + 1 : 0)),
+    const rings: V3[][] = parcelRings.map((ring) =>
+      ring.map((p) => ({ x: p.x, y: p.y, z: (grid ? zAtPlan(p.x, p.y) : 0) + 1 })),
     );
 
-    // Fit everything into the viewBox (labels get chip-sized headroom).
+    // Where a walk should start: centroid of the drawn fence.
+    const runPts = runs.flatMap((r) => r.points);
+    const centroid =
+      runPts.length > 0
+        ? {
+            x: runPts.reduce((a, p) => a + p.x, 0) / runPts.length,
+            y: runPts.reduce((a, p) => a + p.y, 0) / runPts.length,
+          }
+        : { x: CANVAS_W / 2, y: CANVAS_H / 2 };
+
+    return {
+      style,
+      scale,
+      label: `${heightFt}' ${t.label}`,
+      faces,
+      labels,
+      rings,
+      zAtPlan,
+      centroid,
+      railCount: t.railsPerSection(heightFt),
+      capRail: t.category === "wood" || t.category === "vinyl",
+      gateCount,
+      steppedCount,
+      wallCount,
+      hasSurface: !!grid,
+      reliefFt: Math.round(relief),
+    };
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall]);
+
+  /* ===================== orbit (axonometric) ======================== */
+  const orbitScene = useMemo(() => {
+    if (world.faces.length === 0) return null;
+    const rot = (view.yawDeg * Math.PI) / 180;
+    const cosR = Math.cos(rot);
+    const sinR = Math.sin(rot);
+    const squash = view.squash;
+    const proj = (p: V3): Pt => ({
+      x: p.x * cosR - p.y * sinR,
+      y: (p.x * sinR + p.y * cosR) * squash - p.z,
+    });
+    const depthOf = (f: WFace): number => {
+      let mx = 0;
+      let my = 0;
+      const n = f.kind === "tree" ? 1 : f.pts.length;
+      for (let i = 0; i < n; i++) {
+        mx += f.pts[i].x;
+        my += f.pts[i].y;
+      }
+      return ((mx / n) * sinR + (my / n) * cosR) * squash + f.bias;
+    };
+
+    const pfaces: ProjFace[] = world.faces.map((f) => ({
+      face: f,
+      poly: f.pts.map(proj),
+      isQuad: f.pts.length === 4,
+      depth: depthOf(f),
+    }));
+    pfaces.sort((a, b) => a.depth - b.depth);
+
+    const plabels = world.labels.map((l) => ({ text: l.text, at: proj(l.anchor) }));
+    const prings = world.rings.map((ring) => ring.map(proj));
+
     const all: Pt[] = [
-      ...faces.flatMap((f) => f.quad),
-      ...groundPaths.flat(),
-      ...labels.flatMap((l) => [
-        { x: l.anchor.x - l.text.length * 3.4 - 10, y: l.anchor.y - 24 },
-        { x: l.anchor.x + l.text.length * 3.4 + 10, y: l.anchor.y },
+      ...pfaces.flatMap((f) => f.poly),
+      ...prings.flat(),
+      ...plabels.flatMap((l) => [
+        { x: l.at.x - l.text.length * 3.4 - 10, y: l.at.y - 24 },
+        { x: l.at.x + l.text.length * 3.4 + 10, y: l.at.y },
       ]),
     ];
-    if (all.length === 0) {
-      return null;
-    }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of all) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
@@ -592,36 +670,313 @@ export function Fence3D({
     const oy = (VIEW_H - (maxY - minY) * fit) / 2 - minY * fit;
     const T = (p: Pt): Pt => ({ x: p.x * fit + ox, y: p.y * fit + oy });
 
-    const fitFaces = faces.map((f) => ({ ...f, quad: f.quad.map(T) as Face["quad"] }));
-
-    // Height marker beside the leftmost post.
+    const faces = pfaces.map((f) => ({ ...f, poly: f.poly.map(T) }));
     let marker: { base: Pt; top: Pt } | null = null;
-    for (const f of fitFaces) {
-      if (f.kind !== "post") continue;
-      const base = { x: (f.quad[0].x + f.quad[1].x) / 2, y: (f.quad[0].y + f.quad[1].y) / 2 };
-      const top = { x: (f.quad[2].x + f.quad[3].x) / 2, y: (f.quad[2].y + f.quad[3].y) / 2 };
-      if (Math.abs(base.y - top.y) < 6) continue; // caps, not posts
+    for (const f of faces) {
+      if (f.face.kind !== "post") continue;
+      const base = { x: (f.poly[0].x + f.poly[1].x) / 2, y: (f.poly[0].y + f.poly[1].y) / 2 };
+      const top = { x: (f.poly[2].x + f.poly[3].x) / 2, y: (f.poly[2].y + f.poly[3].y) / 2 };
+      if (Math.abs(base.y - top.y) < 6) continue;
       if (!marker || base.x < marker.base.x) marker = { base, top };
     }
-
     return {
-      style,
-      label: `${heightFt}' ${t.label}`,
-      faces: fitFaces,
-      labels: labels.map((l) => ({ ...l, anchor: T(l.anchor) })),
-      groundPaths: groundPaths.map((ring) => ring.map(T)),
+      faces,
+      labels: plabels.map((l) => ({ ...l, at: T(l.at) })),
+      rings: prings.map((r) => r.map(T)),
       marker,
-      railCount: t.railsPerSection(heightFt),
-      capRail: t.category === "wood" || t.category === "vinyl",
-      gateCount,
-      steppedCount,
-      wallCount,
-      hasSurface: !!grid,
-      reliefFt: Math.round(relief),
+      fit,
+      ox,
+      oy,
+      cosR,
+      sinR,
+      squash,
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall, view.yawDeg, view.squash]);
+  }, [world, view]);
 
-  if (!scene) {
+  /* ===================== walk (perspective) ========================= */
+  const walkScene = useMemo(() => {
+    if (mode !== "walk" || world.faces.length === 0) return null;
+    const { x: cx, y: cy, heading, pitch } = walkCam;
+    const camZ = world.zAtPlan(cx, cy) + EYE_FT * world.scale * HEIGHT_EXAGGERATION;
+    const cosH = Math.cos(heading);
+    const sinH = Math.sin(heading);
+    const horizon = VIEW_H * 0.5 - pitch * FOCAL * 0.9;
+
+    type CPt = { d: number; l: number; h: number };
+    const toCam = (p: V3): CPt => {
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      return {
+        d: dx * cosH + dy * sinH,
+        l: -dx * sinH + dy * cosH,
+        h: p.z - camZ,
+      };
+    };
+    const projC = (c: CPt): Pt => ({
+      x: VIEW_W / 2 + (c.l / c.d) * FOCAL,
+      y: horizon - (c.h / c.d) * FOCAL,
+    });
+    /** Sutherland–Hodgman clip against d >= NEAR_PX. */
+    const clipNear = (pts: CPt[]): CPt[] => {
+      const out: CPt[] = [];
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i];
+        const b = pts[(i + 1) % pts.length];
+        const aIn = a.d >= NEAR_PX;
+        const bIn = b.d >= NEAR_PX;
+        if (aIn) out.push(a);
+        if (aIn !== bIn) {
+          const s = (NEAR_PX - a.d) / (b.d - a.d);
+          out.push({
+            d: NEAR_PX,
+            l: a.l + (b.l - a.l) * s,
+            h: a.h + (b.h - a.h) * s,
+          });
+        }
+      }
+      return out;
+    };
+
+    const faces: ProjFace[] = [];
+    for (const f of world.faces) {
+      if (f.kind === "tree") {
+        const base = toCam(f.pts[0]);
+        if (base.d < NEAR_PX || base.d > 2600) continue;
+        const top = toCam(f.pts[1]);
+        faces.push({ face: f, poly: [projC(base), projC({ ...top, d: base.d })], isQuad: false, depth: base.d });
+        continue;
+      }
+      const cpts = f.pts.map(toCam);
+      if (cpts.every((c) => c.d < NEAR_PX)) continue;
+      let maxD = 0;
+      for (const c of cpts) maxD = Math.max(maxD, c.d);
+      if (maxD > 3200 && f.kind === "ground") continue; // distance cull
+      const clipped = cpts.every((c) => c.d >= NEAR_PX) ? cpts : clipNear(cpts);
+      if (clipped.length < 3) continue;
+      const poly = clipped.map(projC);
+      // off-screen cull
+      if (
+        poly.every((p) => p.x < -80) ||
+        poly.every((p) => p.x > VIEW_W + 80) ||
+        poly.every((p) => p.y < -80) ||
+        poly.every((p) => p.y > VIEW_H + 80)
+      )
+        continue;
+      let meanD = 0;
+      for (const c of clipped) meanD += c.d;
+      meanD /= clipped.length;
+      faces.push({
+        face: f,
+        poly,
+        isQuad: clipped.length === 4 && cpts.every((c) => c.d >= NEAR_PX),
+        depth: meanD - f.bias * 2,
+      });
+    }
+    faces.sort((a, b) => b.depth - a.depth); // far → near
+
+    const labels = world.labels
+      .map((l) => {
+        const c = toCam(l.anchor);
+        if (c.d < NEAR_PX * 3 || c.d > 1600) return null;
+        return { text: l.text, at: projC(c) };
+      })
+      .filter(Boolean) as { text: string; at: Pt }[];
+
+    return { faces, labels, horizon };
+  }, [mode, walkCam, world]);
+
+  /* ======================= interactions ============================= */
+
+  // Native wheel: zoom the orbit view toward the cursor (React root
+  // wheel handlers are passive — preventDefault needs a native listener).
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onWheel = (e: WheelEvent) => {
+      if (modeRef.current !== "orbit") return;
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const sx = ((e.clientX - r.left) / r.width) * VIEW_W;
+      const sy = ((e.clientY - r.top) / r.height) * VIEW_H;
+      const factor = Math.exp(-e.deltaY * 0.0022);
+      setZoomCam((z0) => {
+        const k = Math.min(8, Math.max(1, z0.k * factor));
+        if (k === z0.k) return z0;
+        // keep the world point under the cursor fixed
+        const wx = (sx - z0.tx) / z0.k;
+        const wy = (sy - z0.ty) / z0.k;
+        return { k, tx: sx - wx * k, ty: sy - wy * k };
+      });
+    };
+    svg.addEventListener("wheel", onWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onWheel);
+  }, []);
+
+  /** Screen → plan-ground point (inverts zoom, fit and the axonometric
+   *  rotation, iterating for terrain height). */
+  const pickGround = useCallback(
+    (clientX: number, clientY: number): Pt | null => {
+      const svg = svgRef.current;
+      const sc = orbitScene;
+      if (!svg || !sc) return null;
+      const r = svg.getBoundingClientRect();
+      let sx = ((clientX - r.left) / r.width) * VIEW_W;
+      let sy = ((clientY - r.top) / r.height) * VIEW_H;
+      const z0 = zoomRef.current;
+      sx = (sx - z0.tx) / z0.k;
+      sy = (sy - z0.ty) / z0.k;
+      const px = (sx - sc.ox) / sc.fit;
+      const py = (sy - sc.oy) / sc.fit;
+      let x = CANVAS_W / 2;
+      let y = CANVAS_H / 2;
+      let z = 0;
+      for (let i = 0; i < 3; i++) {
+        const yr = (py + z) / sc.squash;
+        x = px * sc.cosR + yr * sc.sinR;
+        y = -px * sc.sinR + yr * sc.cosR;
+        z = world.zAtPlan(
+          Math.max(0, Math.min(CANVAS_W, x)),
+          Math.max(0, Math.min(CANVAS_H, y)),
+        );
+      }
+      return {
+        x: Math.max(10, Math.min(CANVAS_W - 10, x)),
+        y: Math.max(10, Math.min(CANVAS_H - 10, y)),
+      };
+    },
+    [orbitScene, world],
+  );
+
+  const enterWalk = useCallback(
+    (at?: Pt) => {
+      const pos = at ?? { x: world.centroid.x, y: world.centroid.y + 40 };
+      const heading = Math.atan2(world.centroid.y - pos.y, world.centroid.x - pos.x);
+      setWalkCam({ x: pos.x, y: pos.y, heading, pitch: 0 });
+      setMode("walk");
+    },
+    [world],
+  );
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      const v = viewRef.current;
+      const w = walkCamRef.current;
+      dragRef.current = {
+        sx: e.clientX,
+        sy: e.clientY,
+        yaw0: v.yawDeg,
+        sq0: v.squash,
+        h0: w.heading,
+        p0: w.pitch,
+        moved: false,
+      };
+    },
+    [],
+  );
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = e.clientX - d.sx;
+      const dy = e.clientY - d.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+      if (!d.moved) return;
+      if (modeRef.current === "walk") {
+        scheduleFrame(() =>
+          setWalkCam((w) => ({
+            ...w,
+            heading: d.h0 + dx * 0.0042,
+            pitch: Math.max(-0.42, Math.min(0.42, d.p0 + dy * 0.0028)),
+          })),
+        );
+      } else {
+        scheduleFrame(() =>
+          setView({
+            yawDeg: d.yaw0 + dx * 0.35,
+            squash: Math.min(0.8, Math.max(0.3, d.sq0 + dy * 0.0022)),
+          }),
+        );
+      }
+    },
+    [scheduleFrame],
+  );
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (!d) return;
+      if (d.moved) {
+        if (modeRef.current === "orbit") onViewChange?.(viewRef.current);
+        return;
+      }
+      // clean click: in orbit mode, step into the yard at that spot
+      if (modeRef.current === "orbit") {
+        const at = pickGround(e.clientX, e.clientY);
+        if (at) enterWalk(at);
+      }
+    },
+    [onViewChange, pickGround, enterWalk],
+  );
+
+  // Walk-mode movement loop + keys.
+  useEffect(() => {
+    if (mode !== "walk") return;
+    const down = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (k === "escape") {
+        setMode("orbit");
+        return;
+      }
+      if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright", "shift"].includes(k)) {
+        e.preventDefault();
+        keysRef.current.add(k);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      keysRef.current.delete(e.key.toLowerCase());
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.06, (now - last) / 1000);
+      last = now;
+      const keys = keysRef.current;
+      if (keys.size > 0) {
+        setWalkCam((w) => {
+          const boost = keys.has("shift") ? 2 : 1;
+          const speed = WALK_FT_PER_S * world.scale * boost;
+          let { x, y, heading } = w;
+          const fwd =
+            (keys.has("w") || keys.has("arrowup") ? 1 : 0) -
+            (keys.has("s") || keys.has("arrowdown") ? 1 : 0);
+          const turn =
+            (keys.has("d") || keys.has("arrowright") ? 1 : 0) -
+            (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
+          heading += turn * TURN_RAD_PER_S * dt;
+          x += Math.cos(heading) * fwd * speed * dt;
+          y += Math.sin(heading) * fwd * speed * dt;
+          x = Math.max(6, Math.min(CANVAS_W - 6, x));
+          y = Math.max(6, Math.min(CANVAS_H - 6, y));
+          return { ...w, x, y, heading };
+        });
+      }
+      walkRafRef.current = requestAnimationFrame(tick);
+    };
+    walkRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      if (walkRafRef.current) cancelAnimationFrame(walkRafRef.current);
+      keysRef.current.clear();
+    };
+  }, [mode, world.scale]);
+
+  /* ========================== render ================================ */
+
+  if (!orbitScene) {
     return (
       <div className={cn("flex h-full items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-400", className)}>
         Draw a fence run to see the 3D preview.
@@ -629,326 +984,353 @@ export function Fence3D({
     );
   }
 
-  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount, wallCount, hasSurface, reliefFt } = scene;
-  const quadPath = (q: Face["quad"]) =>
-    `M${q[0].x.toFixed(1)} ${q[0].y.toFixed(1)} L${q[1].x.toFixed(1)} ${q[1].y.toFixed(1)} L${q[2].x.toFixed(1)} ${q[2].y.toFixed(1)} L${q[3].x.toFixed(1)} ${q[3].y.toFixed(1)} Z`;
+  const { style, label, railCount, capRail, gateCount, steppedCount, wallCount, hasSurface, reliefFt } = world;
+  const polyPath = (pts: Pt[]) =>
+    `M${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L")} Z`;
 
+  const renderFace = (f: ProjFace, i: number) => {
+    const kind = f.face.kind;
+    if (kind === "ground") {
+      return (
+        <path key={i} d={polyPath(f.poly)} fill={f.face.fill} stroke={f.face.fill} strokeWidth={0.6} />
+      );
+    }
+    if (kind === "tree") {
+      const [base, top] = f.poly;
+      const hPx = Math.max(4, base.y - top.y);
+      const r = hPx * 0.34;
+      const tones = TREE_TONES[f.face.tone ?? 0];
+      return (
+        <g key={i}>
+          <ellipse cx={base.x} cy={base.y + 1.5} rx={r * 0.9} ry={r * 0.22} fill="rgba(30,50,28,0.18)" />
+          <line x1={base.x} y1={base.y} x2={base.x} y2={base.y - hPx * 0.55} stroke="#6B4E2E" strokeWidth={Math.max(1, hPx * 0.05)} />
+          <circle cx={base.x - r * 0.35} cy={base.y - hPx * 0.62} r={r * 0.72} fill={tones[1]} />
+          <circle cx={base.x + r * 0.3} cy={base.y - hPx * 0.58} r={r * 0.66} fill={tones[1]} />
+          <circle cx={base.x} cy={base.y - hPx * 0.74} r={r} fill={tones[0]} />
+        </g>
+      );
+    }
+    if (kind === "skirt") {
+      return (
+        <path key={i} d={polyPath(f.poly)} fill="url(#f3d-earth)" stroke="rgba(46,72,42,0.14)" strokeWidth={0.7} strokeLinejoin="round" />
+      );
+    }
+    if (kind === "wall") {
+      const q = f.poly;
+      const courses: React.ReactNode[] = [];
+      if (f.isQuad) {
+        const [wa, wb, wlb, wla] = q;
+        for (let k = 1; k <= 3; k++) {
+          const s = k / 4;
+          courses.push(
+            <line
+              key={k}
+              x1={wa.x + (wla.x - wa.x) * s}
+              y1={wa.y + (wla.y - wa.y) * s}
+              x2={wb.x + (wlb.x - wb.x) * s}
+              y2={wb.y + (wlb.y - wb.y) * s}
+              stroke="rgba(70,64,54,0.18)"
+              strokeWidth={0.8}
+            />,
+          );
+        }
+      }
+      return (
+        <g key={i}>
+          <path d={polyPath(q)} fill={f.face.shaded ? "#B6AFA2" : "#CBC4B7"} stroke="#8E8778" strokeWidth={0.9} strokeLinejoin="round" />
+          {courses}
+          {f.isQuad && (
+            <line x1={q[0].x} y1={q[0].y} x2={q[1].x} y2={q[1].y} stroke="#7A7365" strokeWidth={2.2} strokeLinecap="round" />
+          )}
+        </g>
+      );
+    }
+    if (kind === "post") {
+      return (
+        <path key={i} d={polyPath(f.poly)} fill={style.post} stroke={style.stroke} strokeWidth={f.face.heavy ? 1.2 : 0.8} />
+      );
+    }
+    if (kind === "gate") {
+      if (!f.isQuad) {
+        return <path key={i} d={polyPath(f.poly)} fill="#EAD9BC" stroke={style.stroke} strokeWidth={1.4} strokeLinejoin="round" />;
+      }
+      const [a, b, tb, ta] = f.poly;
+      const leaves = f.face.leaves ?? 1;
+      const leafEls: React.ReactNode[] = [];
+      for (let k = 0; k < leaves; k++) {
+        const s0 = k / leaves;
+        const s1 = (k + 1) / leaves;
+        const la = { x: a.x + (b.x - a.x) * s0, y: a.y + (b.y - a.y) * s0 };
+        const lb = { x: a.x + (b.x - a.x) * s1, y: a.y + (b.y - a.y) * s1 };
+        const lta = { x: ta.x + (tb.x - ta.x) * s0, y: ta.y + (tb.y - ta.y) * s0 };
+        const ltb = { x: ta.x + (tb.x - ta.x) * s1, y: ta.y + (tb.y - ta.y) * s1 };
+        const hingeBottom = k === 0 ? la : lb;
+        const latchTop = k === 0 ? ltb : lta;
+        leafEls.push(
+          <g key={k}>
+            <path d={`M${la.x} ${la.y} L${lb.x} ${lb.y} L${ltb.x} ${ltb.y} L${lta.x} ${lta.y} Z`} fill="#EAD9BC" stroke={style.stroke} strokeWidth={1.4} strokeLinejoin="round" />
+            <line x1={hingeBottom.x} y1={hingeBottom.y} x2={latchTop.x} y2={latchTop.y} stroke="rgba(0,0,0,0.25)" strokeWidth={1.6} />
+          </g>,
+        );
+      }
+      return (
+        <g key={i}>
+          {leafEls}
+          {leaves === 2 && (
+            <line x1={(a.x + b.x) / 2} y1={(a.y + b.y) / 2} x2={(ta.x + tb.x) / 2} y2={(ta.y + tb.y) / 2} stroke={style.stroke} strokeWidth={1.4} />
+          )}
+          <circle cx={(a.x + b.x + ta.x + tb.x) / 4} cy={(a.y + b.y + ta.y + tb.y) / 4} r={2.4} fill="#3f3f46" />
+        </g>
+      );
+    }
+    // panel
+    const fill = f.face.shaded ? style.shade : style.face;
+    if (!f.isQuad) {
+      return <path key={i} d={polyPath(f.poly)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />;
+    }
+    const [a, b, tb, ta] = f.poly;
+    const details: React.ReactNode[] = [];
+    if (style.lines === "pickets" || style.lines === "bars") {
+      const n = Math.max(2, Math.floor(f.face.baseLenPx / (style.lines === "bars" ? 10 : 7)));
+      for (let k = 1; k < n; k++) {
+        const s = k / n;
+        details.push(
+          <line
+            key={k}
+            x1={a.x + (b.x - a.x) * s}
+            y1={a.y + (b.y - a.y) * s}
+            x2={ta.x + (tb.x - ta.x) * s}
+            y2={ta.y + (tb.y - ta.y) * s}
+            stroke={style.lines === "bars" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)"}
+            strokeWidth={style.lines === "bars" ? 2 : 1}
+          />,
+        );
+      }
+    } else if (style.lines === "mesh") {
+      const n = Math.max(2, Math.floor(f.face.baseLenPx / 9));
+      for (let k = 0; k <= n; k++) {
+        const s = k / n;
+        details.push(
+          <line key={`m1-${k}`} x1={a.x + (b.x - a.x) * s} y1={a.y + (b.y - a.y) * s} x2={ta.x + (tb.x - ta.x) * Math.min(1, s + 0.18)} y2={ta.y + (tb.y - ta.y) * Math.min(1, s + 0.18)} stroke="rgba(90,100,108,0.4)" strokeWidth={0.8} />,
+          <line key={`m2-${k}`} x1={a.x + (b.x - a.x) * s} y1={a.y + (b.y - a.y) * s} x2={ta.x + (tb.x - ta.x) * Math.max(0, s - 0.18)} y2={ta.y + (tb.y - ta.y) * Math.max(0, s - 0.18)} stroke="rgba(90,100,108,0.4)" strokeWidth={0.8} />,
+        );
+      }
+    }
+    if (style.lines === "rails") {
+      const rails: React.ReactNode[] = [];
+      for (let r = 1; r <= railCount; r++) {
+        const s = r / (railCount + 1);
+        rails.push(
+          <line
+            key={r}
+            x1={a.x + (ta.x - a.x) * s}
+            y1={a.y + (ta.y - a.y) * s}
+            x2={b.x + (tb.x - b.x) * s}
+            y2={b.y + (tb.y - b.y) * s}
+            stroke={fill}
+            strokeWidth={4}
+            strokeLinecap="round"
+          />,
+        );
+      }
+      return <g key={i}>{rails}</g>;
+    }
+    if (style.lines === "pickets") {
+      for (const s of [0.22, 0.78]) {
+        details.push(
+          <line
+            key={`rail-${s}`}
+            x1={a.x + (ta.x - a.x) * s}
+            y1={a.y + (ta.y - a.y) * s}
+            x2={b.x + (tb.x - b.x) * s}
+            y2={b.y + (tb.y - b.y) * s}
+            stroke="rgba(0,0,0,0.08)"
+            strokeWidth={2}
+          />,
+        );
+      }
+    }
+    return (
+      <g key={i}>
+        <path d={polyPath(f.poly)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />
+        {details}
+        {capRail && (
+          <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={style.post} strokeWidth={2.2} strokeLinecap="round" />
+        )}
+      </g>
+    );
+  };
+
+  const labelChip = (l: { text: string; at: Pt }, i: number) => {
+    const w = l.text.length * 6.4 + 16;
+    return (
+      <g key={i}>
+        <line x1={l.at.x} y1={l.at.y} x2={l.at.x} y2={l.at.y + 9} stroke="#DB2777" strokeWidth={1.2} />
+        <rect x={l.at.x - w / 2} y={l.at.y - 20} width={w} height={20} rx={10} fill="rgba(255,255,255,0.95)" stroke="#DB2777" strokeWidth={1.2} />
+        <text x={l.at.x} y={l.at.y - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#9D174D">
+          {l.text}
+        </text>
+      </g>
+    );
+  };
+
+  const walking = mode === "walk" && walkScene;
   const isDefaultView =
     Math.abs(view.yawDeg - DEFAULT_YAW_DEG) < 0.5 &&
-    Math.abs(view.squash - DEFAULT_SQUASH) < 0.005;
+    Math.abs(view.squash - DEFAULT_SQUASH) < 0.005 &&
+    zoomCam.k === 1;
 
   return (
     <div className={cn("relative overflow-hidden rounded-2xl border border-zinc-200", className)}>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className="block h-full w-full cursor-grab active:cursor-grabbing"
+        className={cn("block h-full w-full", walking ? "cursor-move" : "cursor-grab active:cursor-grabbing")}
         style={{ touchAction: "none" }}
         role="img"
-        aria-label={`3D preview of the ${label} fence as designed — drag to orbit`}
+        aria-label={`3D preview of the ${label} fence as designed — drag to orbit, click a spot to walk`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        {/* sky→lawn backdrop */}
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E6F1F9" />
-            <stop offset="52%" stopColor="#F0F5EA" />
+            <stop offset="0%" stopColor="#DDEDF9" />
+            <stop offset="52%" stopColor="#EFF5E9" />
             <stop offset="100%" stopColor="#DCE8D4" />
+          </linearGradient>
+          <linearGradient id="f3d-sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#BFDCF2" />
+            <stop offset="100%" stopColor="#EAF3EA" />
           </linearGradient>
           <linearGradient id="f3d-earth" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#C7DBBD" />
             <stop offset="100%" stopColor="#A9C29B" />
           </linearGradient>
+          <radialGradient id="f3d-sun" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="rgba(255,246,214,0.9)" />
+            <stop offset="45%" stopColor="rgba(255,246,214,0.35)" />
+            <stop offset="100%" stopColor="rgba(255,246,214,0)" />
+          </radialGradient>
         </defs>
-        <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
 
-        {/* faces, back to front (terrain cells sort with everything else) */}
-        {faces.map((f, i) => {
-          if (f.kind === "ground") {
-            return (
-              <path
-                key={i}
-                d={quadPath(f.quad)}
-                fill={f.fill}
-                stroke={f.fill}
-                strokeWidth={0.6}
-              />
-            );
-          }
-          if (f.kind === "skirt") {
-            return (
-              <path
-                key={i}
-                d={quadPath(f.quad)}
-                fill="url(#f3d-earth)"
-                stroke="rgba(46,72,42,0.14)"
-                strokeWidth={0.7}
-                strokeLinejoin="round"
-              />
-            );
-          }
-          if (f.kind === "wall") {
-            // Masonry retaining-wall face: cap line + block courses.
-            const [wa, wb, wlb, wla] = f.quad;
-            const courses: React.ReactNode[] = [];
-            for (let k = 1; k <= 3; k++) {
-              const s = k / 4;
-              courses.push(
-                <line
-                  key={k}
-                  x1={wa.x + (wla.x - wa.x) * s}
-                  y1={wa.y + (wla.y - wa.y) * s}
-                  x2={wb.x + (wlb.x - wb.x) * s}
-                  y2={wb.y + (wlb.y - wb.y) * s}
-                  stroke="rgba(70,64,54,0.18)"
-                  strokeWidth={0.8}
-                />,
-              );
-            }
-            return (
-              <g key={i}>
-                <path
-                  d={quadPath(f.quad)}
-                  fill={f.shaded ? "#B6AFA2" : "#CBC4B7"}
-                  stroke="#8E8778"
-                  strokeWidth={0.9}
-                  strokeLinejoin="round"
+        {walking ? (
+          <>
+            {/* sky above the horizon, warm ground tone below */}
+            <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-sky)" />
+            <circle cx={VIEW_W * 0.78} cy={Math.min(walkScene!.horizon - 60, 120)} r={90} fill="url(#f3d-sun)" />
+            <rect x={0} y={Math.max(0, walkScene!.horizon)} width={VIEW_W} height={Math.max(0, VIEW_H - walkScene!.horizon)} fill="#A9C29B" />
+            {walkScene!.faces.map(renderFace)}
+            {walkScene!.labels.map(labelChip)}
+          </>
+        ) : (
+          <>
+            <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
+            <circle cx={VIEW_W * 0.8} cy={70} r={110} fill="url(#f3d-sun)" />
+            <g transform={`translate(${zoomCam.tx} ${zoomCam.ty}) scale(${zoomCam.k})`}>
+              {orbitScene.faces.map(renderFace)}
+              {orbitScene.rings.map((ring, i) => (
+                <polygon
+                  key={i}
+                  points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke="#3FA65B"
+                  strokeWidth={1.5}
+                  strokeDasharray="7 5"
+                  opacity={0.85}
                 />
-                {courses}
-                <line x1={wa.x} y1={wa.y} x2={wb.x} y2={wb.y} stroke="#7A7365" strokeWidth={2.2} strokeLinecap="round" />
-              </g>
-            );
-          }
-          if (f.kind === "post") {
-            return (
-              <path
-                key={i}
-                d={quadPath(f.quad)}
-                fill={style.post}
-                stroke={style.stroke}
-                strokeWidth={f.heavy ? 1.2 : 0.8}
-              />
-            );
-          }
-          const [a, b, tb, ta] = f.quad;
-          if (f.kind === "gate") {
-            // Framed, braced leaf(s) — lighter than the fence so it reads.
-            const leaves = f.leaves ?? 1;
-            const leafEls: React.ReactNode[] = [];
-            for (let k = 0; k < leaves; k++) {
-              const s0 = k / leaves;
-              const s1 = (k + 1) / leaves;
-              const la = { x: a.x + (b.x - a.x) * s0, y: a.y + (b.y - a.y) * s0 };
-              const lb = { x: a.x + (b.x - a.x) * s1, y: a.y + (b.y - a.y) * s1 };
-              const lta = { x: ta.x + (tb.x - ta.x) * s0, y: ta.y + (tb.y - ta.y) * s0 };
-              const ltb = { x: ta.x + (tb.x - ta.x) * s1, y: ta.y + (tb.y - ta.y) * s1 };
-              const hingeBottom = k === 0 ? la : lb;
-              const latchTop = k === 0 ? ltb : lta;
-              leafEls.push(
-                <g key={k}>
-                  <path
-                    d={`M${la.x} ${la.y} L${lb.x} ${lb.y} L${ltb.x} ${ltb.y} L${lta.x} ${lta.y} Z`}
-                    fill="#EAD9BC"
-                    stroke={style.stroke}
-                    strokeWidth={1.4}
-                    strokeLinejoin="round"
-                  />
-                  <line x1={hingeBottom.x} y1={hingeBottom.y} x2={latchTop.x} y2={latchTop.y} stroke="rgba(0,0,0,0.25)" strokeWidth={1.6} />
-                </g>,
-              );
-            }
-            return (
-              <g key={i}>
-                {leafEls}
-                {leaves === 2 && (
-                  <line
-                    x1={(a.x + b.x) / 2}
-                    y1={(a.y + b.y) / 2}
-                    x2={(ta.x + tb.x) / 2}
-                    y2={(ta.y + tb.y) / 2}
-                    stroke={style.stroke}
-                    strokeWidth={1.4}
-                  />
-                )}
-                <circle
-                  cx={(a.x + b.x + ta.x + tb.x) / 4}
-                  cy={(a.y + b.y + ta.y + tb.y) / 4}
-                  r={2.4}
-                  fill="#3f3f46"
-                />
-              </g>
-            );
-          }
-          // panel
-          const fill = f.shaded ? style.shade : style.face;
-          const details: React.ReactNode[] = [];
-          if (style.lines === "pickets" || style.lines === "bars") {
-            const n = Math.max(2, Math.floor(f.baseLenPx / (style.lines === "bars" ? 10 : 7)));
-            for (let k = 1; k < n; k++) {
-              const s = k / n;
-              details.push(
-                <line
-                  key={k}
-                  x1={a.x + (b.x - a.x) * s}
-                  y1={a.y + (b.y - a.y) * s}
-                  x2={ta.x + (tb.x - ta.x) * s}
-                  y2={ta.y + (tb.y - ta.y) * s}
-                  stroke={style.lines === "bars" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)"}
-                  strokeWidth={style.lines === "bars" ? 2 : 1}
-                />,
-              );
-            }
-          } else if (style.lines === "mesh") {
-            const n = Math.max(2, Math.floor(f.baseLenPx / 9));
-            for (let k = 0; k <= n; k++) {
-              const s = k / n;
-              details.push(
-                <line key={`m1-${k}`} x1={a.x + (b.x - a.x) * s} y1={a.y + (b.y - a.y) * s} x2={ta.x + (tb.x - ta.x) * Math.min(1, s + 0.18)} y2={ta.y + (tb.y - ta.y) * Math.min(1, s + 0.18)} stroke="rgba(90,100,108,0.4)" strokeWidth={0.8} />,
-                <line key={`m2-${k}`} x1={a.x + (b.x - a.x) * s} y1={a.y + (b.y - a.y) * s} x2={ta.x + (tb.x - ta.x) * Math.max(0, s - 0.18)} y2={ta.y + (tb.y - ta.y) * Math.max(0, s - 0.18)} stroke="rgba(90,100,108,0.4)" strokeWidth={0.8} />,
-              );
-            }
-          }
-          if (style.lines === "rails") {
-            // split/ranch rail: open panel, draw only the rails
-            const rails: React.ReactNode[] = [];
-            for (let r = 1; r <= railCount; r++) {
-              const s = r / (railCount + 1);
-              rails.push(
-                <line
-                  key={r}
-                  x1={a.x + (ta.x - a.x) * s}
-                  y1={a.y + (ta.y - a.y) * s}
-                  x2={b.x + (tb.x - b.x) * s}
-                  y2={b.y + (tb.y - b.y) * s}
-                  stroke={f.shaded ? style.shade : style.face}
-                  strokeWidth={4}
-                  strokeLinecap="round"
-                />,
-              );
-            }
-            return <g key={i}>{rails}</g>;
-          }
-          // horizontal rails read through the boards on wood builds
-          if (style.lines === "pickets") {
-            for (const s of [0.22, 0.78]) {
-              details.push(
-                <line
-                  key={`rail-${s}`}
-                  x1={a.x + (ta.x - a.x) * s}
-                  y1={a.y + (ta.y - a.y) * s}
-                  x2={b.x + (tb.x - b.x) * s}
-                  y2={b.y + (tb.y - b.y) * s}
-                  stroke="rgba(0,0,0,0.08)"
-                  strokeWidth={2}
-                />,
-              );
-            }
-          }
-          return (
-            <g key={i}>
-              <path d={quadPath(f.quad)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />
-              {details}
-              {capRail && (
-                <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={style.post} strokeWidth={2.2} strokeLinecap="round" />
+              ))}
+              {orbitScene.labels.map(labelChip)}
+              {orbitScene.marker && (
+                <g stroke="#52525B" strokeWidth={1.2} fill="none">
+                  <line x1={orbitScene.marker.base.x - 14} y1={orbitScene.marker.base.y} x2={orbitScene.marker.base.x - 14} y2={orbitScene.marker.top.y} />
+                  <line x1={orbitScene.marker.base.x - 18} y1={orbitScene.marker.base.y} x2={orbitScene.marker.base.x - 10} y2={orbitScene.marker.base.y} />
+                  <line x1={orbitScene.marker.base.x - 18} y1={orbitScene.marker.top.y} x2={orbitScene.marker.base.x - 10} y2={orbitScene.marker.top.y} />
+                  <g stroke="none" fill="#3F3F46">
+                    <text x={orbitScene.marker.base.x - 22} y={(orbitScene.marker.base.y + orbitScene.marker.top.y) / 2 + 4} textAnchor="end" fontSize={12} fontWeight={700}>
+                      {heightFt}′
+                    </text>
+                  </g>
+                </g>
               )}
             </g>
-          );
-        })}
-
-        {/* property line over the terrain */}
-        {groundPaths.map((ring, i) => (
-          <polygon
-            key={i}
-            points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill="none"
-            stroke="#3FA65B"
-            strokeWidth={1.5}
-            strokeDasharray="7 5"
-            opacity={0.85}
-          />
-        ))}
-
-        {/* gate size labels — drawn last, always readable */}
-        {labels.map((l, i) => {
-          const w = l.text.length * 6.4 + 16;
-          return (
-            <g key={i}>
-              <line x1={l.anchor.x} y1={l.anchor.y} x2={l.anchor.x} y2={l.anchor.y + 9} stroke="#DB2777" strokeWidth={1.2} />
-              <rect x={l.anchor.x - w / 2} y={l.anchor.y - 20} width={w} height={20} rx={10} fill="rgba(255,255,255,0.95)" stroke="#DB2777" strokeWidth={1.2} />
-              <text x={l.anchor.x} y={l.anchor.y - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#9D174D">
-                {l.text}
-              </text>
-            </g>
-          );
-        })}
-
-        {/* fence height dimension beside the leftmost post */}
-        {marker && (
-          <g stroke="#52525B" strokeWidth={1.2} fill="none">
-            <line x1={marker.base.x - 14} y1={marker.base.y} x2={marker.base.x - 14} y2={marker.top.y} />
-            <line x1={marker.base.x - 18} y1={marker.base.y} x2={marker.base.x - 10} y2={marker.base.y} />
-            <line x1={marker.base.x - 18} y1={marker.top.y} x2={marker.base.x - 10} y2={marker.top.y} />
-            <g stroke="none" fill="#3F3F46">
-              <text
-                x={marker.base.x - 22}
-                y={(marker.base.y + marker.top.y) / 2 + 4}
-                textAnchor="end"
-                fontSize={12}
-                fontWeight={700}
-              >
-                {heightFt}′
-              </text>
-            </g>
-          </g>
+          </>
         )}
       </svg>
 
-      {/* orbit affordance + reset */}
+      {/* mode controls */}
       <div className="absolute right-3 top-3 flex items-center gap-1.5">
-        {!isDefaultView && (
+        {walking ? (
           <button
             type="button"
-            onClick={() => {
-              const v = { yawDeg: DEFAULT_YAW_DEG, squash: DEFAULT_SQUASH };
-              setView(v);
-              onViewChange?.(v);
-            }}
+            onClick={() => setMode("orbit")}
             className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
           >
-            Reset view
+            ✕ Exit walk (Esc)
           </button>
+        ) : (
+          <>
+            {!isDefaultView && (
+              <button
+                type="button"
+                onClick={() => {
+                  const v = { yawDeg: DEFAULT_YAW_DEG, squash: DEFAULT_SQUASH };
+                  setView(v);
+                  setZoomCam({ k: 1, tx: 0, ty: 0 });
+                  onViewChange?.(v);
+                }}
+                className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+              >
+                Reset view
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => enterWalk()}
+              className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
+            >
+              🚶 Walk the yard
+            </button>
+            <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
+              ↻ Drag to spin · scroll to zoom · click a spot to walk
+            </span>
+          </>
         )}
-        <span className="pointer-events-none rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
-          ↻ Drag to spin
-        </span>
       </div>
 
       {/* client-readable summary chips */}
       <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
-          {label} — to scale
-        </span>
-        {gateCount > 0 && (
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
-            {gateCount} {gateCount === 1 ? "gate" : "gates"}
+        {walking ? (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+            W A S D / arrows to walk · Shift to hurry · drag to look around
           </span>
-        )}
-        {steppedCount > 0 && (
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
-            ⛰ {steppedCount} sections step down the slope
-          </span>
-        )}
-        {wallCount > 0 && (
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
-            🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
-          </span>
-        )}
-        {hasSurface && reliefFt >= heightFt * 5 && (
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
-            {reliefFt}′ of total rise — hill softened to keep the fence readable
-          </span>
+        ) : (
+          <>
+            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+              {label} — to scale
+            </span>
+            {gateCount > 0 && (
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
+                {gateCount} {gateCount === 1 ? "gate" : "gates"}
+              </span>
+            )}
+            {steppedCount > 0 && (
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
+                ⛰ {steppedCount} sections step down the slope
+              </span>
+            )}
+            {wallCount > 0 && (
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
+                🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
+              </span>
+            )}
+            {hasSurface && reliefFt >= heightFt * 5 && (
+              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+                {reliefFt}′ of total rise — hill softened to keep the fence readable
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>
