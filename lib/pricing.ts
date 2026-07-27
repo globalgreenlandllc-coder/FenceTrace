@@ -193,6 +193,22 @@ function buildFenceLineItems(
       unitPrice: 28,
       taxable: true,
     });
+  if ((fence.wallTopLf ?? 0) > 0) {
+    // Posts on the wall span are core-drilled + epoxy-anchored to the
+    // wall cap instead of dug and set in concrete: anchor kit + drilling
+    // time per post (posts every spacing across the span, +1 to close).
+    const wallPosts =
+      Math.floor(Math.max(0, fence.wallTopLf!) / t.postSpacingFt) + 1;
+    lines.push({
+      id: "fence-wall-mount",
+      name: "Retaining-wall mounting — core-drilled anchors",
+      description: `${wallPosts} posts anchored on ${Math.round(fence.wallTopLf!)} LF of wall top (no digging on the wall)`,
+      quantity: wallPosts,
+      unit: "ea",
+      unitPrice: 72,
+      taxable: true,
+    });
+  }
   if (fence.removalLf > 0)
     lines.push({
       id: "fence-removal",

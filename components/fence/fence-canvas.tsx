@@ -10,6 +10,7 @@ import {
   type Pt,
 } from "@/lib/fence/geo";
 import type { FenceScanResult } from "@/app/actions/fence-scan";
+import type { ContourLine } from "@/lib/fence/contours";
 
 /**
  * FenceCanvas — draw fence runs over the satellite tile with the Regrid
@@ -83,11 +84,15 @@ export function FenceCanvas({
   scan,
   layout,
   onChange,
+  topo = null,
   className,
 }: {
   scan: FenceScanResult;
   layout: FenceLayout;
   onChange: (next: FenceLayout) => void;
+  /** Measured elevation contours to overlay (levels are ft above the
+   *  lot's low point). Null hides the layer. */
+  topo?: { lines: ContourLine[]; intervalFt: number } | null;
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -426,6 +431,74 @@ export function FenceCanvas({
             height={CANVAS_H}
             preserveAspectRatio="xMidYMid slice"
           />
+
+          {/* Topo overlay — measured elevation contours with ft labels.
+              Purely informational: never intercepts pointer events. */}
+          {topo && topo.lines.length > 0 && (
+            <g pointerEvents="none">
+              {topo.lines.map((line) =>
+                line.chains.map((ch, i) => (
+                  <polyline
+                    key={`c-${line.levelFt}-${i}`}
+                    points={ch.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+                    fill="none"
+                    stroke="#FCD34D"
+                    strokeWidth={1.3}
+                    strokeOpacity={0.85}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                )),
+              )}
+              {topo.lines.map((line) =>
+                line.chains.slice(0, 3).map((ch, i) => {
+                  let len = 0;
+                  for (let k = 1; k < ch.length; k++) {
+                    len += Math.hypot(ch[k].x - ch[k - 1].x, ch[k].y - ch[k - 1].y);
+                  }
+                  if (len < 70) return null;
+                  const mid = ch[Math.floor(ch.length / 2)];
+                  // keep labels clear of the canvas border so they never clip
+                  if (
+                    mid.x < 26 ||
+                    mid.x > CANVAS_W - 26 ||
+                    mid.y < 16 ||
+                    mid.y > CANVAS_H - 16
+                  )
+                    return null;
+                  return (
+                    <text
+                      key={`cl-${line.levelFt}-${i}`}
+                      x={mid.x}
+                      y={mid.y - 3}
+                      textAnchor="middle"
+                      fontSize={10}
+                      fontWeight={700}
+                      fill="#FDE68A"
+                      stroke="#1C1917"
+                      strokeWidth={2.6}
+                      style={{ paintOrder: "stroke" }}
+                    >
+                      +{line.levelFt}′
+                    </text>
+                  );
+                }),
+              )}
+              <text
+                x={CANVAS_W - 10}
+                y={CANVAS_H - 10}
+                textAnchor="end"
+                fontSize={10.5}
+                fontWeight={600}
+                fill="#FDE68A"
+                stroke="#1C1917"
+                strokeWidth={2.6}
+                style={{ paintOrder: "stroke" }}
+              >
+                Topo lines every {topo.intervalFt}′ — feet above the low point
+              </text>
+            </g>
+          )}
 
           {/* Parcel boundary — the Regrid property line */}
           {scan.parcelRings.map((ring, i) => (

@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
-import { rackingLimitFt } from "@/lib/fence/slope";
+import { rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
 import { runDistanceModel, type RunElevationModel } from "@/lib/fence/geo";
 
 /**
@@ -48,7 +48,7 @@ function proj(p: Pt, z: number): Pt {
 }
 
 type Face = {
-  kind: "panel" | "gate" | "post" | "skirt";
+  kind: "panel" | "gate" | "post" | "skirt" | "wall";
   /** Painter depth — projected plan-y of the base midpoint (+bias). */
   depth: number;
   /** Quad corners in projected space: baseA, baseB, topB, topA. */
@@ -132,6 +132,7 @@ export function Fence3D({
   parcelRings = [],
   runElevationsFt,
   elevationSpacingPx,
+  retainingWall = false,
   className,
 }: {
   /** Fence runs in canvas space ({points} is all that's read). */
@@ -149,6 +150,10 @@ export function Fence3D({
    *  to this fence type's post spacing — pass it when the rendered type
    *  may differ from the type that was active when sampling. */
   elevationSpacingPx?: number;
+  /** Contractor confirmed the fence mounts on a retaining wall: sheer
+   *  drops render as a masonry wall face with the fence anchored on top
+   *  (instead of an earth bank), and get a summary chip. */
+  retainingWall?: boolean;
   className?: string;
 }) {
   const scene = useMemo(() => {
@@ -210,14 +215,16 @@ export function Fence3D({
     const faces: Face[] = [];
     const labels: GateLabel[] = [];
     let steppedCount = 0;
+    let wallCount = 0;
 
     // Posts merge by (run, rounded distance): ground at the lowest read,
     // top at the tallest adjacent panel — extended posts fall out free.
+    // Wall-mounted sections override the base to the wall cap.
     const posts = new Map<string, { plan: Pt; zGround: number; zPostTop: number; heavy: boolean }>();
-    const notePost = (ri: number, d: number, panelTopZ: number, heavy = false) => {
+    const notePost = (ri: number, d: number, panelTopZ: number, heavy = false, zBase?: number) => {
       const key = `${ri}:${Math.round(d)}`;
       const plan = pointAt(geo[ri].pts, geo[ri].cum, d);
-      const zGround = zOf(ri, d);
+      const zGround = zBase ?? zOf(ri, d);
       const prev = posts.get(key);
       posts.set(key, {
         plan,
@@ -299,13 +306,38 @@ export function Fence3D({
           const zA = zOf(ri, d0);
           const zB = zOf(ri, d1);
           const riseFt = (zB - zA) / (scale * HEIGHT_EXAGGERATION);
-          const stepped = !!models[ri] && Math.abs(riseFt) > rackFt;
-          const bzA = stepped ? Math.max(zA, zB) : zA;
-          const bzB = stepped ? Math.max(zA, zB) : zB;
+          // A sheer drop under a confirmed retaining wall renders as a
+          // masonry face with the fence anchored level on the cap; other
+          // over-limit rises step down the slope as terrain.
+          const wallish =
+            retainingWall && !!models[ri] && Math.abs(riseFt) >= WALL_RISE_FT;
+          const stepped = !wallish && !!models[ri] && Math.abs(riseFt) > rackFt;
+          const level = stepped || wallish;
+          const bzA = level ? Math.max(zA, zB) : zA;
+          const bzB = level ? Math.max(zA, zB) : zB;
           if (stepped) steppedCount++;
+          if (wallish) wallCount++;
           const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
           const depth = proj(mid, 0).y;
-          if (models[ri] && (zA > 0.5 || zB > 0.5)) {
+          if (wallish) {
+            const zLo = Math.min(zA, zB);
+            faces.push({
+              kind: "wall",
+              depth: depth - 0.02,
+              quad: [proj(A, bzA), proj(B, bzB), proj(B, zLo), proj(A, zLo)],
+              shaded,
+              baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+            });
+            if (zLo > 0.5) {
+              faces.push({
+                kind: "skirt",
+                depth: depth - 0.03,
+                quad: [proj(A, zLo), proj(B, zLo), proj(B, 0), proj(A, 0)],
+                shaded,
+                baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+              });
+            }
+          } else if (models[ri] && (zA > 0.5 || zB > 0.5)) {
             faces.push({
               kind: "skirt",
               depth: depth - 0.02,
@@ -321,8 +353,8 @@ export function Fence3D({
             shaded,
             baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
           });
-          notePost(ri, d0, bzA + zTop + 0.4 * scale);
-          notePost(ri, d1, bzB + zTop + 0.4 * scale);
+          notePost(ri, d0, bzA + zTop + 0.4 * scale, false, wallish ? bzA : undefined);
+          notePost(ri, d1, bzB + zTop + 0.4 * scale, false, wallish ? bzB : undefined);
         }
       }
     });
@@ -399,9 +431,10 @@ export function Fence3D({
       capRail: t.category === "wood" || t.category === "vinyl",
       gateCount,
       steppedCount,
+      wallCount,
       hasTerrain: models.some(Boolean),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, retainingWall]);
 
   if (!scene) {
     return (
@@ -411,7 +444,7 @@ export function Fence3D({
     );
   }
 
-  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount } = scene;
+  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount, wallCount } = scene;
   const quadPath = (q: Face["quad"]) =>
     `M${q[0].x.toFixed(1)} ${q[0].y.toFixed(1)} L${q[1].x.toFixed(1)} ${q[1].y.toFixed(1)} L${q[2].x.toFixed(1)} ${q[2].y.toFixed(1)} L${q[3].x.toFixed(1)} ${q[3].y.toFixed(1)} Z`;
 
@@ -456,6 +489,38 @@ export function Fence3D({
                 strokeWidth={0.7}
                 strokeLinejoin="round"
               />
+            );
+          }
+          if (f.kind === "wall") {
+            // Masonry retaining-wall face: cap line + block courses.
+            const [wa, wb, wlb, wla] = f.quad;
+            const courses: React.ReactNode[] = [];
+            for (let k = 1; k <= 3; k++) {
+              const s = k / 4;
+              courses.push(
+                <line
+                  key={k}
+                  x1={wa.x + (wla.x - wa.x) * s}
+                  y1={wa.y + (wla.y - wa.y) * s}
+                  x2={wb.x + (wlb.x - wb.x) * s}
+                  y2={wb.y + (wlb.y - wb.y) * s}
+                  stroke="rgba(70,64,54,0.18)"
+                  strokeWidth={0.8}
+                />,
+              );
+            }
+            return (
+              <g key={i}>
+                <path
+                  d={quadPath(f.quad)}
+                  fill={f.shaded ? "#B6AFA2" : "#CBC4B7"}
+                  stroke="#8E8778"
+                  strokeWidth={0.9}
+                  strokeLinejoin="round"
+                />
+                {courses}
+                <line x1={wa.x} y1={wa.y} x2={wb.x} y2={wb.y} stroke="#7A7365" strokeWidth={2.2} strokeLinecap="round" />
+              </g>
             );
           }
           if (f.kind === "post") {
@@ -627,6 +692,11 @@ export function Fence3D({
         {steppedCount > 0 && (
           <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
             ⛰ {steppedCount} sections step down the slope
+          </span>
+        )}
+        {wallCount > 0 && (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
+            🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
           </span>
         )}
       </div>

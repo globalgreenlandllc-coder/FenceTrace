@@ -39,6 +39,10 @@ export type FenceLayoutInput = {
   /** Sections that must STEP down a slope (from the terrain analysis) —
    *  each needs an extended post and extra set/trim time. */
   steppedSections?: number;
+  /** LF of fence running on top of a retaining wall. Posts over that
+   *  span are core-drilled + anchored to the wall cap — mount hardware
+   *  and drilling labor instead of dug holes and concrete. */
+  wallTopLf?: number;
 };
 
 export type BomLine = {
@@ -110,6 +114,14 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const gatePosts = (input.gatesSingle + input.gatesDouble + customGates.length) * 2;
   const totalPosts = linePosts + cornerPosts + endPosts + gatePosts;
 
+  // Posts standing on a retaining wall are core-drilled + anchored to
+  // the wall cap — they get mount hardware, not holes and concrete.
+  const wallTopLf = Math.max(0, Math.min(input.wallTopLf ?? 0, input.totalLf));
+  const wallPosts =
+    wallTopLf > 0
+      ? Math.min(totalPosts, Math.floor(wallTopLf / t.postSpacingFt) + 1)
+      : 0;
+
   const bom: BomLine[] = [];
   const add = (key: string, label: string, qty: number, unit: BomLine["unit"]) => {
     if (qty > 0) bom.push({ key, label, qty: Math.ceil(qty), unit });
@@ -122,8 +134,14 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   add(
     "concrete",
     "Concrete (60 lb bags)",
-    totalPosts * concreteBagsPerPost(input.heightFt),
+    (totalPosts - wallPosts) * concreteBagsPerPost(input.heightFt),
     "bag",
+  );
+  add(
+    "wall-anchor",
+    "Wall-top post anchors (core-drill + epoxy)",
+    wallPosts,
+    "ea",
   );
 
   if (t.build === "stick") {
@@ -205,6 +223,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     (netFenceLf / lfPerHour) * TERRAIN_FACTOR[input.terrain] * hf +
     (input.gatesSingle + input.gatesDouble + customGates.length) * 1.5 +
     (input.steppedSections ?? 0) * 0.4 +
+    wallPosts * 0.6 + // core-drill + epoxy set beats digging, but not by much
     (input.removalLf ?? 0) / 12;
 
   return {

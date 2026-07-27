@@ -198,6 +198,7 @@ export function AerialSection({
                 pxPerFt={takeoff!.canvasPxPerFt}
                 runElevationsFt={takeoff!.runElevationsFt}
                 elevationSpacingPx={takeoff!.elevationSpacingPx}
+                retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
                 className="aspect-[16/10]"
               />
             ) : showDiagram ? (

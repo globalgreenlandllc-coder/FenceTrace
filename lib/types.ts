@@ -181,6 +181,10 @@ export type FenceEstimateConfig = {
   ends: number;
   /** Sections stepping down a measured slope (terrain analysis). */
   steppedSections?: number;
+  /** LF of fence mounted on top of a retaining wall — those posts are
+   *  core-drilled + anchored to the wall cap instead of dug and set in
+   *  concrete (mount hardware + drilling labor priced per post). */
+  wallTopLf?: number;
 };
 
 export type EstimateConfig = {

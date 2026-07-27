@@ -49,6 +49,18 @@ test("chain-link racks the most; burial floors at 2 feet", () => {
   assert.ok(Math.abs(burialFt(8) - 8 / 3) < 1e-9);
 });
 
+test("retaining-wall detection: a sheer one-section drop reads wall-like", () => {
+  // 4' drop inside one 8' section amid flat ground
+  const s = summarizeSlopes([[100, 100, 96, 96]], 8, 6, "stick");
+  assert.equal(s.wallSections, 1);
+  assert.equal(s.wallLikeLf, 8);
+  // still counted as a step until the contractor confirms the wall
+  assert.ok(s.steppedSections >= 1);
+  // an ordinary 10% grade never reads as a wall
+  const g = summarizeSlopes([[100, 100.8, 101.6]], 8, 6, "stick");
+  assert.equal(g.wallSections, 0);
+});
+
 test("analyzeRunSlope: too-short runs are inert", () => {
   const r = analyzeRunSlope([100], 8, 1);
   assert.equal(r.steppedSections, 0);

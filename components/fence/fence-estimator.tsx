@@ -30,7 +30,8 @@ import {
 } from "@/lib/fence/catalog";
 import { computeFenceTakeoff } from "@/lib/fence/takeoff";
 import { fenceTiers, priceFence } from "@/lib/fence/pricing";
-import { canvasPolylineFt, canvasToLatLng, walkPostPositions } from "@/lib/fence/geo";
+import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, walkPostPositions } from "@/lib/fence/geo";
+import { buildContours, pickContourInterval } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { Mountain } from "lucide-react";
@@ -41,6 +42,10 @@ import type { Downspout, EditableLine, Measurements } from "@/lib/types";
  * Regrid property line → draw/verify the fence → live takeoff, BOM and
  * Good/Better/Best pricing → one click into a proposal draft.
  */
+
+// Topo lattice density: 18×12 = 216 sample points, one Elevation call.
+const TOPO_COLS = 18;
+const TOPO_ROWS = 12;
 
 const fmt = (n: number) =>
   `$${Math.round(n).toLocaleString("en-US")}`;
@@ -103,6 +108,16 @@ export function FenceEstimator() {
   } | null>(null);
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
+  // Retaining wall: fence mounts on top of a wall — posts over that span
+  // are core-drilled + anchored (priced per post), never dug. Off by
+  // default; the topo read only SUGGESTS it when it sees a sheer drop.
+  const [wallTop, setWallTop] = useState(false);
+  const [wallLfInput, setWallLfInput] = useState<number | null>(null);
+  // Topo overlay: a coarse elevation lattice over the visible yard →
+  // contour lines with ft labels on the layout canvas. One batched
+  // Elevation call per scan; toggleable, on by default.
+  const [topoGrid, setTopoGrid] = useState<number[][] | null>(null);
+  const [showTopo, setShowTopo] = useState(true);
   const [view3d, setView3d] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -123,6 +138,8 @@ export function FenceEstimator() {
     setSlopeError(null);
     setRunElevRaw(null);
     setTerrainAuto(true);
+    setWallTop(false);
+    setWallLfInput(null);
     setScanState("idle");
   }
 
@@ -139,6 +156,44 @@ export function FenceEstimator() {
     if (!t.heightsFt.includes(heightFt)) setHeightFt(t.defaultHeightFt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeId]);
+
+  // Topo lattice: one 18×12 elevation grid per scan (216 points, one
+  // batched call) → contour lines drawn over the satellite canvas.
+  useEffect(() => {
+    if (!scan) {
+      setTopoGrid(null);
+      return;
+    }
+    const rows = [];
+    for (let r = 0; r < TOPO_ROWS; r++) {
+      const row = [];
+      for (let c = 0; c < TOPO_COLS; c++) {
+        row.push(
+          canvasToLatLng(
+            {
+              x: (c * CANVAS_W) / (TOPO_COLS - 1),
+              y: (r * CANVAS_H) / (TOPO_ROWS - 1),
+            },
+            scan.center,
+            scan.zoom,
+          ),
+        );
+      }
+      rows.push(row);
+    }
+    let cancelled = false;
+    void sampleFenceElevations(rows).then((res) => {
+      if (cancelled) return;
+      setTopoGrid(
+        res.ok && res.runElevationsFt.every((r) => r.length === TOPO_COLS)
+          ? res.runElevationsFt
+          : null,
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scan]);
 
   // Terrain from the sky: sample elevation at every post position along
   // the drawn runs (debounced — one batched request per layout change).
@@ -196,6 +251,29 @@ export function FenceEstimator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layout.runs, scan, typeId, heightFt]);
 
+  // Contours from the lattice, relative to the lot's low point (labels
+  // read "+8′"). Null when the yard is too flat to contour.
+  const topoContours = useMemo(() => {
+    if (!topoGrid) return null;
+    let min = Infinity;
+    let max = -Infinity;
+    for (const row of topoGrid) {
+      for (const v of row) {
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+    }
+    const intervalFt = pickContourInterval(min, max);
+    if (intervalFt <= 0) return null;
+    const lines = buildContours(
+      topoGrid.map((row) => row.map((v) => v - min)),
+      CANVAS_W / (TOPO_COLS - 1),
+      CANVAS_H / (TOPO_ROWS - 1),
+      intervalFt,
+    );
+    return lines.length > 0 ? { lines, intervalFt } : null;
+  }, [topoGrid]);
+
   /* ---- live math ---- */
   const totalLf = useMemo(
     () =>
@@ -221,6 +299,28 @@ export function FenceEstimator() {
   );
   const effRemoval = removalLf < 0 ? totalLf : removalLf; // -1 = "same as drawn"
 
+  // Wall-top LF: manual entry wins; else the topo's sheer-drop estimate;
+  // else the whole drawn fence (contractor said wall, nothing measured).
+  const suggestedWallLf =
+    slopeFromRuns && slope ? Math.round(slope.wallLikeLf) : 0;
+  const effWallLf = wallTop
+    ? Math.max(
+        0,
+        Math.min(
+          totalLf || 9999,
+          wallLfInput ?? (suggestedWallLf > 0 ? suggestedWallLf : totalLf),
+        ),
+      )
+    : 0;
+  // Wall sections are mounts, not slope steps — don't double-charge.
+  const effSteppedSections = slopeFromRuns
+    ? Math.max(
+        0,
+        (slope?.steppedSections ?? 0) -
+          (wallTop ? (slope?.wallSections ?? 0) : 0),
+      )
+    : 0;
+
   const runLengths = useMemo(
     () =>
       scan
@@ -243,9 +343,10 @@ export function FenceEstimator() {
       wastePct: 10,
       removalLf: jobType === "replacement" ? effRemoval : 0,
       stain,
-      steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,
+      steppedSections: effSteppedSections,
+      wallTopLf: effWallLf,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, slope, slopeFromRuns],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf],
   );
 
   const takeoff = useMemo(
@@ -317,7 +418,8 @@ export function FenceEstimator() {
         gatesCustomWidthsFt,
         corners,
         ends,
-        steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,
+        steppedSections: effSteppedSections,
+        wallTopLf: effWallLf,
       },
     });
     setSaving(false);
@@ -411,25 +513,41 @@ export function FenceEstimator() {
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
             {/* Canvas column */}
             <div>
-              <div className="mb-2 inline-flex rounded-full bg-zinc-100 p-0.5">
-                {([
-                  { id: false, label: "Layout" },
-                  { id: true, label: "3D preview" },
-                ] as { id: boolean; label: string }[]).map((v) => (
+              <div className="mb-2 flex items-center gap-2">
+                <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
+                  {([
+                    { id: false, label: "Layout" },
+                    { id: true, label: "3D preview" },
+                  ] as { id: boolean; label: string }[]).map((v) => (
+                    <button
+                      key={String(v.id)}
+                      type="button"
+                      onClick={() => setView3d(v.id)}
+                      className={cn(
+                        "transition-smooth ring-focus rounded-full px-3 py-1.5 text-xs font-semibold",
+                        view3d === v.id
+                          ? "bg-white text-zinc-900 shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-800",
+                      )}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                {!view3d && topoContours && (
                   <button
-                    key={String(v.id)}
                     type="button"
-                    onClick={() => setView3d(v.id)}
+                    onClick={() => setShowTopo((s) => !s)}
                     className={cn(
-                      "transition-smooth ring-focus rounded-full px-3 py-1.5 text-xs font-semibold",
-                      view3d === v.id
-                        ? "bg-white text-zinc-900 shadow-sm"
-                        : "text-zinc-500 hover:text-zinc-800",
+                      "transition-smooth ring-focus rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset",
+                      showTopo
+                        ? "bg-amber-50 text-amber-800 ring-amber-200"
+                        : "bg-white text-zinc-500 ring-zinc-200 hover:text-zinc-800",
                     )}
                   >
-                    {v.label}
+                    Topo {showTopo ? "on" : "off"}
                   </button>
-                ))}
+                )}
               </div>
               {view3d ? (
                 <Fence3D
@@ -441,10 +559,16 @@ export function FenceEstimator() {
                   parcelRings={scan.parcelRings}
                   runElevationsFt={runElevRaw?.elevations}
                   elevationSpacingPx={runElevRaw?.spacingPx}
+                  retainingWall={effWallLf > 0}
                   className="aspect-[16/10]"
                 />
               ) : (
-                <FenceCanvas scan={scan} layout={layout} onChange={setLayout} />
+                <FenceCanvas
+                  scan={scan}
+                  layout={layout}
+                  onChange={setLayout}
+                  topo={showTopo ? topoContours : null}
+                />
               )}
               {scan.parcel && (
                 <p className="mt-2 text-xs text-zinc-400">
@@ -566,6 +690,56 @@ export function FenceEstimator() {
                       />
                       <span className="text-zinc-700">Stain & seal after install</span>
                     </label>
+                  )}
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={wallTop}
+                      onChange={(e) => setWallTop(e.target.checked)}
+                      className="h-4 w-4 accent-[#1E7340]"
+                    />
+                    <span className="text-zinc-700">
+                      Fence sits on a retaining wall
+                    </span>
+                  </label>
+                  {wallTop && (
+                    <div className="pl-6">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          max={totalLf || 9999}
+                          value={Math.round(effWallLf)}
+                          onChange={(e) =>
+                            setWallLfInput(
+                              Math.max(0, Number(e.target.value) || 0),
+                            )
+                          }
+                          className="input w-24 py-1"
+                        />
+                        <span className="text-xs text-zinc-500">
+                          LF of fence on the wall
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                        Posts on the wall are core-drilled & epoxy-anchored to
+                        the cap — no digging, priced per post.
+                      </p>
+                    </div>
+                  )}
+                  {!wallTop && suggestedWallLf > 0 && layout.runs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWallTop(true);
+                        setWallLfInput(suggestedWallLf);
+                      }}
+                      className="transition-smooth w-full rounded-lg bg-amber-50 px-2.5 py-2 text-left text-[11px] leading-relaxed text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100"
+                    >
+                      Sharp drop measured on ~{suggestedWallLf} LF — retaining
+                      wall? Tap to price wall-top mounting (core-drilled
+                      anchors).
+                    </button>
                   )}
                 </div>
               </section>

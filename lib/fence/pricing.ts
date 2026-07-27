@@ -87,6 +87,7 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       corners: Math.max(0, layout.corners),
       ends: Math.max(0, layout.ends),
       steppedSections: Math.max(0, layout.steppedSections ?? 0),
+      wallTopLf: Math.max(0, layout.wallTopLf ?? 0),
     },
   };
   return { measurements, config, netFenceLf: take.netFenceLf };

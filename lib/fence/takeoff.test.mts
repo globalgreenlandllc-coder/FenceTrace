@@ -121,6 +121,26 @@ test("stain only applies to stainable wood; removal adds a line", () => {
   assert.ok(!vinyl.bom.some((b) => b.key === "stain"));
 });
 
+test("retaining wall: anchors replace concrete for wall-span posts", () => {
+  const flat = computeFenceTakeoff(CEDAR_100);
+  const wall = computeFenceTakeoff({ ...CEDAR_100, wallTopLf: 24 });
+  // 24 LF at 8' spacing → 4 anchored posts
+  const anchors = wall.bom.find((b) => b.key === "wall-anchor")!;
+  assert.equal(anchors.qty, 4);
+  assert.ok(!flat.bom.some((b) => b.key === "wall-anchor"));
+  // those 4 posts lose their concrete (2 bags each at 6' height)…
+  const cFlat = flat.bom.find((b) => b.key === "concrete")!.qty;
+  const cWall = wall.bom.find((b) => b.key === "concrete")!.qty;
+  assert.equal(cFlat - cWall, 8);
+  // …and gain core-drill time
+  assert.ok(wall.laborHours > flat.laborHours);
+  // money: the wall-mount line prices on the proposal side too
+  const priced = priceFence({ ...CEDAR_100, wallTopLf: 24 });
+  const line = priced.lines.find((l) => l.key === "fence-wall-mount")!;
+  assert.equal(line.amount, 4 * 72);
+  assert.ok(priced.total > priceFence(CEDAR_100).total);
+});
+
 test("PARITY: priceFence total === packageTotal for the same layout", () => {
   const layout = {
     ...CEDAR_100,
@@ -129,6 +149,7 @@ test("PARITY: priceFence total === packageTotal for the same layout", () => {
     terrain: "rocky" as const,
     gatesCustomWidthsFt: [7],
     steppedSections: 3,
+    wallTopLf: 16,
   };
   for (const markupPct of [30, 35, 38]) {
     const rail = priceFence(layout, { markupPct });

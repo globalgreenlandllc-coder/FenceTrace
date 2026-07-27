@@ -18,6 +18,7 @@ export type FenceDraftInput = {
   corners: number;
   ends: number;
   steppedSections?: number;
+  wallTopLf?: number;
 };
 
 export type FenceTierPatch = {
@@ -51,6 +52,11 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
       ...((tier.stain || input.stain) && t.stainable
         ? ["Penetrating stain & seal, both faces"]
         : []),
+      ...((input.wallTopLf ?? 0) > 0
+        ? [
+            `Core-drilled & epoxy-anchored on the retaining wall — ${Math.round(input.wallTopLf!)} LF`,
+          ]
+        : []),
       ...(input.removalLf > 0
         ? [`Tear-out & haul-away of ${input.removalLf} LF of old fence`]
         : []),
@@ -72,6 +78,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         corners: input.corners,
         ends: input.ends,
         steppedSections: input.steppedSections ?? 0,
+        wallTopLf: input.wallTopLf ?? 0,
       },
       highlights,
       markupPct: tier.markupPct,
