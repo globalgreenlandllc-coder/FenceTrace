@@ -48,7 +48,7 @@ const PROVIDER_META: Record<
 > = {
   GOOGLE_MAPS: {
     label: "Google Maps",
-    sub: "Geocoding + satellite imagery",
+    sub: "Geocoding · satellite · elevation (terrain)",
     tone: "sky",
   },
   REGRID: {

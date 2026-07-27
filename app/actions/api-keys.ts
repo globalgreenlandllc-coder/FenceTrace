@@ -686,9 +686,39 @@ export async function testApiKey(
           error_message?: string;
         };
         if (body.status === "OK") {
+          // FenceTrace also needs the Elevation service (terrain-aware
+          // estimating) — probe it too so a disabled toggle is caught
+          // HERE, on the Test button, not as a blank readout in the
+          // estimator.
+          if (row.provider === "GOOGLE_MAPS") {
+            try {
+              const elev = await fetch(
+                `https://maps.googleapis.com/maps/api/elevation/json?locations=39.74,-104.98&key=${encodeURIComponent(value)}`,
+                { cache: "no-store" },
+              );
+              const elevBody = (await elev.json().catch(() => ({}))) as {
+                status?: string;
+              };
+              if (elevBody.status !== "OK") {
+                return {
+                  ok: false,
+                  status:
+                    "Geocoding works, but the Elevation API is not enabled on this key — terrain-aware estimating needs it. Enable “Elevation API” in Google Cloud console → APIs & Services → Library.",
+                  error: elevBody.status ?? "no response",
+                  testedFingerprint: fp,
+                  reason: "invalid_key",
+                };
+              }
+            } catch {
+              // network blip — don't fail the whole test over the probe
+            }
+          }
           return {
             ok: true,
-            status: "Google accepted the key (tested via Geocoding API)",
+            status:
+              row.provider === "GOOGLE_MAPS"
+                ? "Google accepted the key — Geocoding ✓ and Elevation ✓ (terrain ready)"
+                : "Google accepted the key (tested via Geocoding API)",
             error: null,
             testedFingerprint: fp,
             reason: "ok",
