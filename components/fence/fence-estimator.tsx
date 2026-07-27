@@ -88,6 +88,9 @@ export function FenceEstimator() {
   // Terrain follows the measured grade until the contractor overrides it.
   const [terrainAuto, setTerrainAuto] = useState(true);
   const [slope, setSlope] = useState<SlopeSummary | null>(null);
+  // Whether the current slope analysis measured the DRAWN runs (prices
+  // steps) or just the yard preview (informational only).
+  const [slopeFromRuns, setSlopeFromRuns] = useState(false);
   const [slopeError, setSlopeError] = useState<string | null>(null);
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
@@ -107,6 +110,9 @@ export function FenceEstimator() {
     }
     setScan(res);
     setLayout({ runs: [], gates: [] });
+    setSlope(null);
+    setSlopeError(null);
+    setTerrainAuto(true);
     setScanState("idle");
   }
 
@@ -125,16 +131,28 @@ export function FenceEstimator() {
   }, [typeId]);
 
   // Terrain from the sky: sample elevation at every post position along
-  // the drawn runs (debounced — one batched request per layout change)
-  // and derive grade, step-downs, and post sizing. Fail-safe: no
+  // the drawn runs (debounced — one batched request per layout change).
+  // BEFORE anything is drawn we still read the YARD: along the county
+  // property line when we have it, else a cross-section of the visible
+  // lot — so the ground story shows right after the scan. Fail-safe: no
   // elevation ⇒ the Ground picker simply stays manual.
   useEffect(() => {
-    if (!scan || layout.runs.length === 0) {
+    if (!scan) {
       setSlope(null);
       return;
     }
     const spacingPx = t.postSpacingFt * scan.canvasPxPerFt;
-    const runsLatLng = layout.runs.map((r) =>
+    const sources: { points: { x: number; y: number }[] }[] =
+      layout.runs.length > 0
+        ? layout.runs
+        : scan.parcelRings.length > 0
+          ? scan.parcelRings.map((ring) => ({ points: ring }))
+          : [
+              // no parcel: sample a horizontal + vertical slice of the yard
+              { points: [{ x: 150, y: 290 }, { x: 750, y: 290 }] },
+              { points: [{ x: 450, y: 120 }, { x: 450, y: 460 }] },
+            ];
+    const runsLatLng = sources.map((r) =>
       walkPostPositions(r.points, spacingPx).map((p) =>
         canvasToLatLng(p, scan.center, scan.zoom),
       ),
@@ -148,6 +166,7 @@ export function FenceEstimator() {
         return;
       }
       setSlopeError(null);
+      setSlopeFromRuns(layout.runs.length > 0);
       const summary = summarizeSlopes(
         res.runElevationsFt,
         t.postSpacingFt,
@@ -200,9 +219,9 @@ export function FenceEstimator() {
       wastePct: 10,
       removalLf: jobType === "replacement" ? effRemoval : 0,
       stain,
-      steppedSections: slope?.steppedSections ?? 0,
+      steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType, slope],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType, slope, slopeFromRuns],
   );
 
   const takeoff = useMemo(
@@ -269,7 +288,7 @@ export function FenceEstimator() {
         gatesDouble,
         corners,
         ends,
-        steppedSections: slope?.steppedSections ?? 0,
+        steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,
       },
     });
     setSaving(false);
@@ -475,8 +494,9 @@ export function FenceEstimator() {
                     <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-600 ring-1 ring-inset ring-zinc-200">
                       <Mountain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-600" />
                       <span>
-                        Grade {slope.avgGradePct}% avg · {slope.maxGradePct}% max.{" "}
-                        {slope.steppedSections > 0 ? (
+                        {layout.runs.length === 0 ? "Yard grade" : "Grade"}{" "}
+                        {slope.avgGradePct}% avg · {slope.maxGradePct}% max.{" "}
+                        {layout.runs.length > 0 && slope.steppedSections > 0 ? (
                           <>
                             <strong>{slope.steppedSections}</strong>{" "}
                             {slope.steppedSections === 1 ? "section steps" : "sections step"}{" "}
