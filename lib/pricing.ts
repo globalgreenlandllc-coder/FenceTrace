@@ -107,14 +107,24 @@ function buildFenceLineItems(
   // Gates re-price from the LIVE drawn count (measurements.downspoutCount
   // carries gates) — the config split only decides how many of them are
   // doubles. Editing gate markers on the proposal canvas must move money.
+  const customWidths = (fence.gatesCustomWidthsFt ?? []).filter(
+    (w) => Number.isFinite(w) && w > 0,
+  );
   const liveGates = Math.max(
     0,
     Math.round(
-      measurements.downspoutCount ?? fence.gatesSingle + fence.gatesDouble,
+      measurements.downspoutCount ??
+        fence.gatesSingle + fence.gatesDouble + customWidths.length,
     ),
   );
-  const gatesDouble = Math.min(Math.max(0, fence.gatesDouble), liveGates);
-  const gatesSingle = liveGates - gatesDouble;
+  // Custom + double counts come from the estimator config; the live drawn
+  // count adjusts the WALK-gate remainder so canvas edits still re-price.
+  const gatesCustom = Math.min(customWidths.length, liveGates);
+  const gatesDouble = Math.min(
+    Math.max(0, fence.gatesDouble),
+    liveGates - gatesCustom,
+  );
+  const gatesSingle = Math.max(0, liveGates - gatesDouble - gatesCustom);
   const lines: LineItemPlan[] = [
     {
       id: "fence-materials",
@@ -158,6 +168,21 @@ function buildFenceLineItems(
       unitPrice: round2(t.gateSingle * 2.4),
       taxable: true,
     });
+  customWidths.slice(0, gatesCustom).forEach((w, i) => {
+    // Anchor pricing on the presets: ≤5' ≈ a walk gate; wider scales
+    // linearly through the 10' drive-gate price (2.4× walk).
+    const price =
+      w <= 5 ? t.gateSingle : round2(t.gateSingle * 2.4 * (w / 10));
+    lines.push({
+      id: `gate-custom-${i}`,
+      name: `Custom gate (${w}') — framed & hung`,
+      description: "Heavy-set posts, hinges & latch included",
+      quantity: 1,
+      unit: "ea",
+      unitPrice: price,
+      taxable: true,
+    });
+  });
   if ((fence.steppedSections ?? 0) > 0)
     lines.push({
       id: "fence-steps",

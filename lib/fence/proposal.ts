@@ -14,6 +14,7 @@ export type FenceDraftInput = {
   removalLf: number;
   gatesSingle: number;
   gatesDouble: number;
+  gatesCustomWidthsFt?: number[];
   corners: number;
   ends: number;
   steppedSections?: number;
@@ -37,7 +38,10 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
     const heightFt = t.heightsFt.includes(input.heightFt)
       ? input.heightFt
       : t.defaultHeightFt;
-    const gates = input.gatesSingle + input.gatesDouble;
+    const gates =
+      input.gatesSingle +
+      input.gatesDouble +
+      (input.gatesCustomWidthsFt?.length ?? 0);
     const highlights = [
       `${heightFt}' ${t.label.toLowerCase()} — ${t.blurb}`,
       "Posts set in concrete, " + t.postSpacingFt + "' on center",
@@ -64,6 +68,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         removalLf: input.removalLf,
         gatesSingle: input.gatesSingle,
         gatesDouble: input.gatesDouble,
+        gatesCustomWidthsFt: input.gatesCustomWidthsFt ?? [],
         corners: input.corners,
         ends: input.ends,
         steppedSections: input.steppedSections ?? 0,

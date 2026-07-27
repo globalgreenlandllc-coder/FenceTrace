@@ -58,7 +58,12 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
     outsideCorners: Math.max(0, layout.corners),
     insideCorners: 0,
     endCaps: Math.max(0, layout.ends),
-    downspoutCount: Math.max(0, layout.gatesSingle + layout.gatesDouble),
+    downspoutCount: Math.max(
+      0,
+      layout.gatesSingle +
+        layout.gatesDouble +
+        (layout.gatesCustomWidthsFt?.length ?? 0),
+    ),
     stories: 1,
     wasteFactorPct: Math.min(30, Math.max(0, layout.wastePct ?? 10)),
   };
@@ -78,6 +83,7 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       removalLf: Math.max(0, layout.removalLf ?? 0),
       gatesSingle: Math.max(0, layout.gatesSingle),
       gatesDouble: Math.max(0, layout.gatesDouble),
+      gatesCustomWidthsFt: layout.gatesCustomWidthsFt ?? [],
       corners: Math.max(0, layout.corners),
       ends: Math.max(0, layout.ends),
       steppedSections: Math.max(0, layout.steppedSections ?? 0),

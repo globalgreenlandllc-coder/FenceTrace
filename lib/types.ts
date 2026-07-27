@@ -170,6 +170,8 @@ export type FenceEstimateConfig = {
   removalLf: number;
   gatesSingle: number;
   gatesDouble: number;
+  /** Custom-width gates (feet each) beyond the walk/drive presets. */
+  gatesCustomWidthsFt?: number[];
   corners: number;
   ends: number;
   /** Sections stepping down a measured slope (terrain analysis). */

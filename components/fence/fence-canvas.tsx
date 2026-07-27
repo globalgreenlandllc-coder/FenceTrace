@@ -23,7 +23,14 @@ import type { FenceScanResult } from "@/app/actions/fence-scan";
  */
 
 export type FenceRun = { id: string; points: Pt[] };
-export type FenceGate = { id: string; x: number; y: number; kind: "single" | "double" };
+export type FenceGate = {
+  id: string;
+  x: number;
+  y: number;
+  kind: "single" | "double" | "custom";
+  /** Opening width in feet (4 walk · 10 drive · custom = user-typed). */
+  widthFt: number;
+};
 
 export type FenceLayout = { runs: FenceRun[]; gates: FenceGate[] };
 
@@ -33,6 +40,29 @@ const SNAP_PX = 12;
 
 let idSeq = 0;
 const nextId = (p: string) => `${p}-${Date.now().toString(36)}-${idSeq++}`;
+
+/** Unit direction of the nearest run segment at a point (for drawing a
+ *  gate's opening along the fence). */
+function runDirectionAt(p: Pt, runs: FenceRun[]): Pt {
+  let best = { x: 1, y: 0 };
+  let bestD = Infinity;
+  for (const run of runs) {
+    for (let i = 1; i < run.points.length; i++) {
+      const a = run.points[i - 1];
+      const b = run.points[i];
+      const abx = b.x - a.x;
+      const aby = b.y - a.y;
+      const len = Math.hypot(abx, aby) || 1;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (len * len)));
+      const d = Math.hypot(a.x + t * abx - p.x, a.y + t * aby - p.y);
+      if (d < bestD) {
+        bestD = d;
+        best = { x: abx / len, y: aby / len };
+      }
+    }
+  }
+  return best;
+}
 
 /** Distance from a point to the nearest spot on a run's segments. */
 function distToRun(p: Pt, run: FenceRun): number {
@@ -64,7 +94,8 @@ export function FenceCanvas({
   const [tool, setTool] = useState<Tool>(
     scan.suggestedRuns.length > 0 ? "select" : "draw",
   );
-  const [gateKind, setGateKind] = useState<"single" | "double">("single");
+  const [gateKind, setGateKind] = useState<"single" | "double" | "custom">("single");
+  const [customGateFt, setCustomGateFt] = useState(6);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [draft, setDraft] = useState<Pt[]>([]);
   const [hover, setHover] = useState<Pt | null>(null);
@@ -214,9 +245,11 @@ export function FenceCanvas({
       }
       const q = nearestOnRuns(raw);
       if (q) {
+        const widthFt =
+          gateKind === "single" ? 4 : gateKind === "double" ? 10 : Math.min(24, Math.max(3, customGateFt));
         onChange({
           ...layout,
-          gates: [...layout.gates, { id: nextId("gate"), ...q, kind: gateKind }],
+          gates: [...layout.gates, { id: nextId("gate"), ...q, kind: gateKind, widthFt }],
         });
       } else {
         say("Tap on (or near) a fence line to place the gate.");
@@ -276,8 +309,8 @@ export function FenceCanvas({
           ))}
         </div>
         {tool === "gate" && (
-          <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
-            {(["single", "double"] as const).map((k) => (
+          <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-0.5">
+            {(["single", "double", "custom"] as const).map((k) => (
               <button
                 key={k}
                 type="button"
@@ -289,9 +322,23 @@ export function FenceCanvas({
                     : "text-zinc-500 hover:text-zinc-800",
                 )}
               >
-                {k === "single" ? "Walk 4'" : "Drive 10'"}
+                {k === "single" ? "Walk 4'" : k === "double" ? "Drive 10'" : "Custom"}
               </button>
             ))}
+            {gateKind === "custom" && (
+              <span className="flex items-center gap-1 pr-1.5 text-[11px] font-semibold text-zinc-600">
+                <input
+                  type="number"
+                  min={3}
+                  max={24}
+                  step={1}
+                  value={customGateFt}
+                  onChange={(e) => setCustomGateFt(Number(e.target.value) || 6)}
+                  className="h-6 w-12 rounded-md border border-zinc-200 bg-white px-1.5 text-center text-[11px] tabular-nums outline-none focus:border-accent-400"
+                />
+                ft
+              </span>
+            )}
           </div>
         )}
         {draft.length > 0 && (
@@ -430,7 +477,7 @@ export function FenceCanvas({
             );
           })}
 
-          {/* Draft run being drawn */}
+          {/* Draft run being drawn — live numbers at the cursor */}
           {draft.length > 0 && (
             <g pointerEvents="none">
               <polyline
@@ -446,6 +493,26 @@ export function FenceCanvas({
               {draft.map((p, i) => (
                 <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="#fbbf24" />
               ))}
+              {hover && (() => {
+                const last = draft[draft.length - 1];
+                const segFt = Math.round(
+                  Math.hypot(hover.x - last.x, hover.y - last.y) / pxPerFt,
+                );
+                const totalFt = Math.round(
+                  canvasPolylineFt([...draft, hover], pxPerFt),
+                );
+                const label =
+                  draft.length > 1 ? `+${segFt} ft · ${totalFt} ft total` : `${segFt} ft`;
+                const w = label.length * 6.6 + 16;
+                return (
+                  <g transform={`translate(${hover.x + 14}, ${hover.y - 16})`}>
+                    <rect x={0} y={-12} width={w} height={20} rx={6} fill="rgba(9,20,12,0.9)" />
+                    <text x={w / 2} y={2} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fde68a">
+                      {label}
+                    </text>
+                  </g>
+                );
+              })()}
             </g>
           )}
 
@@ -463,26 +530,39 @@ export function FenceCanvas({
             />
           )}
 
-          {/* Gates */}
-          {layout.gates.map((g) => (
-            <g
-              key={g.id}
-              transform={`translate(${g.x}, ${g.y})`}
-              style={{ cursor: "pointer" }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange({
-                  ...layout,
-                  gates: layout.gates.filter((x) => x.id !== g.id),
-                });
-              }}
-            >
-              <circle r={9} fill="#f472b6" stroke="#fff" strokeWidth={2} />
-              <text y={3.5} textAnchor="middle" fontSize={9} fontWeight={800} fill="#fff">
-                {g.kind === "single" ? "G" : "GG"}
-              </text>
-            </g>
-          ))}
+          {/* Gates — drawn at their real width along the run */}
+          {layout.gates.map((g) => {
+            const widthFt = g.widthFt ?? (g.kind === "double" ? 10 : 4);
+            const dir = runDirectionAt(g, layout.runs);
+            const half = (widthFt * pxPerFt) / 2;
+            const a = { x: g.x - dir.x * half, y: g.y - dir.y * half };
+            const b = { x: g.x + dir.x * half, y: g.y + dir.y * half };
+            return (
+              <g
+                key={g.id}
+                style={{ cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange({
+                    ...layout,
+                    gates: layout.gates.filter((x) => x.id !== g.id),
+                  });
+                }}
+              >
+                {/* the opening: interrupt the run visually */}
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0b1210" strokeWidth={7} strokeLinecap="round" opacity={0.55} />
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f472b6" strokeWidth={4} strokeLinecap="round" strokeDasharray="6 4" />
+                <circle cx={a.x} cy={a.y} r={3.5} fill="#fff" stroke="#f472b6" strokeWidth={2} />
+                <circle cx={b.x} cy={b.y} r={3.5} fill="#fff" stroke="#f472b6" strokeWidth={2} />
+                <g transform={`translate(${g.x}, ${g.y - 14})`} pointerEvents="none">
+                  <rect x={-17} y={-10} width={34} height={16} rx={8} fill="#f472b6" />
+                  <text y={2.5} textAnchor="middle" fontSize={9.5} fontWeight={800} fill="#fff">
+                    {widthFt}&apos;
+                  </text>
+                </g>
+              </g>
+            );
+          })}
         </svg>
       </div>
 

@@ -27,6 +27,8 @@ export type FenceLayoutInput = {
   ends: number;
   gatesSingle: number; // 4' walk gates
   gatesDouble: number; // ~10' drive gates
+  /** Custom-width gates, feet each (e.g. [6, 12]). */
+  gatesCustomWidthsFt?: number[];
   terrain: Terrain;
   /** Extra material percentage, default 10. */
   wastePct?: number;
@@ -74,9 +76,13 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const waste = 1 + Math.min(30, Math.max(0, input.wastePct ?? 10)) / 100;
   const hf = heightFactor(t, input.heightFt);
 
+  const customGates = (input.gatesCustomWidthsFt ?? []).filter(
+    (w) => Number.isFinite(w) && w > 0,
+  );
   const gateOpenings =
     input.gatesSingle * GATE_SINGLE_OPENING_FT +
-    input.gatesDouble * GATE_DOUBLE_OPENING_FT;
+    input.gatesDouble * GATE_DOUBLE_OPENING_FT +
+    customGates.reduce((a, w) => a + w, 0);
   const netFenceLf = Math.max(0, input.totalLf - gateOpenings);
 
   // Sections are counted PER RUN when the layout provides run lengths —
@@ -101,7 +107,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const linePosts = Math.max(0, sections - 1 - input.corners);
   const cornerPosts = Math.max(0, input.corners);
   const endPosts = Math.max(0, input.ends);
-  const gatePosts = (input.gatesSingle + input.gatesDouble) * 2;
+  const gatePosts = (input.gatesSingle + input.gatesDouble + customGates.length) * 2;
   const totalPosts = linePosts + cornerPosts + endPosts + gatePosts;
 
   const bom: BomLine[] = [];
@@ -169,10 +175,13 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   add("post-cap", "Post caps", totalPosts, "ea");
   add("gate-single", "Walk gate kit (4')", input.gatesSingle, "ea");
   add("gate-double", "Drive gate kit (10')", input.gatesDouble, "ea");
+  customGates.forEach((w, i) => {
+    add(`gate-custom-${i}`, `Custom gate kit (${w}')`, 1, "ea");
+  });
   add(
     "gate-hardware",
     "Gate hinge + latch sets",
-    input.gatesSingle + input.gatesDouble,
+    input.gatesSingle + input.gatesDouble + customGates.length,
     "ea",
   );
   if (input.stain && t.stainable) {
@@ -194,7 +203,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     t.build === "mesh" ? 4.5 : t.build === "panel" ? 3.5 : t.build === "rail" ? 5 : 2.5;
   const laborHours =
     (netFenceLf / lfPerHour) * TERRAIN_FACTOR[input.terrain] * hf +
-    (input.gatesSingle + input.gatesDouble) * 1.5 +
+    (input.gatesSingle + input.gatesDouble + customGates.length) * 1.5 +
     (input.steppedSections ?? 0) * 0.4 +
     (input.removalLf ?? 0) / 12;
 

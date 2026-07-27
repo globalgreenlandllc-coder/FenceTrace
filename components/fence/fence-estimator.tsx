@@ -196,6 +196,13 @@ export function FenceEstimator() {
   const { corners, ends } = useMemo(() => cornersAndEnds(layout), [layout]);
   const gatesSingle = layout.gates.filter((g) => g.kind === "single").length;
   const gatesDouble = layout.gates.filter((g) => g.kind === "double").length;
+  const gatesCustomWidthsFt = useMemo(
+    () =>
+      layout.gates
+        .filter((g) => g.kind === "custom")
+        .map((g) => g.widthFt ?? 6),
+    [layout.gates],
+  );
   const effRemoval = removalLf < 0 ? totalLf : removalLf; // -1 = "same as drawn"
 
   const runLengths = useMemo(
@@ -215,13 +222,14 @@ export function FenceEstimator() {
       ends,
       gatesSingle,
       gatesDouble,
+      gatesCustomWidthsFt,
       terrain,
       wastePct: 10,
       removalLf: jobType === "replacement" ? effRemoval : 0,
       stain,
       steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType, slope, slopeFromRuns],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, slope, slopeFromRuns],
   );
 
   const takeoff = useMemo(
@@ -254,7 +262,7 @@ export function FenceEstimator() {
       outsideCorners: corners,
       insideCorners: 0,
       endCaps: ends,
-      downspoutCount: gatesSingle + gatesDouble,
+      downspoutCount: gatesSingle + gatesDouble + gatesCustomWidthsFt.length,
       stories: 1,
       wasteFactorPct: 10,
     };
@@ -286,6 +294,7 @@ export function FenceEstimator() {
         removalLf: layoutInput.removalLf,
         gatesSingle,
         gatesDouble,
+        gatesCustomWidthsFt,
         corners,
         ends,
         steppedSections: slopeFromRuns ? (slope?.steppedSections ?? 0) : 0,

@@ -71,6 +71,29 @@ test("gate openings subtract from fabric; double gate = 10 ft", () => {
   assert.equal(withDouble.posts.gate, 2);
 });
 
+test("custom gates: width subtracts, posts + kit added, priced between anchors", () => {
+  const t = computeFenceTakeoff({
+    ...CEDAR_100,
+    totalLf: 106,
+    gatesSingle: 0,
+    gatesDouble: 0,
+    gatesCustomWidthsFt: [6],
+  });
+  assert.equal(t.netFenceLf, 100);
+  assert.equal(t.posts.gate, 2);
+  assert.ok(t.bom.some((b) => b.key === "gate-custom-0"));
+  const p = priceFence({
+    ...CEDAR_100,
+    totalLf: 106,
+    gatesSingle: 0,
+    gatesDouble: 0,
+    gatesCustomWidthsFt: [6],
+  });
+  const gateLine = p.lines.find((l) => l.key === "gate-custom-0")!;
+  // 6' gate: between a 4' walk ($385) and a 10' drive ($924)
+  assert.ok(gateLine.amount > 385 && gateLine.amount < 924, `got ${gateLine.amount}`);
+});
+
 test("shadowbox pickets ≈ double a solid face; chain-link bands only on terminals", () => {
   const solid = computeFenceTakeoff({ ...CEDAR_100, type: "cedar-privacy" });
   const shadow = computeFenceTakeoff({ ...CEDAR_100, type: "shadowbox" });
@@ -99,7 +122,14 @@ test("stain only applies to stainable wood; removal adds a line", () => {
 });
 
 test("PARITY: priceFence total === packageTotal for the same layout", () => {
-  const layout = { ...CEDAR_100, stain: true, removalLf: 104, terrain: "rocky" as const };
+  const layout = {
+    ...CEDAR_100,
+    stain: true,
+    removalLf: 104,
+    terrain: "rocky" as const,
+    gatesCustomWidthsFt: [7],
+    steppedSections: 3,
+  };
   for (const markupPct of [30, 35, 38]) {
     const rail = priceFence(layout, { markupPct });
     const { measurements, config } = layoutToPricingInputs(layout);
