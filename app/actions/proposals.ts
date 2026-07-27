@@ -302,6 +302,8 @@ export async function saveDraftFromEstimate(args: {
   runElevationsFt?: number[][];
   /** Walk spacing (canvas px) the elevations were sampled at. */
   elevationSpacingPx?: number;
+  /** FenceTrace: the scan's topo lattice for the proposal 3D's terrain. */
+  topoGridFt?: number[][];
 }): Promise<SaveDraftResult> {
   try {
     return await saveDraftFromEstimateImpl(args);
@@ -321,6 +323,7 @@ async function saveDraftFromEstimateImpl(args: {
   canvasPxPerFt?: number;
   runElevationsFt?: number[][];
   elevationSpacingPx?: number;
+  topoGridFt?: number[][];
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -395,6 +398,7 @@ async function saveDraftFromEstimateImpl(args: {
       canvasPxPerFt: args.canvasPxPerFt,
       runElevationsFt: args.runElevationsFt,
       elevationSpacingPx: args.elevationSpacingPx,
+      topoGridFt: args.topoGridFt,
     },
     contractor: {
       name: me.profile.contractorName || me.user.name,

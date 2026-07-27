@@ -406,6 +406,7 @@ export function FenceEstimator() {
       canvasPxPerFt: scan.canvasPxPerFt,
       runElevationsFt: runElevRaw?.elevations,
       elevationSpacingPx: runElevRaw?.spacingPx,
+      topoGridFt: topoGrid ?? undefined,
       jobType,
       fence: {
         type: typeId,
@@ -559,6 +560,7 @@ export function FenceEstimator() {
                   parcelRings={scan.parcelRings}
                   runElevationsFt={runElevRaw?.elevations}
                   elevationSpacingPx={runElevRaw?.spacingPx}
+                  topoGridFt={topoGrid}
                   retainingWall={effWallLf > 0}
                   className="aspect-[16/10]"
                 />

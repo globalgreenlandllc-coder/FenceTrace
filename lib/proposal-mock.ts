@@ -150,6 +150,10 @@ export type ProposalTakeoff = {
    *  quote a fence type with a different post spacing, so the sampling
    *  spacing must travel with the samples to re-pair them to the runs. */
   elevationSpacingPx?: number;
+  /** FenceTrace: the scan's topo lattice (rows × cols of ft spanning the
+   *  full canvas) — the proposal 3D renders the yard as a shaded terrain
+   *  surface from it. ~200 numbers; absent on older drafts. */
+  topoGridFt?: number[][];
 };
 
 export type Proposal = {

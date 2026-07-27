@@ -486,7 +486,7 @@ export function FenceCanvas({
               )}
               <text
                 x={CANVAS_W - 10}
-                y={CANVAS_H - 10}
+                y={20}
                 textAnchor="end"
                 fontSize={10.5}
                 fontWeight={600}

@@ -4,22 +4,26 @@ import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import { rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
-import { runDistanceModel, type RunElevationModel } from "@/lib/fence/geo";
+import {
+  CANVAS_H,
+  CANVAS_W,
+  runDistanceModel,
+  type RunElevationModel,
+} from "@/lib/fence/geo";
 
 /**
  * Fence3D — a to-scale isometric preview of the drawn fence, hand-rolled
  * in SVG (no 3D library: deterministic, fast, prints cleanly in the
  * proposal PDF and the client portal).
  *
- * Model: the 2D layout (canvas space, px) is rotated and foreshortened
- * into an axonometric ground plane; posts and panels extrude upward by
- * the fence height (ft × pxPerFt). When measured ground elevations are
- * supplied the fence follows the real terrain: sections rack (tilt) up
- * to the build kind's limit and STEP beyond it — level panels cascading
- * down the slope on extended posts — with an earth skirt under each run
- * so the hillside itself is visible. Painter's algorithm sorts faces
- * back-to-front. Gates render at their real width as framed, braced
- * leaves with a size label the client can read.
+ * Ground: when the scan's topo lattice is available the whole yard
+ * renders as a slope-shaded terrain surface and the fence stands on it;
+ * without it (legacy proposals) each run gets a shallow earth ribbon.
+ * Extreme lots are vertically softened past 5× the fence height so an
+ * 80 ft hillside still reads as a yard with a fence, not a cliff.
+ * Sections rack (tilt) up to the build kind's limit and STEP beyond it —
+ * level panels cascading downhill on extended posts. Gates render at
+ * their real width as framed, braced leaves with a size label.
  */
 
 type Pt = { x: number; y: number };
@@ -48,7 +52,7 @@ function proj(p: Pt, z: number): Pt {
 }
 
 type Face = {
-  kind: "panel" | "gate" | "post" | "skirt" | "wall";
+  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground";
   /** Painter depth — projected plan-y of the base midpoint (+bias). */
   depth: number;
   /** Quad corners in projected space: baseA, baseB, topB, topA. */
@@ -61,6 +65,8 @@ type Face = {
   leaves?: 1 | 2;
   /** Posts: gate posts render heavier. */
   heavy?: boolean;
+  /** Ground cells: pre-computed lawn fill from the slope shading. */
+  fill?: string;
 };
 
 type GateLabel = { anchor: Pt; text: string };
@@ -123,6 +129,16 @@ function nearestOnPolyline(p: Pt, pts: Pt[], cum: number[]): { dist: number; per
 
 const fmtFt = (w: number) => `${Math.round(w * 10) / 10}`;
 
+/** Lawn color for a ground cell from its slope (light from the NW). */
+function lawnFill(gxFt: number, gyFt: number): string {
+  // gx: ft rise per plan px eastward; gy: ft rise per plan px southward.
+  const b = Math.max(0.66, Math.min(1.06, 0.88 - gxFt * 2.4 + gyFt * 1.2));
+  const r = Math.round(178 * b);
+  const g = Math.round(208 * b);
+  const bl = Math.round(160 * b);
+  return `rgb(${r},${g},${bl})`;
+}
+
 export function Fence3D({
   runs,
   gates,
@@ -132,6 +148,7 @@ export function Fence3D({
   parcelRings = [],
   runElevationsFt,
   elevationSpacingPx,
+  topoGridFt = null,
   retainingWall = false,
   className,
 }: {
@@ -150,6 +167,10 @@ export function Fence3D({
    *  to this fence type's post spacing — pass it when the rendered type
    *  may differ from the type that was active when sampling. */
   elevationSpacingPx?: number;
+  /** The scan's topo lattice (rows × cols of ft, spanning the full
+   *  900×580 canvas). When present the yard renders as a shaded terrain
+   *  surface and the fence grounds on it. */
+  topoGridFt?: number[][] | null;
   /** Contractor confirmed the fence mounts on a retaining wall: sheer
    *  drops render as a masonry wall face with the fence anchored on top
    *  (instead of an earth bank), and get a summary chip. */
@@ -164,24 +185,84 @@ export function Fence3D({
     const spacingPx = t.postSpacingFt * scale;
     const rackFt = rackingLimitFt(t.build);
 
-    // Terrain: one elevation model per run, all sharing one datum (the
-    // lowest sample across the layout) so the scene stays coherent.
+    // ---- ground sources ----------------------------------------------
+    const grid =
+      topoGridFt &&
+      topoGridFt.length >= 2 &&
+      topoGridFt[0].length >= 2 &&
+      topoGridFt.every(
+        (r) => r.length === topoGridFt[0].length && r.every((v) => Number.isFinite(v)),
+      )
+        ? topoGridFt
+        : null;
+    const gridRows = grid?.length ?? 0;
+    const gridCols = grid?.[0]?.length ?? 0;
+    const cellW = grid ? CANVAS_W / (gridCols - 1) : 0;
+    const cellH = grid ? CANVAS_H / (gridRows - 1) : 0;
+
     const sampleSpacing =
       elevationSpacingPx && elevationSpacingPx > 0 ? elevationSpacingPx : spacingPx;
     const models: (RunElevationModel | null)[] = runs.map((r, i) =>
       runDistanceModel(r.points, sampleSpacing, runElevationsFt?.[i] ?? []),
     );
+
+    // Shared datum + relief softening: past 5× the fence height, extra
+    // relief renders at 35% so big hillsides stay readable.
     let minElev = Infinity;
+    let maxElev = -Infinity;
+    const noteElev = (v: number) => {
+      minElev = Math.min(minElev, v);
+      maxElev = Math.max(maxElev, v);
+    };
+    if (grid) for (const row of grid) for (const v of row) noteElev(v);
     models.forEach((m, i) => {
-      if (m) for (const v of runElevationsFt![i]) minElev = Math.min(minElev, v);
+      if (m) for (const v of runElevationsFt![i]) noteElev(v);
     });
-    if (!Number.isFinite(minElev)) minElev = 0;
+    if (!Number.isFinite(minElev)) {
+      minElev = 0;
+      maxElev = 0;
+    }
+    const relief = maxElev - minElev;
+    const softCap = heightFt * 5;
+    const soften = (ft: number) =>
+      ft <= softCap ? ft : softCap + (ft - softCap) * 0.35;
+
+    const bilinear = (x: number, y: number): number => {
+      if (!grid) return minElev;
+      const fx = Math.max(0, Math.min(gridCols - 1.001, x / cellW));
+      const fy = Math.max(0, Math.min(gridRows - 1.001, y / cellH));
+      const c0 = Math.floor(fx);
+      const r0 = Math.floor(fy);
+      const sx = fx - c0;
+      const sy = fy - r0;
+      const v00 = grid[r0][c0];
+      const v01 = grid[r0][c0 + 1];
+      const v10 = grid[r0 + 1][c0];
+      const v11 = grid[r0 + 1][c0 + 1];
+      return (
+        v00 * (1 - sx) * (1 - sy) +
+        v01 * sx * (1 - sy) +
+        v10 * (1 - sx) * sy +
+        v11 * sx * sy
+      );
+    };
 
     const geo = runs.map((r) => ({ pts: r.points, cum: cumLengths(r.points) }));
-    const zOf = (ri: number, d: number) => {
+    const hasGroundFor = (ri: number) => !!grid || !!models[ri];
+    /** Raw ground elevation (ft, absolute) under a run point. */
+    const elevAt = (ri: number, d: number): number => {
+      if (grid) {
+        const p = pointAt(geo[ri].pts, geo[ri].cum, d);
+        return bilinear(p.x, p.y);
+      }
       const m = models[ri];
-      return m ? (m.atDistPx(d) - minElev) * scale * HEIGHT_EXAGGERATION : 0;
+      return m ? m.atDistPx(d) : minElev;
     };
+    /** Screen-z of the ground under a run point (softened + scaled). */
+    const zOf = (ri: number, d: number): number =>
+      soften(elevAt(ri, d) - minElev) * scale * HEIGHT_EXAGGERATION;
+    const zOfPlan = (x: number, y: number): number =>
+      soften(bilinear(x, y) - minElev) * scale * HEIGHT_EXAGGERATION;
 
     // Assign each gate to its nearest run as a span of arc distance.
     const spansByRun: { c: number; w: number; kind: "single" | "double" | "custom" }[][] =
@@ -216,6 +297,41 @@ export function Fence3D({
     const labels: GateLabel[] = [];
     let steppedCount = 0;
     let wallCount = 0;
+
+    // ---- terrain surface (topo lattice) ------------------------------
+    // Rendered at 2× the lattice density via bilinear interpolation so
+    // the lawn reads as rolling ground, not a patchwork of flat tiles.
+    if (grid) {
+      const SUB = 2;
+      const stepX = cellW / SUB;
+      const stepY = cellH / SUB;
+      const nx = (gridCols - 1) * SUB;
+      const ny = (gridRows - 1) * SUB;
+      for (let r = 0; r < ny; r++) {
+        for (let c = 0; c < nx; c++) {
+          const x0 = c * stepX;
+          const y0 = r * stepY;
+          const x1 = x0 + stepX;
+          const y1 = y0 + stepY;
+          const mid = { x: x0 + stepX / 2, y: y0 + stepY / 2 };
+          const gx = (bilinear(x1, mid.y) - bilinear(x0, mid.y)) / stepX;
+          const gy = (bilinear(mid.x, y1) - bilinear(mid.x, y0)) / stepY;
+          faces.push({
+            kind: "ground",
+            depth: proj(mid, 0).y - 0.5, // before any co-located fence
+            quad: [
+              proj({ x: x0, y: y0 }, zOfPlan(x0, y0)),
+              proj({ x: x1, y: y0 }, zOfPlan(x1, y0)),
+              proj({ x: x1, y: y1 }, zOfPlan(x1, y1)),
+              proj({ x: x0, y: y1 }, zOfPlan(x0, y1)),
+            ],
+            shaded: false,
+            baseLenPx: stepX,
+            fill: lawnFill(gx, gy),
+          });
+        }
+      }
+    }
 
     // Posts merge by (run, rounded distance): ground at the lowest read,
     // top at the tallest adjacent panel — extended posts fall out free.
@@ -258,7 +374,6 @@ export function Fence3D({
         const len = iv.e - iv.s;
         const A0 = pointAt(rg.pts, rg.cum, iv.s);
         const B0 = pointAt(rg.pts, rg.cum, iv.e);
-        const ux = (B0.x - A0.x) / Math.max(1e-6, Math.hypot(B0.x - A0.x, B0.y - A0.y));
         const uy = (B0.y - A0.y) / Math.max(1e-6, Math.hypot(B0.x - A0.x, B0.y - A0.y));
         const shaded = -uy < 0;
 
@@ -270,15 +385,6 @@ export function Fence3D({
           const top = base + zTop - 0.12 * scale;
           const mid = { x: (A0.x + B0.x) / 2, y: (A0.y + B0.y) / 2 };
           const depth = proj(mid, 0).y;
-          if (models[ri] && (zA > 0.5 || zB > 0.5)) {
-            faces.push({
-              kind: "skirt",
-              depth: depth - 0.02,
-              quad: [proj(A0, zA), proj(B0, zB), proj(B0, 0), proj(A0, 0)],
-              shaded,
-              baseLenPx: len,
-            });
-          }
           faces.push({
             kind: "gate",
             depth,
@@ -305,13 +411,11 @@ export function Fence3D({
           const B = pointAt(rg.pts, rg.cum, d1);
           const zA = zOf(ri, d0);
           const zB = zOf(ri, d1);
-          const riseFt = (zB - zA) / (scale * HEIGHT_EXAGGERATION);
-          // A sheer drop under a confirmed retaining wall renders as a
-          // masonry face with the fence anchored level on the cap; other
-          // over-limit rises step down the slope as terrain.
+          // Rack/step decisions use REAL feet (not the softened screen z).
+          const riseFt = hasGroundFor(ri) ? elevAt(ri, d1) - elevAt(ri, d0) : 0;
           const wallish =
-            retainingWall && !!models[ri] && Math.abs(riseFt) >= WALL_RISE_FT;
-          const stepped = !wallish && !!models[ri] && Math.abs(riseFt) > rackFt;
+            retainingWall && hasGroundFor(ri) && Math.abs(riseFt) >= WALL_RISE_FT;
+          const stepped = !wallish && hasGroundFor(ri) && Math.abs(riseFt) > rackFt;
           const level = stepped || wallish;
           const bzA = level ? Math.max(zA, zB) : zA;
           const bzB = level ? Math.max(zA, zB) : zB;
@@ -328,20 +432,19 @@ export function Fence3D({
               shaded,
               baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
             });
-            if (zLo > 0.5) {
-              faces.push({
-                kind: "skirt",
-                depth: depth - 0.03,
-                quad: [proj(A, zLo), proj(B, zLo), proj(B, 0), proj(A, 0)],
-                shaded,
-                baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
-              });
-            }
-          } else if (models[ri] && (zA > 0.5 || zB > 0.5)) {
+          } else if (!grid && models[ri] && (zA > 0.5 || zB > 0.5)) {
+            // Legacy ground (no lattice): a shallow earth ribbon under
+            // the run — bounded, so big lots never become green cliffs.
+            const ribbon = 4 * scale * HEIGHT_EXAGGERATION;
             faces.push({
               kind: "skirt",
               depth: depth - 0.02,
-              quad: [proj(A, zA), proj(B, zB), proj(B, 0), proj(A, 0)],
+              quad: [
+                proj(A, zA),
+                proj(B, zB),
+                proj(B, Math.max(0, zB - ribbon)),
+                proj(A, Math.max(0, zA - ribbon)),
+              ],
               shaded,
               baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
             });
@@ -359,13 +462,14 @@ export function Fence3D({
       }
     });
 
-    // Posts as thin quads: ground → tallest adjacent panel (+cap).
-    const postW = Math.max(2.5, 0.45 * scale);
+    // Posts as thin quads: ground → tallest adjacent panel, with a cap.
+    const postW = Math.max(3, 0.55 * scale);
     for (const p of posts.values()) {
       const w = p.heavy ? postW * 1.6 : postW;
+      const depth = proj(p.plan, 0).y + 0.01; // draw just after coplanar panels
       faces.push({
         kind: "post",
-        depth: proj(p.plan, 0).y + 0.01, // draw just after coplanar panels
+        depth,
         quad: [
           proj({ x: p.plan.x - w / 2, y: p.plan.y }, p.zGround),
           proj({ x: p.plan.x + w / 2, y: p.plan.y }, p.zGround),
@@ -376,12 +480,28 @@ export function Fence3D({
         baseLenPx: w,
         heavy: p.heavy,
       });
+      // cap: a slightly wider sliver on top of the post
+      faces.push({
+        kind: "post",
+        depth: depth + 0.005,
+        quad: [
+          proj({ x: p.plan.x - w * 0.75, y: p.plan.y }, p.zPostTop),
+          proj({ x: p.plan.x + w * 0.75, y: p.plan.y }, p.zPostTop),
+          proj({ x: p.plan.x + w * 0.75, y: p.plan.y }, p.zPostTop + 0.16 * scale),
+          proj({ x: p.plan.x - w * 0.75, y: p.plan.y }, p.zPostTop + 0.16 * scale),
+        ],
+        shaded: false,
+        baseLenPx: w,
+        heavy: p.heavy,
+      });
     }
 
     faces.sort((f1, f2) => f1.depth - f2.depth);
 
-    // Ground: parcel rings at z=0.
-    const groundPaths = parcelRings.map((ring) => ring.map((p) => proj(p, 0)));
+    // Property line, draped on the terrain when we have it.
+    const groundPaths = parcelRings.map((ring) =>
+      ring.map((p) => proj(p, grid ? zOfPlan(p.x, p.y) + 1 : 0)),
+    );
 
     // Fit everything into the viewBox (labels get chip-sized headroom).
     const all: Pt[] = [
@@ -400,7 +520,7 @@ export function Fence3D({
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
       minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
     }
-    const margin = 46;
+    const margin = 40;
     const fit = Math.min(
       (VIEW_W - margin * 2) / Math.max(1, maxX - minX),
       (VIEW_H - margin * 2) / Math.max(1, maxY - minY),
@@ -417,6 +537,7 @@ export function Fence3D({
       if (f.kind !== "post") continue;
       const base = { x: (f.quad[0].x + f.quad[1].x) / 2, y: (f.quad[0].y + f.quad[1].y) / 2 };
       const top = { x: (f.quad[2].x + f.quad[3].x) / 2, y: (f.quad[2].y + f.quad[3].y) / 2 };
+      if (Math.abs(base.y - top.y) < 6) continue; // caps, not posts
       if (!marker || base.x < marker.base.x) marker = { base, top };
     }
 
@@ -432,9 +553,10 @@ export function Fence3D({
       gateCount,
       steppedCount,
       wallCount,
-      hasTerrain: models.some(Boolean),
+      hasSurface: !!grid,
+      reliefFt: Math.round(relief),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, retainingWall]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall]);
 
   if (!scene) {
     return (
@@ -444,7 +566,7 @@ export function Fence3D({
     );
   }
 
-  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount, wallCount } = scene;
+  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount, wallCount, hasSurface, reliefFt } = scene;
   const quadPath = (q: Face["quad"]) =>
     `M${q[0].x.toFixed(1)} ${q[0].y.toFixed(1)} L${q[1].x.toFixed(1)} ${q[1].y.toFixed(1)} L${q[2].x.toFixed(1)} ${q[2].y.toFixed(1)} L${q[3].x.toFixed(1)} ${q[3].y.toFixed(1)} Z`;
 
@@ -454,9 +576,9 @@ export function Fence3D({
         {/* sky→lawn backdrop */}
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#EAF3FA" />
-            <stop offset="52%" stopColor="#F1F6EC" />
-            <stop offset="100%" stopColor="#D5E4D2" />
+            <stop offset="0%" stopColor="#E6F1F9" />
+            <stop offset="52%" stopColor="#F0F5EA" />
+            <stop offset="100%" stopColor="#DCE8D4" />
           </linearGradient>
           <linearGradient id="f3d-earth" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#C7DBBD" />
@@ -465,20 +587,19 @@ export function Fence3D({
         </defs>
         <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
 
-        {/* property line on the ground */}
-        {groundPaths.map((ring, i) => (
-          <polygon
-            key={i}
-            points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
-            fill="rgba(63,166,91,0.05)"
-            stroke="#3FA65B"
-            strokeWidth={1.5}
-            strokeDasharray="7 5"
-          />
-        ))}
-
-        {/* faces, back to front (earth skirts sort with their sections) */}
+        {/* faces, back to front (terrain cells sort with everything else) */}
         {faces.map((f, i) => {
+          if (f.kind === "ground") {
+            return (
+              <path
+                key={i}
+                d={quadPath(f.quad)}
+                fill={f.fill}
+                stroke={f.fill}
+                strokeWidth={0.6}
+              />
+            );
+          }
           if (f.kind === "skirt") {
             return (
               <path
@@ -546,7 +667,6 @@ export function Fence3D({
               const lb = { x: a.x + (b.x - a.x) * s1, y: a.y + (b.y - a.y) * s1 };
               const lta = { x: ta.x + (tb.x - ta.x) * s0, y: ta.y + (tb.y - ta.y) * s0 };
               const ltb = { x: ta.x + (tb.x - ta.x) * s1, y: ta.y + (tb.y - ta.y) * s1 };
-              // hinge at the outer edge of each leaf; brace runs hinge-bottom → latch-top
               const hingeBottom = k === 0 ? la : lb;
               const latchTop = k === 0 ? ltb : lta;
               leafEls.push(
@@ -633,6 +753,22 @@ export function Fence3D({
             }
             return <g key={i}>{rails}</g>;
           }
+          // horizontal rails read through the boards on wood builds
+          if (style.lines === "pickets") {
+            for (const s of [0.22, 0.78]) {
+              details.push(
+                <line
+                  key={`rail-${s}`}
+                  x1={a.x + (ta.x - a.x) * s}
+                  y1={a.y + (ta.y - a.y) * s}
+                  x2={b.x + (tb.x - b.x) * s}
+                  y2={b.y + (tb.y - b.y) * s}
+                  stroke="rgba(0,0,0,0.08)"
+                  strokeWidth={2}
+                />,
+              );
+            }
+          }
           return (
             <g key={i}>
               <path d={quadPath(f.quad)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />
@@ -643,6 +779,19 @@ export function Fence3D({
             </g>
           );
         })}
+
+        {/* property line over the terrain */}
+        {groundPaths.map((ring, i) => (
+          <polygon
+            key={i}
+            points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
+            fill="none"
+            stroke="#3FA65B"
+            strokeWidth={1.5}
+            strokeDasharray="7 5"
+            opacity={0.85}
+          />
+        ))}
 
         {/* gate size labels — drawn last, always readable */}
         {labels.map((l, i) => {
@@ -697,6 +846,11 @@ export function Fence3D({
         {wallCount > 0 && (
           <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
             🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
+          </span>
+        )}
+        {hasSurface && reliefFt >= heightFt * 5 && (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+            {reliefFt}′ of total rise — hill softened to keep the fence readable
           </span>
         )}
       </div>
