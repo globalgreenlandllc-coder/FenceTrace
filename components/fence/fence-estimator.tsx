@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
+import { AddressAutocompleteInput } from "@/components/ui/address-autocomplete";
 import { cn } from "@/lib/utils";
 import { runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
 import { saveDraftFromEstimate } from "@/app/actions/proposals";
@@ -493,16 +494,17 @@ export function FenceEstimator() {
               — then you draw or confirm the fence in seconds.
             </p>
             <div className="mt-4 flex gap-2">
-              <div className="relative flex-1">
-                <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                <input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="123 Property Ln, Austin, TX"
-                  autoFocus
-                  className="ring-focus h-12 w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-3 text-[15px] text-zinc-900 placeholder:text-zinc-400 focus:border-accent-400"
-                />
-              </div>
+              <AddressAutocompleteInput
+                value={address}
+                onChange={setAddress}
+                onPick={(addr) => {
+                  setAddress(addr);
+                  void scanAddress(addr);
+                }}
+                placeholder="123 Property Ln, Austin, TX"
+                autoFocus
+                className="flex-1"
+              />
               <Button type="submit" disabled={scanState === "loading" || address.trim().length < 8} className="h-12 px-5">
                 {scanState === "loading" ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

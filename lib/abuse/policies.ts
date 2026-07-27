@@ -74,6 +74,19 @@ export const POLICIES = {
     "Terrain is busy — try again in a minute.",
   ),
 
+  /** Address autocomplete — Places suggestions fire per (debounced)
+   *  keystroke, so the budget is per-typing-session generous. */
+  addressSuggest: make(
+    "address.suggest",
+    "ABUSE_LIMIT_ADDRESS_SUGGEST",
+    [
+      { limit: 240, windowSec: HOUR },
+      { limit: 1200, windowSec: DAY },
+    ],
+    "open",
+    "Address search is busy — keep typing and try again in a moment.",
+  ),
+
   /** Blueprint analyze / re-analyze — the most expensive action in the app (3× Opus + ensemble). */
   blueprintAnalyze: make(
     "blueprint.analyze",

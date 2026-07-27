@@ -19,6 +19,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getRecentAddresses } from "@/app/actions/estimate";
+import {
+  PlacesAttribution,
+  usePlacesSuggestions,
+} from "@/components/ui/address-autocomplete";
 
 type JobType = "replacement" | "new";
 
@@ -293,13 +297,23 @@ function SatelliteTakeoffCard() {
     };
   }, []);
 
-  // Filter the dropdown by the current input. Empty input shows
-  // everything; typing narrows by case-insensitive substring.
+  // Live Places autocomplete rides along with the recents: recents
+  // filter by substring, Google fills in the rest (deduped, capped).
+  const { places } = usePlacesSuggestions(value);
   const suggestions = useMemo(() => {
     const q = value.trim().toLowerCase();
-    if (!q) return recents;
-    return recents.filter((a) => a.toLowerCase().includes(q));
-  }, [recents, value]);
+    const rec = (!q ? recents : recents.filter((a) => a.toLowerCase().includes(q))).map(
+      (text) => ({ text, kind: "recent" as const }),
+    );
+    const seen = new Set(rec.map((r) => r.text.toLowerCase()));
+    const live = places
+      .filter((p) => !seen.has(p.toLowerCase()))
+      .slice(0, 5)
+      .map((text) => ({ text, kind: "place" as const }));
+    return [...rec, ...live];
+  }, [recents, value, places]);
+  const hasRecent = suggestions.some((s) => s.kind === "recent");
+  const hasPlaces = suggestions.some((s) => s.kind === "place");
 
   const showDropdown = focused && suggestions.length > 0;
 
@@ -369,7 +383,7 @@ function SatelliteTakeoffCard() {
             // Enter while a dropdown row is highlighted picks that row,
             // otherwise submits whatever's in the input.
             if (highlight >= 0 && suggestions[highlight]) {
-              goAddress(suggestions[highlight]);
+              goAddress(suggestions[highlight].text);
             } else {
               goAddress();
             }
@@ -457,17 +471,17 @@ function SatelliteTakeoffCard() {
                     "px-3 pb-1 pt-0.5 text-zinc-400",
                   )}
                 >
-                  Recent addresses
+                  {hasRecent ? "Recent addresses" : "Address matches"}
                 </li>
                 {suggestions.map((s, i) => (
-                  <li key={s} role="option" aria-selected={i === highlight}>
+                  <li key={s.text} role="option" aria-selected={i === highlight}>
                     <button
                       type="button"
                       // mousedown fires before input blur — picks the
                       // option before the dropdown unmounts.
                       onMouseDown={(e) => {
                         e.preventDefault();
-                        goAddress(s);
+                        goAddress(s.text);
                       }}
                       onMouseEnter={() => setHighlight(i)}
                       className={cn(
@@ -477,11 +491,20 @@ function SatelliteTakeoffCard() {
                           : "text-zinc-700 hover:bg-zinc-50",
                       )}
                     >
-                      <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                      <span className="truncate">{s}</span>
+                      {s.kind === "recent" ? (
+                        <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                      ) : (
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                      )}
+                      <span className="truncate">{s.text}</span>
                     </button>
                   </li>
                 ))}
+                {hasPlaces && (
+                  <li aria-hidden>
+                    <PlacesAttribution />
+                  </li>
+                )}
               </ul>
             )}
           </div>
