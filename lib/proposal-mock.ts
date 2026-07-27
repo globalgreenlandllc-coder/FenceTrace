@@ -141,6 +141,15 @@ export type ProposalTakeoff = {
    *  estimate so the proposal's eave LF + re-price use the same scale
    *  (not the plan-mode PX_PER_FT=2.4). Absent for plan/older takeoffs. */
   canvasPxPerFt?: number;
+  /** FenceTrace: ground elevation (ft) sampled at every post position
+   *  along each run, same order as `eaves` — lets the proposal's 3D
+   *  preview draw the fence stepping down the real slope. Absent (or
+   *  misaligned after canvas edits) ⇒ the preview renders flat. */
+  runElevationsFt?: number[][];
+  /** Walk spacing (canvas px) the elevations were sampled at — tiers can
+   *  quote a fence type with a different post spacing, so the sampling
+   *  spacing must travel with the samples to re-pair them to the runs. */
+  elevationSpacingPx?: number;
 };
 
 export type Proposal = {

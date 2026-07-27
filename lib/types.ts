@@ -99,6 +99,11 @@ export type Downspout = {
   x: number;
   y: number;
   heightFt: number;
+  /** FenceTrace: downspouts carry gates. Kind + width let the proposal's
+   *  3D preview draw the gate at its real size with a label; absent on
+   *  gutter takeoffs and legacy fence drafts (treated as a 4' walk gate). */
+  gateKind?: "single" | "double" | "custom";
+  gateWidthFt?: number;
 };
 
 export type Stories = 1 | 2 | 3;

@@ -3,6 +3,8 @@
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
+import { rackingLimitFt } from "@/lib/fence/slope";
+import { runDistanceModel, type RunElevationModel } from "@/lib/fence/geo";
 
 /**
  * Fence3D — a to-scale isometric preview of the drawn fence, hand-rolled
@@ -11,19 +13,32 @@ import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
  *
  * Model: the 2D layout (canvas space, px) is rotated and foreshortened
  * into an axonometric ground plane; posts and panels extrude upward by
- * the fence height (ft × pxPerFt). Painter's algorithm sorts faces
- * back-to-front; panels facing "away" get the shaded tone so corners
- * read. Gates render as braced lighter panels with a marker.
+ * the fence height (ft × pxPerFt). When measured ground elevations are
+ * supplied the fence follows the real terrain: sections rack (tilt) up
+ * to the build kind's limit and STEP beyond it — level panels cascading
+ * down the slope on extended posts — with an earth skirt under each run
+ * so the hillside itself is visible. Painter's algorithm sorts faces
+ * back-to-front. Gates render at their real width as framed, braced
+ * leaves with a size label the client can read.
  */
 
 type Pt = { x: number; y: number };
+
+/** Gates from the estimator carry kind/widthFt; proposal takeoffs carry
+ *  gateKind/gateWidthFt on downspouts; legacy blobs carry only x/y. */
+type GateIn = Pt & {
+  kind?: "single" | "double" | "custom";
+  widthFt?: number;
+  gateKind?: "single" | "double" | "custom";
+  gateWidthFt?: number;
+};
 
 const VIEW_W = 900;
 const VIEW_H = 560;
 const ROT = (-28 * Math.PI) / 180;
 const SQUASH = 0.52;
 const HEIGHT_EXAGGERATION = 1.3; // readability: fences are long + short
-const GATE_HALF_FT = 2; // walk-gate visual half-width
+const GATE_SNAP_PX = 30; // gates farther than this from every run are ignored
 
 /** Rotate + foreshorten a plan point, then lift by z (screen px). */
 function proj(p: Pt, z: number): Pt {
@@ -33,8 +48,8 @@ function proj(p: Pt, z: number): Pt {
 }
 
 type Face = {
-  kind: "panel" | "gate" | "post";
-  /** Painter depth — projected plan-y of the base midpoint. */
+  kind: "panel" | "gate" | "post" | "skirt";
+  /** Painter depth — projected plan-y of the base midpoint (+bias). */
   depth: number;
   /** Quad corners in projected space: baseA, baseB, topB, topA. */
   quad: [Pt, Pt, Pt, Pt];
@@ -42,7 +57,13 @@ type Face = {
   shaded: boolean;
   /** Plan-space base segment (for picket/bar spacing). */
   baseLenPx: number;
+  /** Gate faces: 2 for a double gate's split leaves. */
+  leaves?: 1 | 2;
+  /** Posts: gate posts render heavier. */
+  heavy?: boolean;
 };
+
+type GateLabel = { anchor: Pt; text: string };
 
 const STYLES: Record<
   string,
@@ -56,6 +77,52 @@ const STYLES: Record<
   "split-rail": { face: "#B98F5C", shade: "#9A7344", post: "#7E5730", stroke: "#5F421F", lines: "rails" },
 };
 
+/** Cumulative arc lengths of a polyline (same length as points). */
+function cumLengths(pts: Pt[]): number[] {
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) {
+    cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y));
+  }
+  return cum;
+}
+
+/** Plan point at arc distance d along a polyline. */
+function pointAt(pts: Pt[], cum: number[], d: number): Pt {
+  const total = cum[cum.length - 1];
+  if (d <= 0) return pts[0];
+  if (d >= total) return pts[pts.length - 1];
+  let i = 1;
+  while (cum[i] < d) i++;
+  const span = cum[i] - cum[i - 1];
+  const s = span > 0 ? (d - cum[i - 1]) / span : 0;
+  return {
+    x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * s,
+    y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * s,
+  };
+}
+
+/** Nearest point on a polyline: arc distance + perpendicular offset. */
+function nearestOnPolyline(p: Pt, pts: Pt[], cum: number[]): { dist: number; perp: number } {
+  let best = { dist: 0, perp: Infinity };
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 0.25) continue;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+    const q = { x: a.x + dx * t, y: a.y + dy * t };
+    const perp = Math.hypot(p.x - q.x, p.y - q.y);
+    if (perp < best.perp) {
+      best = { dist: cum[i - 1] + Math.sqrt(len2) * t, perp };
+    }
+  }
+  return best;
+}
+
+const fmtFt = (w: number) => `${Math.round(w * 10) / 10}`;
+
 export function Fence3D({
   runs,
   gates,
@@ -63,16 +130,25 @@ export function Fence3D({
   typeId = "cedar-privacy",
   pxPerFt,
   parcelRings = [],
+  runElevationsFt,
+  elevationSpacingPx,
   className,
 }: {
   /** Fence runs in canvas space ({points} is all that's read). */
   runs: { points: Pt[] }[];
   /** Gate markers sitting on runs (canvas space). */
-  gates: Pt[];
+  gates: GateIn[];
   heightFt: number;
   typeId?: string;
   pxPerFt?: number;
   parcelRings?: Pt[][];
+  /** Measured ground elevations (ft) per run, walk-sampled at the post
+   *  spacing — same order as `runs`. Absent/misaligned ⇒ flat ground. */
+  runElevationsFt?: number[][];
+  /** Walk spacing the elevations were sampled at (canvas px). Defaults
+   *  to this fence type's post spacing — pass it when the rendered type
+   *  may differ from the type that was active when sampling. */
+  elevationSpacingPx?: number;
   className?: string;
 }) {
   const scene = useMemo(() => {
@@ -80,84 +156,209 @@ export function Fence3D({
     const style = STYLES[t.category] ?? STYLES.wood;
     const scale = pxPerFt && pxPerFt > 0 ? pxPerFt : 2.4;
     const zTop = heightFt * scale * HEIGHT_EXAGGERATION;
-    const postEvery = t.postSpacingFt * scale;
-    const gateHalf = GATE_HALF_FT * scale;
+    const spacingPx = t.postSpacingFt * scale;
+    const rackFt = rackingLimitFt(t.build);
 
-    const faces: Face[] = [];
-    const postBases: Pt[] = [];
+    // Terrain: one elevation model per run, all sharing one datum (the
+    // lowest sample across the layout) so the scene stays coherent.
+    const sampleSpacing =
+      elevationSpacingPx && elevationSpacingPx > 0 ? elevationSpacingPx : spacingPx;
+    const models: (RunElevationModel | null)[] = runs.map((r, i) =>
+      runDistanceModel(r.points, sampleSpacing, runElevationsFt?.[i] ?? []),
+    );
+    let minElev = Infinity;
+    models.forEach((m, i) => {
+      if (m) for (const v of runElevationsFt![i]) minElev = Math.min(minElev, v);
+    });
+    if (!Number.isFinite(minElev)) minElev = 0;
 
-    const nearGate = (p: Pt) =>
-      gates.some((g) => Math.hypot(g.x - p.x, g.y - p.y) < gateHalf);
+    const geo = runs.map((r) => ({ pts: r.points, cum: cumLengths(r.points) }));
+    const zOf = (ri: number, d: number) => {
+      const m = models[ri];
+      return m ? (m.atDistPx(d) - minElev) * scale * HEIGHT_EXAGGERATION : 0;
+    };
 
-    for (const run of runs) {
-      const pts = run.points;
-      for (let i = 1; i < pts.length; i++) {
-        const a = pts[i - 1];
-        const b = pts[i];
-        const segLen = Math.hypot(b.x - a.x, b.y - a.y);
-        if (segLen < 1) continue;
-        const ux = (b.x - a.x) / segLen;
-        const uy = (b.y - a.y) / segLen;
-        // Posts along the segment (always one at the start; the final
-        // vertex of the run gets one from the last chunk's end).
-        const chunks = Math.max(1, Math.ceil(segLen / postEvery));
-        for (let c = 0; c < chunks; c++) {
-          const s0 = (segLen * c) / chunks;
-          const s1 = (segLen * (c + 1)) / chunks;
-          const pa = { x: a.x + ux * s0, y: a.y + uy * s0 };
-          const pb = { x: a.x + ux * s1, y: a.y + uy * s1 };
-          postBases.push(pa);
-          if (c === chunks - 1) postBases.push(pb);
-          const mid = { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 };
-          const isGate = nearGate(mid);
-          const depth = proj(mid, 0).y;
-          // Outward normal (plan): (-uy, ux); shade faces pointing left.
-          const shaded = -uy < 0;
-          faces.push({
-            kind: isGate ? "gate" : "panel",
-            depth,
-            quad: [
-              proj(pa, 0),
-              proj(pb, 0),
-              proj(pb, zTop),
-              proj(pa, zTop),
-            ],
-            shaded,
-            baseLenPx: Math.hypot(pb.x - pa.x, pb.y - pa.y),
-          });
+    // Assign each gate to its nearest run as a span of arc distance.
+    const spansByRun: { c: number; w: number; kind: "single" | "double" | "custom" }[][] =
+      runs.map(() => []);
+    let gateCount = 0;
+    for (const g of gates) {
+      const kind = g.kind ?? g.gateKind ?? "single";
+      const widthFt = g.widthFt ?? g.gateWidthFt ?? (kind === "double" ? 10 : 4);
+      let bestRun = -1;
+      let best = { dist: 0, perp: Infinity };
+      geo.forEach((rg, ri) => {
+        if (rg.pts.length < 2) return;
+        const n = nearestOnPolyline(g, rg.pts, rg.cum);
+        if (n.perp < best.perp) {
+          best = n;
+          bestRun = ri;
         }
-      }
+      });
+      if (bestRun < 0 || best.perp > GATE_SNAP_PX) continue;
+      const total = geo[bestRun].cum[geo[bestRun].cum.length - 1];
+      const wPx = widthFt * scale;
+      if (total <= wPx + 2) continue; // run shorter than the gate
+      spansByRun[bestRun].push({
+        c: Math.max(wPx / 2, Math.min(total - wPx / 2, best.dist)),
+        w: wPx,
+        kind,
+      });
+      gateCount++;
     }
 
-    // Posts as thin quads slightly above panel tops (caps read as dots).
+    const faces: Face[] = [];
+    const labels: GateLabel[] = [];
+    let steppedCount = 0;
+
+    // Posts merge by (run, rounded distance): ground at the lowest read,
+    // top at the tallest adjacent panel — extended posts fall out free.
+    const posts = new Map<string, { plan: Pt; zGround: number; zPostTop: number; heavy: boolean }>();
+    const notePost = (ri: number, d: number, panelTopZ: number, heavy = false) => {
+      const key = `${ri}:${Math.round(d)}`;
+      const plan = pointAt(geo[ri].pts, geo[ri].cum, d);
+      const zGround = zOf(ri, d);
+      const prev = posts.get(key);
+      posts.set(key, {
+        plan,
+        zGround: prev ? Math.min(prev.zGround, zGround) : zGround,
+        zPostTop: Math.max(prev?.zPostTop ?? 0, panelTopZ),
+        heavy: (prev?.heavy ?? false) || heavy,
+      });
+    };
+
+    geo.forEach((rg, ri) => {
+      const total = rg.cum[rg.cum.length - 1];
+      if (rg.pts.length < 2 || total < 1) return;
+
+      // Cut the run into fence intervals and gate intervals.
+      const spans = spansByRun[ri].sort((a, b) => a.c - b.c);
+      type Interval = { s: number; e: number; gate?: { kind: "single" | "double" | "custom"; w: number } };
+      const intervals: Interval[] = [];
+      let cursor = 0;
+      for (const sp of spans) {
+        let s = sp.c - sp.w / 2;
+        const e = Math.min(total, sp.c + sp.w / 2);
+        if (s < cursor) s = cursor; // overlapping gates shrink, never overlap
+        if (e - s < 4) continue;
+        if (s - cursor > 0.5) intervals.push({ s: cursor, e: s });
+        intervals.push({ s, e, gate: { kind: sp.kind, w: sp.w } });
+        cursor = e;
+      }
+      if (total - cursor > 0.5) intervals.push({ s: cursor, e: total });
+
+      for (const iv of intervals) {
+        const len = iv.e - iv.s;
+        const A0 = pointAt(rg.pts, rg.cum, iv.s);
+        const B0 = pointAt(rg.pts, rg.cum, iv.e);
+        const ux = (B0.x - A0.x) / Math.max(1e-6, Math.hypot(B0.x - A0.x, B0.y - A0.y));
+        const uy = (B0.y - A0.y) / Math.max(1e-6, Math.hypot(B0.x - A0.x, B0.y - A0.y));
+        const shaded = -uy < 0;
+
+        if (iv.gate) {
+          // ---- gate: level leaf(s) with ground clearance + a label ----
+          const zA = zOf(ri, iv.s);
+          const zB = zOf(ri, iv.e);
+          const base = Math.max(zA, zB) + 0.12 * scale;
+          const top = base + zTop - 0.12 * scale;
+          const mid = { x: (A0.x + B0.x) / 2, y: (A0.y + B0.y) / 2 };
+          const depth = proj(mid, 0).y;
+          if (models[ri] && (zA > 0.5 || zB > 0.5)) {
+            faces.push({
+              kind: "skirt",
+              depth: depth - 0.02,
+              quad: [proj(A0, zA), proj(B0, zB), proj(B0, 0), proj(A0, 0)],
+              shaded,
+              baseLenPx: len,
+            });
+          }
+          faces.push({
+            kind: "gate",
+            depth,
+            quad: [proj(A0, base), proj(B0, base), proj(B0, top), proj(A0, top)],
+            shaded,
+            baseLenPx: len,
+            leaves: iv.gate.kind === "double" ? 2 : 1,
+          });
+          notePost(ri, iv.s, top + 0.55 * scale, true);
+          notePost(ri, iv.e, top + 0.55 * scale, true);
+          labels.push({
+            anchor: proj(mid, top + 2.6 * scale),
+            text: `${fmtFt(iv.gate.w / scale)}′ gate`,
+          });
+          continue;
+        }
+
+        // ---- fence: post-spaced sections, racked or stepped ----
+        const sections = Math.max(1, Math.ceil(len / spacingPx));
+        for (let c = 0; c < sections; c++) {
+          const d0 = iv.s + (len * c) / sections;
+          const d1 = iv.s + (len * (c + 1)) / sections;
+          const A = pointAt(rg.pts, rg.cum, d0);
+          const B = pointAt(rg.pts, rg.cum, d1);
+          const zA = zOf(ri, d0);
+          const zB = zOf(ri, d1);
+          const riseFt = (zB - zA) / (scale * HEIGHT_EXAGGERATION);
+          const stepped = !!models[ri] && Math.abs(riseFt) > rackFt;
+          const bzA = stepped ? Math.max(zA, zB) : zA;
+          const bzB = stepped ? Math.max(zA, zB) : zB;
+          if (stepped) steppedCount++;
+          const mid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
+          const depth = proj(mid, 0).y;
+          if (models[ri] && (zA > 0.5 || zB > 0.5)) {
+            faces.push({
+              kind: "skirt",
+              depth: depth - 0.02,
+              quad: [proj(A, zA), proj(B, zB), proj(B, 0), proj(A, 0)],
+              shaded,
+              baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+            });
+          }
+          faces.push({
+            kind: "panel",
+            depth,
+            quad: [proj(A, bzA), proj(B, bzB), proj(B, bzB + zTop), proj(A, bzA + zTop)],
+            shaded,
+            baseLenPx: Math.hypot(B.x - A.x, B.y - A.y),
+          });
+          notePost(ri, d0, bzA + zTop + 0.4 * scale);
+          notePost(ri, d1, bzB + zTop + 0.4 * scale);
+        }
+      }
+    });
+
+    // Posts as thin quads: ground → tallest adjacent panel (+cap).
     const postW = Math.max(2.5, 0.45 * scale);
-    for (const base of postBases) {
-      const depth = proj(base, 0).y + 0.01; // draw just after coplanar panels
+    for (const p of posts.values()) {
+      const w = p.heavy ? postW * 1.6 : postW;
       faces.push({
         kind: "post",
-        depth,
+        depth: proj(p.plan, 0).y + 0.01, // draw just after coplanar panels
         quad: [
-          proj({ x: base.x - postW / 2, y: base.y }, 0),
-          proj({ x: base.x + postW / 2, y: base.y }, 0),
-          proj({ x: base.x + postW / 2, y: base.y }, zTop + 0.4 * scale),
-          proj({ x: base.x - postW / 2, y: base.y }, zTop + 0.4 * scale),
+          proj({ x: p.plan.x - w / 2, y: p.plan.y }, p.zGround),
+          proj({ x: p.plan.x + w / 2, y: p.plan.y }, p.zGround),
+          proj({ x: p.plan.x + w / 2, y: p.plan.y }, p.zPostTop),
+          proj({ x: p.plan.x - w / 2, y: p.plan.y }, p.zPostTop),
         ],
         shaded: false,
-        baseLenPx: postW,
+        baseLenPx: w,
+        heavy: p.heavy,
       });
     }
 
     faces.sort((f1, f2) => f1.depth - f2.depth);
 
     // Ground: parcel rings at z=0.
-    const groundPaths = parcelRings.map((ring) =>
-      ring.map((p) => proj(p, 0)),
-    );
+    const groundPaths = parcelRings.map((ring) => ring.map((p) => proj(p, 0)));
 
-    // Fit everything into the viewBox.
+    // Fit everything into the viewBox (labels get chip-sized headroom).
     const all: Pt[] = [
       ...faces.flatMap((f) => f.quad),
       ...groundPaths.flat(),
+      ...labels.flatMap((l) => [
+        { x: l.anchor.x - l.text.length * 3.4 - 10, y: l.anchor.y - 24 },
+        { x: l.anchor.x + l.text.length * 3.4 + 10, y: l.anchor.y },
+      ]),
     ];
     if (all.length === 0) {
       return null;
@@ -176,15 +377,31 @@ export function Fence3D({
     const oy = (VIEW_H - (maxY - minY) * fit) / 2 - minY * fit;
     const T = (p: Pt): Pt => ({ x: p.x * fit + ox, y: p.y * fit + oy });
 
+    const fitFaces = faces.map((f) => ({ ...f, quad: f.quad.map(T) as Face["quad"] }));
+
+    // Height marker beside the leftmost post.
+    let marker: { base: Pt; top: Pt } | null = null;
+    for (const f of fitFaces) {
+      if (f.kind !== "post") continue;
+      const base = { x: (f.quad[0].x + f.quad[1].x) / 2, y: (f.quad[0].y + f.quad[1].y) / 2 };
+      const top = { x: (f.quad[2].x + f.quad[3].x) / 2, y: (f.quad[2].y + f.quad[3].y) / 2 };
+      if (!marker || base.x < marker.base.x) marker = { base, top };
+    }
+
     return {
       style,
       label: `${heightFt}' ${t.label}`,
-      faces: faces.map((f) => ({ ...f, quad: f.quad.map(T) as Face["quad"] })),
+      faces: fitFaces,
+      labels: labels.map((l) => ({ ...l, anchor: T(l.anchor) })),
       groundPaths: groundPaths.map((ring) => ring.map(T)),
-      fit,
+      marker,
       railCount: t.railsPerSection(heightFt),
+      capRail: t.category === "wood" || t.category === "vinyl",
+      gateCount,
+      steppedCount,
+      hasTerrain: models.some(Boolean),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx]);
 
   if (!scene) {
     return (
@@ -194,7 +411,7 @@ export function Fence3D({
     );
   }
 
-  const { style, faces, groundPaths, label, railCount } = scene;
+  const { style, faces, labels, groundPaths, marker, label, railCount, capRail, gateCount, steppedCount } = scene;
   const quadPath = (q: Face["quad"]) =>
     `M${q[0].x.toFixed(1)} ${q[0].y.toFixed(1)} L${q[1].x.toFixed(1)} ${q[1].y.toFixed(1)} L${q[2].x.toFixed(1)} ${q[2].y.toFixed(1)} L${q[3].x.toFixed(1)} ${q[3].y.toFixed(1)} Z`;
 
@@ -204,9 +421,13 @@ export function Fence3D({
         {/* sky→lawn backdrop */}
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#F4F8F3" />
-            <stop offset="58%" stopColor="#E8F0E6" />
+            <stop offset="0%" stopColor="#EAF3FA" />
+            <stop offset="52%" stopColor="#F1F6EC" />
             <stop offset="100%" stopColor="#D5E4D2" />
+          </linearGradient>
+          <linearGradient id="f3d-earth" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#C7DBBD" />
+            <stop offset="100%" stopColor="#A9C29B" />
           </linearGradient>
         </defs>
         <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
@@ -223,14 +444,84 @@ export function Fence3D({
           />
         ))}
 
-        {/* fence faces, back to front */}
+        {/* faces, back to front (earth skirts sort with their sections) */}
         {faces.map((f, i) => {
-          if (f.kind === "post") {
-            return <path key={i} d={quadPath(f.quad)} fill={style.post} stroke={style.stroke} strokeWidth={0.8} />;
+          if (f.kind === "skirt") {
+            return (
+              <path
+                key={i}
+                d={quadPath(f.quad)}
+                fill="url(#f3d-earth)"
+                stroke="rgba(46,72,42,0.14)"
+                strokeWidth={0.7}
+                strokeLinejoin="round"
+              />
+            );
           }
-          const fill = f.kind === "gate" ? "#EAD9BC" : f.shaded ? style.shade : style.face;
-          const details: React.ReactNode[] = [];
+          if (f.kind === "post") {
+            return (
+              <path
+                key={i}
+                d={quadPath(f.quad)}
+                fill={style.post}
+                stroke={style.stroke}
+                strokeWidth={f.heavy ? 1.2 : 0.8}
+              />
+            );
+          }
           const [a, b, tb, ta] = f.quad;
+          if (f.kind === "gate") {
+            // Framed, braced leaf(s) — lighter than the fence so it reads.
+            const leaves = f.leaves ?? 1;
+            const leafEls: React.ReactNode[] = [];
+            for (let k = 0; k < leaves; k++) {
+              const s0 = k / leaves;
+              const s1 = (k + 1) / leaves;
+              const la = { x: a.x + (b.x - a.x) * s0, y: a.y + (b.y - a.y) * s0 };
+              const lb = { x: a.x + (b.x - a.x) * s1, y: a.y + (b.y - a.y) * s1 };
+              const lta = { x: ta.x + (tb.x - ta.x) * s0, y: ta.y + (tb.y - ta.y) * s0 };
+              const ltb = { x: ta.x + (tb.x - ta.x) * s1, y: ta.y + (tb.y - ta.y) * s1 };
+              // hinge at the outer edge of each leaf; brace runs hinge-bottom → latch-top
+              const hingeBottom = k === 0 ? la : lb;
+              const latchTop = k === 0 ? ltb : lta;
+              leafEls.push(
+                <g key={k}>
+                  <path
+                    d={`M${la.x} ${la.y} L${lb.x} ${lb.y} L${ltb.x} ${ltb.y} L${lta.x} ${lta.y} Z`}
+                    fill="#EAD9BC"
+                    stroke={style.stroke}
+                    strokeWidth={1.4}
+                    strokeLinejoin="round"
+                  />
+                  <line x1={hingeBottom.x} y1={hingeBottom.y} x2={latchTop.x} y2={latchTop.y} stroke="rgba(0,0,0,0.25)" strokeWidth={1.6} />
+                </g>,
+              );
+            }
+            return (
+              <g key={i}>
+                {leafEls}
+                {leaves === 2 && (
+                  <line
+                    x1={(a.x + b.x) / 2}
+                    y1={(a.y + b.y) / 2}
+                    x2={(ta.x + tb.x) / 2}
+                    y2={(ta.y + tb.y) / 2}
+                    stroke={style.stroke}
+                    strokeWidth={1.4}
+                  />
+                )}
+                <circle
+                  cx={(a.x + b.x + ta.x + tb.x) / 4}
+                  cy={(a.y + b.y + ta.y + tb.y) / 4}
+                  r={2.4}
+                  fill="#3f3f46"
+                />
+              </g>
+            );
+          }
+          // panel
+          const fill = f.shaded ? style.shade : style.face;
+          const details: React.ReactNode[] = [];
           if (style.lines === "pickets" || style.lines === "bars") {
             const n = Math.max(2, Math.floor(f.baseLenPx / (style.lines === "bars" ? 10 : 7)));
             for (let k = 1; k < n; k++) {
@@ -281,19 +572,64 @@ export function Fence3D({
             <g key={i}>
               <path d={quadPath(f.quad)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />
               {details}
-              {f.kind === "gate" && (
-                <>
-                  <line x1={a.x} y1={a.y} x2={tb.x} y2={tb.y} stroke="rgba(0,0,0,0.22)" strokeWidth={1.4} />
-                  <circle cx={(ta.x + tb.x) / 2} cy={(ta.y + tb.y) / 2 - 7} r={5.5} fill="#f472b6" stroke="#fff" strokeWidth={1.5} />
-                </>
+              {capRail && (
+                <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={style.post} strokeWidth={2.2} strokeLinecap="round" />
               )}
             </g>
           );
         })}
+
+        {/* gate size labels — drawn last, always readable */}
+        {labels.map((l, i) => {
+          const w = l.text.length * 6.4 + 16;
+          return (
+            <g key={i}>
+              <line x1={l.anchor.x} y1={l.anchor.y} x2={l.anchor.x} y2={l.anchor.y + 9} stroke="#DB2777" strokeWidth={1.2} />
+              <rect x={l.anchor.x - w / 2} y={l.anchor.y - 20} width={w} height={20} rx={10} fill="rgba(255,255,255,0.95)" stroke="#DB2777" strokeWidth={1.2} />
+              <text x={l.anchor.x} y={l.anchor.y - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#9D174D">
+                {l.text}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* fence height dimension beside the leftmost post */}
+        {marker && (
+          <g stroke="#52525B" strokeWidth={1.2} fill="none">
+            <line x1={marker.base.x - 14} y1={marker.base.y} x2={marker.base.x - 14} y2={marker.top.y} />
+            <line x1={marker.base.x - 18} y1={marker.base.y} x2={marker.base.x - 10} y2={marker.base.y} />
+            <line x1={marker.base.x - 18} y1={marker.top.y} x2={marker.base.x - 10} y2={marker.top.y} />
+            <g stroke="none" fill="#3F3F46">
+              <text
+                x={marker.base.x - 22}
+                y={(marker.base.y + marker.top.y) / 2 + 4}
+                textAnchor="end"
+                fontSize={12}
+                fontWeight={700}
+              >
+                {heightFt}′
+              </text>
+            </g>
+          </g>
+        )}
       </svg>
-      <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
-        {label} — to scale
-      </span>
+
+      {/* client-readable summary chips */}
+      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">
+        <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+          {label} — to scale
+        </span>
+        {gateCount > 0 && (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
+            {gateCount} {gateCount === 1 ? "gate" : "gates"}
+          </span>
+        )}
+        {steppedCount > 0 && (
+          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
+            ⛰ {steppedCount} sections step down the slope
+          </span>
+        )}
+      </div>
     </div>
   );
 }

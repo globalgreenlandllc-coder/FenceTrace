@@ -196,6 +196,8 @@ export function AerialSection({
                 heightFt={fenceCfg!.heightFt}
                 typeId={fenceCfg!.type}
                 pxPerFt={takeoff!.canvasPxPerFt}
+                runElevationsFt={takeoff!.runElevationsFt}
+                elevationSpacingPx={takeoff!.elevationSpacingPx}
                 className="aspect-[16/10]"
               />
             ) : showDiagram ? (

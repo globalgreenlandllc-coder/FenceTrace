@@ -129,6 +129,48 @@ export function walkPostPositions(points: Pt[], spacingPx: number): Pt[] {
   return out;
 }
 
+export type RunElevationModel = {
+  /** Full arc length of the run, canvas px. */
+  totalPx: number;
+  /** Ground elevation (ft) at an arc distance along the run, clamped. */
+  atDistPx: (d: number) => number;
+};
+
+/** Pair walk-sampled elevations back onto arc distance along a run, so
+ *  the 3D preview can read the ground anywhere between posts. MUST be
+ *  built with the same spacing the sampler used — walk points are not
+ *  uniformly spaced (vertices are always kept), so we re-walk the
+ *  polyline and zip. Null when the counts don't match (stale layout —
+ *  render flat rather than guess) or there's nothing to model. */
+export function runDistanceModel(
+  points: Pt[],
+  spacingPx: number,
+  elevationsFt: number[],
+): RunElevationModel | null {
+  if (points.length < 2 || elevationsFt.length < 2) return null;
+  const walk = walkPostPositions(points, spacingPx);
+  if (walk.length !== elevationsFt.length) return null;
+  const dists: number[] = [0];
+  for (let i = 1; i < walk.length; i++) {
+    dists.push(
+      dists[i - 1] +
+        Math.hypot(walk[i].x - walk[i - 1].x, walk[i].y - walk[i - 1].y),
+    );
+  }
+  const totalPx = dists[dists.length - 1];
+  if (totalPx <= 0) return null;
+  const atDistPx = (d: number): number => {
+    if (d <= 0) return elevationsFt[0];
+    if (d >= totalPx) return elevationsFt[elevationsFt.length - 1];
+    let i = 1;
+    while (dists[i] < d) i++;
+    const span = dists[i] - dists[i - 1];
+    const s = span > 0 ? (d - dists[i - 1]) / span : 0;
+    return elevationsFt[i - 1] + (elevationsFt[i] - elevationsFt[i - 1]) * s;
+  };
+  return { totalPx, atDistPx };
+}
+
 /** Length of a canvas polyline in feet given the canvas scale. */
 export function canvasPolylineFt(points: Pt[], pxPerFt: number): number {
   if (pxPerFt <= 0) return 0;

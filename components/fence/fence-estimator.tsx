@@ -92,6 +92,15 @@ export function FenceEstimator() {
   // steps) or just the yard preview (informational only).
   const [slopeFromRuns, setSlopeFromRuns] = useState(false);
   const [slopeError, setSlopeError] = useState<string | null>(null);
+  // Raw per-run elevation samples for the DRAWN runs — feeds the 3D
+  // preview's terrain and rides along to the proposal blob. Carries the
+  // walk spacing used at sample time (the fence type can change before
+  // the resample lands). Null when the last sample covered the yard
+  // preview, not the drawn layout.
+  const [runElevRaw, setRunElevRaw] = useState<{
+    elevations: number[][];
+    spacingPx: number;
+  } | null>(null);
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
   const [view3d, setView3d] = useState(false);
@@ -112,6 +121,7 @@ export function FenceEstimator() {
     setLayout({ runs: [], gates: [] });
     setSlope(null);
     setSlopeError(null);
+    setRunElevRaw(null);
     setTerrainAuto(true);
     setScanState("idle");
   }
@@ -163,10 +173,16 @@ export function FenceEstimator() {
         // Say WHY there's no terrain readout — a silent blank reads as
         // broken (and hides a fixable key/setup problem).
         setSlopeError(res.reason);
+        setRunElevRaw(null);
         return;
       }
       setSlopeError(null);
       setSlopeFromRuns(layout.runs.length > 0);
+      setRunElevRaw(
+        layout.runs.length > 0
+          ? { elevations: res.runElevationsFt, spacingPx }
+          : null,
+      );
       const summary = summarizeSlopes(
         res.runElevationsFt,
         t.postSpacingFt,
@@ -276,6 +292,8 @@ export function FenceEstimator() {
       x: g.x,
       y: g.y,
       heightFt,
+      gateKind: g.kind,
+      gateWidthFt: g.widthFt,
     }));
     const res = await saveDraftFromEstimate({
       address: scan.address,
@@ -285,6 +303,8 @@ export function FenceEstimator() {
       downspouts,
       aerial: scan.aerial,
       canvasPxPerFt: scan.canvasPxPerFt,
+      runElevationsFt: runElevRaw?.elevations,
+      elevationSpacingPx: runElevRaw?.spacingPx,
       jobType,
       fence: {
         type: typeId,
@@ -419,6 +439,8 @@ export function FenceEstimator() {
                   typeId={typeId}
                   pxPerFt={scan.canvasPxPerFt}
                   parcelRings={scan.parcelRings}
+                  runElevationsFt={runElevRaw?.elevations}
+                  elevationSpacingPx={runElevRaw?.spacingPx}
                   className="aspect-[16/10]"
                 />
               ) : (

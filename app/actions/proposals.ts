@@ -296,6 +296,12 @@ export async function saveDraftFromEstimate(args: {
    *  Good/Better/Best packages are rebuilt around it (type ladder,
    *  gates/corners/terrain/removal baked into every tier's config). */
   fence?: FenceDraftInput;
+  /** FenceTrace: measured ground elevations per run (same order as
+   *  `eaves`) — stored on the takeoff blob so the client-facing 3D
+   *  preview shows the fence stepping down the real slope. */
+  runElevationsFt?: number[][];
+  /** Walk spacing (canvas px) the elevations were sampled at. */
+  elevationSpacingPx?: number;
 }): Promise<SaveDraftResult> {
   try {
     return await saveDraftFromEstimateImpl(args);
@@ -313,6 +319,8 @@ export async function saveDraftFromEstimate(args: {
 async function saveDraftFromEstimateImpl(args: {
   fence?: FenceDraftInput;
   canvasPxPerFt?: number;
+  runElevationsFt?: number[][];
+  elevationSpacingPx?: number;
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -385,6 +393,8 @@ async function saveDraftFromEstimateImpl(args: {
       downspouts: args.downspouts,
       aerial: args.aerial,
       canvasPxPerFt: args.canvasPxPerFt,
+      runElevationsFt: args.runElevationsFt,
+      elevationSpacingPx: args.elevationSpacingPx,
     },
     contractor: {
       name: me.profile.contractorName || me.user.name,

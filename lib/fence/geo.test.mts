@@ -6,6 +6,8 @@ import {
   canvasPxPerFt,
   centroid,
   latLngToCanvas,
+  runDistanceModel,
+  walkPostPositions,
   zoomToFit,
 } from "./geo.ts";
 
@@ -61,4 +63,40 @@ test("canvasPolylineFt sums segments; centroid averages", () => {
     { lat: 20, lng: 40 },
   ]);
   assert.deepEqual(c, { lat: 15, lng: 30 });
+});
+
+test("runDistanceModel: interpolates along the walk, clamps at the ends", () => {
+  // 100px straight run, spacing 40 → walk points at 0, 33.3, 66.7, 100.
+  const pts = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+  ];
+  const m = runDistanceModel(pts, 40, [0, 1, 2, 3]);
+  assert.ok(m);
+  assert.equal(m.totalPx, 100);
+  assert.equal(m.atDistPx(0), 0);
+  assert.equal(m.atDistPx(100), 3);
+  // halfway between samples 1 (33.33px) and 2 (66.67px)
+  assert.ok(Math.abs(m.atDistPx(50) - 1.5) < 1e-9);
+  // clamped outside the run
+  assert.equal(m.atDistPx(-10), 0);
+  assert.equal(m.atDistPx(999), 3);
+});
+
+test("runDistanceModel: L-shaped run keeps the vertex sample; mismatch → null", () => {
+  const pts = [
+    { x: 0, y: 0 },
+    { x: 80, y: 0 },
+    { x: 80, y: 40 },
+  ];
+  const walk = walkPostPositions(pts, 40);
+  const elevs = walk.map((_, i) => i); // one per walk point
+  const m = runDistanceModel(pts, 40, elevs);
+  assert.ok(m);
+  assert.equal(m.totalPx, 120);
+  // The corner (arc distance 80) is a real sample — exact, not interpolated.
+  assert.equal(m.atDistPx(80), elevs[2]);
+  // A stale sample count (layout edited since sampling) must refuse to model.
+  assert.equal(runDistanceModel(pts, 40, [1, 2, 3]), null);
+  assert.equal(runDistanceModel(pts, 40, []), null);
 });
