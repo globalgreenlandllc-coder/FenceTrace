@@ -93,6 +93,42 @@ export function centroid(points: LatLng[]): LatLng {
   return { lat: lat / points.length, lng: lng / points.length };
 }
 
+/** Inverse of latLngToCanvas — canvas point back to lat/lng for a map
+ *  centered on `center` at `zoom` (used to sample real-world elevation
+ *  along drawn fence runs). */
+export function canvasToLatLng(p: Pt, center: LatLng, zoom: number): LatLng {
+  const scale = Math.pow(2, zoom);
+  const c = worldCoord(center);
+  const mapPx = { x: p.x / CANVAS_PER_MAP, y: p.y / CANVAS_PER_MAP };
+  const wx = (mapPx.x - MAP_W / 2) / scale + c.x;
+  const wy = (mapPx.y - MAP_H / 2) / scale + c.y;
+  const lng = (wx / 256 - 0.5) * 360;
+  const n = Math.PI - (2 * Math.PI * wy) / 256;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lat, lng };
+}
+
+/** Positions along a polyline every `spacingPx`, vertices included —
+ *  the post positions of a run (used for elevation sampling + 3D). */
+export function walkPostPositions(points: Pt[], spacingPx: number): Pt[] {
+  if (points.length < 2 || spacingPx <= 0) return [...points];
+  const out: Pt[] = [points[0]];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (segLen < 0.5) continue;
+    const chunks = Math.max(1, Math.ceil(segLen / spacingPx));
+    for (let c = 1; c <= chunks; c++) {
+      out.push({
+        x: a.x + ((b.x - a.x) * c) / chunks,
+        y: a.y + ((b.y - a.y) * c) / chunks,
+      });
+    }
+  }
+  return out;
+}
+
 /** Length of a canvas polyline in feet given the canvas scale. */
 export function canvasPolylineFt(points: Pt[], pxPerFt: number): number {
   if (pxPerFt <= 0) return 0;

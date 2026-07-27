@@ -16,6 +16,7 @@ export type FenceDraftInput = {
   gatesDouble: number;
   corners: number;
   ends: number;
+  steppedSections?: number;
 };
 
 export type FenceTierPatch = {
@@ -65,6 +66,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         gatesDouble: input.gatesDouble,
         corners: input.corners,
         ends: input.ends,
+        steppedSections: input.steppedSections ?? 0,
       },
       highlights,
       markupPct: tier.markupPct,

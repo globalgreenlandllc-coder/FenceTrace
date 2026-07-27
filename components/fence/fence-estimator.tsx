@@ -30,7 +30,10 @@ import {
 } from "@/lib/fence/catalog";
 import { computeFenceTakeoff } from "@/lib/fence/takeoff";
 import { fenceTiers, priceFence } from "@/lib/fence/pricing";
-import { canvasPolylineFt } from "@/lib/fence/geo";
+import { canvasPolylineFt, canvasToLatLng, walkPostPositions } from "@/lib/fence/geo";
+import { sampleFenceElevations } from "@/app/actions/fence-topo";
+import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
+import { Mountain } from "lucide-react";
 import type { Downspout, EditableLine, Measurements } from "@/lib/types";
 
 /**
@@ -82,6 +85,9 @@ export function FenceEstimator() {
   const t = fenceType(typeId);
   const [heightFt, setHeightFt] = useState<number>(t.defaultHeightFt);
   const [terrain, setTerrain] = useState<Terrain>("flat");
+  // Terrain follows the measured grade until the contractor overrides it.
+  const [terrainAuto, setTerrainAuto] = useState(true);
+  const [slope, setSlope] = useState<SlopeSummary | null>(null);
   const [stain, setStain] = useState(false);
   const [removalLf, setRemovalLf] = useState(jobType === "replacement" ? -1 : 0);
   const [view3d, setView3d] = useState(false);
@@ -116,6 +122,37 @@ export function FenceEstimator() {
     if (!t.heightsFt.includes(heightFt)) setHeightFt(t.defaultHeightFt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeId]);
+
+  // Terrain from the sky: sample elevation at every post position along
+  // the drawn runs (debounced — one batched request per layout change)
+  // and derive grade, step-downs, and post sizing. Fail-safe: no
+  // elevation ⇒ the Ground picker simply stays manual.
+  useEffect(() => {
+    if (!scan || layout.runs.length === 0) {
+      setSlope(null);
+      return;
+    }
+    const spacingPx = t.postSpacingFt * scan.canvasPxPerFt;
+    const runsLatLng = layout.runs.map((r) =>
+      walkPostPositions(r.points, spacingPx).map((p) =>
+        canvasToLatLng(p, scan.center, scan.zoom),
+      ),
+    );
+    const timer = window.setTimeout(async () => {
+      const res = await sampleFenceElevations(runsLatLng);
+      if (!res.ok) return; // keep last good analysis; picker stays manual
+      const summary = summarizeSlopes(
+        res.runElevationsFt,
+        t.postSpacingFt,
+        heightFt,
+        t.build,
+      );
+      setSlope(summary);
+      if (terrainAuto) setTerrain(summary.suggestedTerrain);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout.runs, scan, typeId, heightFt]);
 
   /* ---- live math ---- */
   const totalLf = useMemo(
@@ -156,8 +193,9 @@ export function FenceEstimator() {
       wastePct: 10,
       removalLf: jobType === "replacement" ? effRemoval : 0,
       stain,
+      steppedSections: slope?.steppedSections ?? 0,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, terrain, effRemoval, stain, jobType, slope],
   );
 
   const takeoff = useMemo(
@@ -224,6 +262,7 @@ export function FenceEstimator() {
         gatesDouble,
         corners,
         ends,
+        steppedSections: slope?.steppedSections ?? 0,
       },
     });
     setSaving(false);
@@ -398,10 +437,20 @@ export function FenceEstimator() {
                 </div>
 
                 <div className="mt-3">
-                  <span className="font-label text-zinc-500">Ground</span>
+                  <span className="flex items-center gap-1.5 font-label text-zinc-500">
+                    Ground
+                    {terrainAuto && slope && (
+                      <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-200">
+                        auto
+                      </span>
+                    )}
+                  </span>
                   <select
                     value={terrain}
-                    onChange={(e) => setTerrain(e.target.value as Terrain)}
+                    onChange={(e) => {
+                      setTerrain(e.target.value as Terrain);
+                      setTerrainAuto(false);
+                    }}
                     className="input mt-1.5 w-full"
                   >
                     {(Object.keys(TERRAIN_LABEL) as Terrain[]).map((k) => (
@@ -410,6 +459,24 @@ export function FenceEstimator() {
                       </option>
                     ))}
                   </select>
+                  {slope && slope.runs.length > 0 && (
+                    <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-zinc-50 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-600 ring-1 ring-inset ring-zinc-200">
+                      <Mountain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-600" />
+                      <span>
+                        Grade {slope.avgGradePct}% avg · {slope.maxGradePct}% max.{" "}
+                        {slope.steppedSections > 0 ? (
+                          <>
+                            <strong>{slope.steppedSections}</strong>{" "}
+                            {slope.steppedSections === 1 ? "section steps" : "sections step"}{" "}
+                            down the slope — {slope.stepPostLengthFt}&apos; posts there,{" "}
+                            {slope.basePostLengthFt}&apos; elsewhere.
+                          </>
+                        ) : (
+                          <>Racks with the grade — {slope.basePostLengthFt}&apos; posts throughout.</>
+                        )}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3 space-y-2 text-sm">

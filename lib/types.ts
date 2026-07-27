@@ -172,6 +172,8 @@ export type FenceEstimateConfig = {
   gatesDouble: number;
   corners: number;
   ends: number;
+  /** Sections stepping down a measured slope (terrain analysis). */
+  steppedSections?: number;
 };
 
 export type EstimateConfig = {

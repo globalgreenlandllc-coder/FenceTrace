@@ -34,6 +34,9 @@ export type FenceLayoutInput = {
   removalLf?: number;
   /** Stain/seal both faces after install (wood only). */
   stain?: boolean;
+  /** Sections that must STEP down a slope (from the terrain analysis) —
+   *  each needs an extended post and extra set/trim time. */
+  steppedSections?: number;
 };
 
 export type BomLine = {
@@ -155,6 +158,14 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     add("rail", "Rails", rails * waste, "ea");
   }
 
+  if ((input.steppedSections ?? 0) > 0) {
+    add(
+      "step-posts",
+      "Extended posts for stepped sections (slope)",
+      input.steppedSections!,
+      "ea",
+    );
+  }
   add("post-cap", "Post caps", totalPosts, "ea");
   add("gate-single", "Walk gate kit (4')", input.gatesSingle, "ea");
   add("gate-double", "Drive gate kit (10')", input.gatesDouble, "ea");
@@ -184,6 +195,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const laborHours =
     (netFenceLf / lfPerHour) * TERRAIN_FACTOR[input.terrain] * hf +
     (input.gatesSingle + input.gatesDouble) * 1.5 +
+    (input.steppedSections ?? 0) * 0.4 +
     (input.removalLf ?? 0) / 12;
 
   return {

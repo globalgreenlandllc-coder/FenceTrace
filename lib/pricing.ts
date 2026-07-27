@@ -158,6 +158,16 @@ function buildFenceLineItems(
       unitPrice: round2(t.gateSingle * 2.4),
       taxable: true,
     });
+  if ((fence.steppedSections ?? 0) > 0)
+    lines.push({
+      id: "fence-steps",
+      name: "Slope steps — extended posts & leveling",
+      description: `${fence.steppedSections} stepped ${fence.steppedSections === 1 ? "section" : "sections"} on the grade`,
+      quantity: fence.steppedSections!,
+      unit: "ea",
+      unitPrice: 28,
+      taxable: true,
+    });
   if (fence.removalLf > 0)
     lines.push({
       id: "fence-removal",
