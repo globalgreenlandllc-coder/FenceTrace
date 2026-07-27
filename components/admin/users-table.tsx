@@ -89,7 +89,7 @@ export function UsersTable({
 
   return (
     <>
-      <div className="surface overflow-hidden shadow-card">
+      <div className="surface shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 p-4">
           <div className="flex flex-wrap gap-1">
             {(

@@ -176,7 +176,7 @@ export function ProposalsTable({
   ).length;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-200/70 bg-white shadow-card">
+    <div className="rounded-2xl border border-zinc-200/70 bg-white shadow-card">
       {showFilters && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 p-4">
           <div className="flex flex-wrap gap-1.5">
@@ -657,7 +657,7 @@ function RowMenu({
       </button>
       {open && (
         <div
-          className="anim-pop origin-top-right absolute right-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-elevated"
+          className="anim-pop origin-top-right absolute right-0 top-full z-50 mt-1 w-64 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-elevated"
           onClick={(e) => e.stopPropagation()}
         >
           {!confirming ? (

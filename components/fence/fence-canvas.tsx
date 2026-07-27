@@ -68,6 +68,15 @@ export function FenceCanvas({
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [draft, setDraft] = useState<Pt[]>([]);
   const [hover, setHover] = useState<Pt | null>(null);
+  // Ghost gate under the cursor in gate mode; transient helper notices.
+  const [gateGhost, setGateGhost] = useState<Pt | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const say = (msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 2400);
+  };
 
   const pxPerFt = scan.canvasPxPerFt;
 
@@ -151,8 +160,15 @@ export function FenceCanvas({
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "Escape") setDraft([]);
       if (e.key === "Enter" && draft.length >= 2) finishDraft();
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedRun) {
-        removeRun(selectedRun);
+      if (e.key === "Delete" || e.key === "Backspace") {
+        // While drawing, Backspace steps back one post; only with no
+        // draft does it delete the selected run.
+        if (draft.length > 0) {
+          e.preventDefault();
+          setDraft((d) => d.slice(0, -1));
+        } else if (selectedRun) {
+          removeRun(selectedRun);
+        }
       }
     }
     window.addEventListener("keydown", onKey);
@@ -161,9 +177,9 @@ export function FenceCanvas({
 
   /* ---- gate tool: nearest point on any run segment ---- */
 
-  function nearestOnRuns(p: Pt): Pt | null {
+  function nearestOnRuns(p: Pt, tolerance = 34): Pt | null {
     let best: Pt | null = null;
-    let bestD = 18;
+    let bestD = tolerance;
     for (const run of layout.runs) {
       for (let i = 1; i < run.points.length; i++) {
         const a = run.points[i - 1];
@@ -192,12 +208,18 @@ export function FenceCanvas({
       return;
     }
     if (tool === "gate") {
+      if (layout.runs.length === 0) {
+        say("Draw a fence line first — gates hang on the fence.");
+        return;
+      }
       const q = nearestOnRuns(raw);
       if (q) {
         onChange({
           ...layout,
           gates: [...layout.gates, { id: nextId("gate"), ...q, kind: gateKind }],
         });
+      } else {
+        say("Tap on (or near) a fence line to place the gate.");
       }
       return;
     }
@@ -272,7 +294,26 @@ export function FenceCanvas({
             ))}
           </div>
         )}
-        {scan.suggestedRuns.length > 0 && (
+        {draft.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={finishDraft}
+              disabled={draft.length < 2}
+              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-accent-700 disabled:opacity-50"
+            >
+              ✓ Finish run
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft([])}
+              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
+            >
+              ✕ Cancel
+            </button>
+          </>
+        )}
+        {scan.suggestedRuns.length > 0 && draft.length === 0 && (
           <button
             type="button"
             onClick={usePropertyLine}
@@ -314,8 +355,21 @@ export function FenceCanvas({
           }}
           onMouseMove={(e) => {
             if (tool === "draw") setHover(snap(toCanvas(e)));
+            else if (tool === "gate") setGateGhost(nearestOnRuns(toCanvas(e)));
           }}
-          onMouseLeave={() => setHover(null)}
+          onMouseLeave={() => {
+            setHover(null);
+            setGateGhost(null);
+          }}
+          onContextMenu={(e) => {
+            // Right-click = finish (or cancel an empty draft) — the "let
+            // go of the line" gesture.
+            if (tool === "draw") {
+              e.preventDefault();
+              if (draft.length >= 2) finishDraft();
+              else setDraft([]);
+            }
+          }}
         >
           <image
             href={scan.aerial.imageDataUrl}
@@ -395,6 +449,20 @@ export function FenceCanvas({
             </g>
           )}
 
+          {/* Ghost gate preview in gate mode */}
+          {tool === "gate" && gateGhost && (
+            <circle
+              cx={gateGhost.x}
+              cy={gateGhost.y}
+              r={9}
+              fill="rgba(244,114,182,0.35)"
+              stroke="#f472b6"
+              strokeWidth={2}
+              strokeDasharray="4 3"
+              pointerEvents="none"
+            />
+          )}
+
           {/* Gates */}
           {layout.gates.map((g) => (
             <g
@@ -418,9 +486,16 @@ export function FenceCanvas({
         </svg>
       </div>
 
+      {notice && (
+        <p className="anim-enter-fade rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-200">
+          {notice}
+        </p>
+      )}
       <p className="text-xs text-zinc-400">
         {tool === "draw"
-          ? "Click to place fence posts along the line — double-click or press Enter to finish a run, Esc to cancel. Points snap to the property corners."
+          ? draft.length > 0
+            ? "Click to keep adding posts — ✓ Finish (or double-click / right-click / Enter) ends the run · Backspace steps back · Esc cancels."
+            : "Click to start a fence line. Points snap to the property corners and to your other runs."
           : tool === "gate"
             ? "Click anywhere on a fence line to place the gate. Click a gate to remove it."
             : "Click a fence run to select it — Delete removes it. The dashed green line is the recorded property boundary."}
