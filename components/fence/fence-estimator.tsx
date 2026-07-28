@@ -167,6 +167,10 @@ export function FenceEstimator() {
     setTerrainAuto(true);
     setWallTop(false);
     setWallLfInput(null);
+    // The PREVIOUS property's contours must never paint over the new
+    // photo while the fresh lattice loads.
+    setTopoGrid(null);
+    setTopoError(null);
     setScanState("idle");
   }
 
