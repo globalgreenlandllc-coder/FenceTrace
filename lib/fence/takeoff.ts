@@ -76,6 +76,13 @@ export type FenceTakeoff = {
 const GATE_SINGLE_OPENING_FT = 4;
 const GATE_DOUBLE_OPENING_FT = 10;
 
+const CAP_LABEL: Record<string, string> = {
+  flat: "Flat",
+  pyramid: "Pyramid",
+  gothic: "Gothic",
+  dome: "Dome",
+};
+
 /** Concrete bags per set post — deeper holes for taller fences. */
 function concreteBagsPerPost(heightFt: number): number {
   return heightFt >= 8 ? 3 : heightFt >= 6 ? 2 : 1.5;
@@ -145,12 +152,23 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   add("post-corner", "Corner posts", cornerPosts, "ea");
   add("post-end", "End posts", endPosts, "ea");
   add("post-gate", "Gate posts (heavy-set)", gatePosts, "ea");
-  add(
-    "concrete",
-    "Concrete (60 lb bags)",
-    (totalPosts - wallPosts) * concreteBagsPerPost(input.heightFt),
-    "bag",
-  );
+  if (t.spec.setInConcrete) {
+    add(
+      "concrete",
+      "Concrete (60 lb bags)",
+      (totalPosts - wallPosts) * concreteBagsPerPost(input.heightFt),
+      "bag",
+    );
+  } else {
+    // Split rail is dropped in and tamped so the rails can be re-seated
+    // as the ground heaves — gravel backfill, never concrete.
+    add(
+      "gravel",
+      "Gravel backfill (50 lb bags)",
+      (totalPosts - wallPosts) * 2,
+      "bag",
+    );
+  }
   add(
     "wall-anchor",
     "Wall-top post anchors (core-drill + epoxy)",
@@ -177,10 +195,22 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     );
   } else if (t.build === "panel") {
     add("panel", `${t.label} panels (${t.postSpacingFt}')`, sections * waste, "ea");
-    add("bracket", "Panel brackets (pairs)", sections * 2, "ea");
+    if (t.category === "vinyl") {
+      // Vinyl rails slide THROUGH routed posts — no brackets at all. A
+      // privacy panel's bottom rail carries an aluminum stiffener so it
+      // can't sag between posts.
+      if (t.id === "vinyl-privacy") {
+        add("rail-stiffener", "Bottom-rail aluminum stiffeners", sections, "ea");
+      }
+    } else {
+      add("bracket", "Panel brackets (pairs)", sections * 2, "ea");
+    }
   } else if (t.build === "mesh") {
     add("mesh", "Chain-link fabric", netFenceLf * waste, "lf");
     add("top-rail", "Top rail", netFenceLf * waste, "lf");
+    // Residential chain link has no bottom rail — a 7-ga tension wire
+    // runs the base to stop the fabric being pushed up.
+    add("tension-wire", "Bottom tension wire (7-ga)", netFenceLf * waste, "lf");
     add("tension-bar", "Tension bars", input.ends + input.corners + gatePosts, "ea");
     // Bands only wrap TERMINAL posts (ends/corners/gate posts) — line
     // posts carry the fabric on the top rail and ties.
@@ -214,7 +244,15 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
       "ea",
     );
   }
-  add("post-cap", "Post caps", totalPosts, "ea");
+  // Caps are per-system hardware, not a generic line: chain-link line
+  // posts take loop caps that the top rail threads through while their
+  // terminals take solid domes, and split rail is capped with nothing.
+  if (t.spec.postCap === "loop") {
+    add("cap-loop", "Loop caps (line posts)", linePosts, "ea");
+    add("cap-dome", "Dome caps (terminal posts)", cornerPosts + endPosts + gatePosts, "ea");
+  } else if (t.spec.postCap !== "none") {
+    add("post-cap", `${CAP_LABEL[t.spec.postCap]} post caps`, totalPosts, "ea");
+  }
   add("gate-single", "Walk gate kit (4')", input.gatesSingle, "ea");
   add("gate-double", "Drive gate kit (10')", input.gatesDouble, "ea");
   customGates.forEach((w, i) => {

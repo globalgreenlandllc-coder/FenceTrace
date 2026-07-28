@@ -45,6 +45,11 @@ const VIEW_H = 560;
 const DEFAULT_YAW_DEG = -28;
 const DEFAULT_SQUASH = 0.52;
 const HEIGHT_EXAGGERATION = 1.3; // readability: fences are long + short
+/** Posts render at TRUE stock width so a 1⅝″ chain-link pipe can't be
+ *  mistaken for a 5×5 vinyl post — with a small uniform gain (ratios
+ *  preserved) and a floor, or thin pipe would vanish on a big lot. */
+const POST_GAIN = 1.5;
+const POST_MIN_PX = 0.7;
 const GATE_SNAP_PX = 30; // gates farther than this from every run are ignored
 const EYE_FT = 5.5; // walk-mode eye height
 const WALK_FT_PER_S = 16;
@@ -74,6 +79,17 @@ type WFace = {
   sub?: boolean;
   /** Panels: nominal height in feet (drives horizontal-board counts). */
   hFt?: number;
+  /** Posts: round stock (chain-link pipe, split-rail cedar) shades as a
+   *  cylinder; square stock (4×4, vinyl 5×5, ornamental tube) as a box. */
+  round?: boolean;
+  /** Posts: terminal (corner / end / gate) stock — heavier on every
+   *  system, and the one that carries chain-link fabric tension. */
+  term?: boolean;
+  /** Post caps: the shape actually sold for this system. */
+  cap?: "flat" | "pyramid" | "gothic" | "dome" | "loop";
+  /** Posts: which fence type's stock stands here — so a chain-link span
+   *  inside a cedar job gets galvanized pipe, not a brown 4×4. */
+  tid?: string;
 };
 
 type WLabel = { anchor: V3; text: string };
@@ -86,17 +102,48 @@ type ProjFace = {
   depth: number;
 };
 
-const STYLES: Record<
-  string,
-  { face: string; shade: string; post: string; stroke: string; lines?: "pickets" | "bars" | "mesh" | "rails" }
-> = {
+type FStyle = {
+  face: string;
+  shade: string;
+  post: string;
+  stroke: string;
+  lines?: "pickets" | "bars" | "mesh" | "rails";
+  /** Chain link: the woven fabric and the framework it hangs on. */
+  mesh?: string;
+  rail?: string;
+};
+
+const STYLES: Record<string, FStyle> = {
   wood: { face: "#BC8A52", shade: "#9A6C3C", post: "#7E5730", stroke: "#5F421F", lines: "pickets" },
   vinyl: { face: "#F4F4EE", shade: "#DDDDD4", post: "#E9E9E2", stroke: "#9C9C92" },
-  "chain-link": { face: "rgba(148,158,166,0.28)", shade: "rgba(120,130,138,0.34)", post: "#8B9298", stroke: "#6E767D", lines: "mesh" },
-  aluminum: { face: "#33373D", shade: "#26292E", post: "#1E2126", stroke: "#101215", lines: "bars" },
-  steel: { face: "#2E3237", shade: "#222528", post: "#1A1D21", stroke: "#0E1013", lines: "bars" },
+  // Chain link is a SCREEN, not a wall — the yard has to show through it.
+  "chain-link": { face: "rgba(148,158,166,0.17)", shade: "rgba(120,130,138,0.22)", post: "#8B9298", stroke: "#6E767D", lines: "mesh", mesh: "rgba(88,98,106,0.46)", rail: "#9AA3AA" },
+  // Ornamental is mostly air: the face tone is a hint of plane, and the
+  // pickets themselves are what you actually see.
+  aluminum: { face: "rgba(38,42,48,0.10)", shade: "rgba(30,33,38,0.16)", post: "#1E2126", stroke: "#2B2F35", lines: "bars" },
+  steel: { face: "rgba(32,36,40,0.12)", shade: "rgba(26,29,33,0.18)", post: "#1A1D21", stroke: "#23272C", lines: "bars" },
   "split-rail": { face: "#B98F5C", shade: "#9A7344", post: "#7E5730", stroke: "#5F421F", lines: "rails" },
 };
+
+/** Per-TYPE overrides, for categories that ship in more than one finish.
+ *  Black vinyl-coated chain link is a different fence to look at than
+ *  galvanized even though the framework underneath is identical. */
+const TYPE_STYLE: Record<string, Partial<FStyle>> = {
+  "chain-link-black": {
+    face: "rgba(34,40,44,0.16)",
+    shade: "rgba(24,29,32,0.22)",
+    post: "#2C3236",
+    stroke: "#16191B",
+    mesh: "rgba(26,31,34,0.52)",
+    rail: "#3B4247",
+  },
+};
+
+function styleOf(t: { id: string; category: string }): FStyle {
+  const base = STYLES[t.category] ?? STYLES.wood;
+  const over = TYPE_STYLE[t.id];
+  return over ? { ...base, ...over } : base;
+}
 
 /** Wood/vinyl subtypes that build differently get their own detail
  *  pass — so a shadowbox reads as a shadowbox, not generic "wood". */
@@ -307,7 +354,7 @@ export function Fence3D({
   /* ================= world model (camera-independent) ================ */
   const world = useMemo(() => {
     const t = fenceType(typeId as FenceTypeId);
-    const style = STYLES[t.category] ?? STYLES.wood;
+    const style = styleOf(t);
     const scale = pxPerFt && pxPerFt > 0 ? pxPerFt : 2.4;
     const zTop = heightFt * scale * HEIGHT_EXAGGERATION;
     const spacingPx = t.postSpacingFt * scale;
@@ -391,6 +438,17 @@ export function Fence3D({
       soften(bilinear(x, y) - minElev) * scale * HEIGHT_EXAGGERATION;
 
     const geo = runs.map((r) => ({ pts: r.points, cum: cumLengths(r.points) }));
+    // Terminal posts: every run end and every corner. On chain link these
+    // are the 2⅜″ pipes that take the fabric tension; on wood they're the
+    // 4×6 at the gate. Everything between them is lighter line stock.
+    const terminalDs = geo.map((rg) => {
+      const total = rg.cum[rg.cum.length - 1];
+      const ds = [0, total];
+      for (let i = 1; i < rg.pts.length - 1; i++) ds.push(rg.cum[i]);
+      return ds;
+    });
+    const isTerminal = (ri: number, d: number) =>
+      terminalDs[ri].some((td) => Math.abs(td - d) < 0.75);
     const hasGroundFor = (ri: number) => !!grid || !!models[ri];
     const elevAt = (ri: number, d: number): number => {
       if (grid) {
@@ -618,8 +676,20 @@ export function Fence3D({
     }
 
     // Posts merge by (run, rounded distance).
-    const posts = new Map<string, { plan: Pt; zGround: number; zPostTop: number; heavy: boolean }>();
-    const notePost = (ri: number, d: number, panelTopZ: number, heavy = false, zBase?: number) => {
+    const posts = new Map<
+      string,
+      { plan: Pt; zGround: number; zPostTop: number; heavy: boolean; tid: FenceTypeId }
+    >();
+    const notePost = (
+      ri: number,
+      d: number,
+      panelTopZ: number,
+      heavy = false,
+      zBase?: number,
+      /** The fence type standing at this post — a mixed-type span puts
+       *  ITS post stock here (steel pipe where chain link takes over). */
+      tid: FenceTypeId = t.id,
+    ) => {
       const key = `${ri}:${Math.round(d)}`;
       const plan = pointAt(geo[ri].pts, geo[ri].cum, d);
       const zGround = zBase ?? zOf(ri, d);
@@ -628,7 +698,8 @@ export function Fence3D({
         plan,
         zGround: prev ? Math.min(prev.zGround, zGround) : zGround,
         zPostTop: Math.max(prev?.zPostTop ?? 0, panelTopZ),
-        heavy: (prev?.heavy ?? false) || heavy,
+        heavy: (prev?.heavy ?? false) || heavy || isTerminal(ri, d),
+        tid: prev?.tid ?? tid,
       });
     };
 
@@ -677,8 +748,12 @@ export function Fence3D({
             baseLenPx: len,
             leaves: iv.gate.kind === "double" ? 2 : 1,
           });
-          notePost(ri, iv.s, top + 0.55 * scale, true);
-          notePost(ri, iv.e, top + 0.55 * scale, true);
+          // Gate posts are terminals: they stand as proud as the system
+          // allows, plus a touch, so the cap clears the swinging leaf.
+          const gateTopZ =
+            top + (t.spec.postProudIn / 12 + 0.1) * scale * HEIGHT_EXAGGERATION;
+          notePost(ri, iv.s, gateTopZ, true);
+          notePost(ri, iv.e, gateTopZ, true);
           labels.push({
             anchor: { x: mid.x, y: mid.y, z: top + 2.6 * scale },
             text: `${fmtFt(iv.gate.w / scale)}′ gate`,
@@ -803,8 +878,14 @@ export function Fence3D({
             alt,
             hFt: zTopLocal / (scale * HEIGHT_EXAGGERATION),
           });
-          notePost(ri, d0, bzA + zTopLocal + 0.4 * scale, false, wallish ? bzA : undefined);
-          notePost(ri, d1, bzB + zTopLocal + 0.4 * scale, false, wallish ? bzB : undefined);
+          // How far the post stands above the fabric is a per-system
+          // tell: a vinyl cap floats above the panel, a chain-link line
+          // post dies flush into the top rail (proud = 0).
+          const chunkT = altT ?? t;
+          const proudZ =
+            (chunkT.spec.postProudIn / 12) * scale * HEIGHT_EXAGGERATION;
+          notePost(ri, d0, bzA + zTopLocal + proudZ, false, wallish ? bzA : undefined, chunkT.id);
+          notePost(ri, d1, bzB + zTopLocal + proudZ, false, wallish ? bzB : undefined, chunkT.id);
           {
             const shCat = alt ? alt.cat : t.category;
             const shId = alt?.id ?? t.id;
@@ -830,11 +911,52 @@ export function Fence3D({
       }
     });
 
-    const postW = Math.max(3, 0.55 * scale) * (postUpgrade === "6x6" ? 1.4 : 1);
+    // Posts draw at TRUE stock width — a 1⅝″ chain-link pipe next to a
+    // 5×5 vinyl post is a 3× difference, and that difference is most of
+    // what tells the two systems apart from across the yard.
+    const postPx = (widthIn: number) =>
+      Math.max(POST_MIN_PX, (widthIn / 12) * scale * POST_GAIN);
+    /** Cap heights, feet — a gothic vinyl cap is a real silhouette, a
+     *  chain-link loop cap barely clears the pipe. */
+    const CAP_FT: Record<string, number> = {
+      flat: 0.08,
+      pyramid: 0.18,
+      gothic: 0.3,
+      dome: 0.14,
+      loop: 0.1,
+    };
     for (const p of posts.values()) {
-      const w = p.heavy ? postW * 1.6 : postW;
+      const ps = fenceType(p.tid).spec;
+      // A post upgrade overrides the system's own stock everywhere.
+      const widthIn =
+        postUpgrade === "6x6"
+          ? 5.5
+          : postUpgrade === "steel"
+            ? 2.5
+            : p.heavy
+              ? ps.terminalWidthIn
+              : ps.postWidthIn;
+      const round = !postUpgrade && ps.postProfile === "round";
+      // Loop caps carry the top rail on chain-link LINE posts; the
+      // terminals that anchor the fabric get a solid dome instead.
+      const cap =
+        ps.postCap === "none"
+          ? null
+          : ps.postCap === "loop" && p.heavy
+            ? ("dome" as const)
+            : ps.postCap;
+      const w = postPx(widthIn);
+      const common = {
+        kind: "post" as const,
+        shaded: false,
+        baseLenPx: w,
+        heavy: p.heavy,
+        round,
+        term: p.heavy,
+        tid: p.tid,
+      };
       faces.push({
-        kind: "post",
+        ...common,
         bias: 0.008,
         pts: [
           { x: p.plan.x, y: p.plan.y - w / 2, z: p.zGround },
@@ -842,13 +964,10 @@ export function Fence3D({
           { x: p.plan.x, y: p.plan.y + w / 2, z: p.zPostTop },
           { x: p.plan.x, y: p.plan.y - w / 2, z: p.zPostTop },
         ],
-        shaded: false,
-        baseLenPx: w,
-        heavy: p.heavy,
         sub: true,
       });
       faces.push({
-        kind: "post",
+        ...common,
         bias: 0.01,
         pts: [
           { x: p.plan.x - w / 2, y: p.plan.y, z: p.zGround },
@@ -856,23 +975,24 @@ export function Fence3D({
           { x: p.plan.x + w / 2, y: p.plan.y, z: p.zPostTop },
           { x: p.plan.x - w / 2, y: p.plan.y, z: p.zPostTop },
         ],
-        shaded: false,
-        baseLenPx: w,
-        heavy: p.heavy,
       });
-      faces.push({
-        kind: "post",
-        bias: 0.015,
-        pts: [
-          { x: p.plan.x - w * 0.75, y: p.plan.y, z: p.zPostTop },
-          { x: p.plan.x + w * 0.75, y: p.plan.y, z: p.zPostTop },
-          { x: p.plan.x + w * 0.75, y: p.plan.y, z: p.zPostTop + 0.16 * scale },
-          { x: p.plan.x - w * 0.75, y: p.plan.y, z: p.zPostTop + 0.16 * scale },
-        ],
-        shaded: false,
-        baseLenPx: w,
-        heavy: p.heavy,
-      });
+      if (cap) {
+        // Loop caps are wider than the pipe (the rail threads through);
+        // moulded caps overhang the post by about half an inch.
+        const half = w * (cap === "loop" ? 0.78 : 0.62);
+        const capZ = p.zPostTop + CAP_FT[cap] * scale * HEIGHT_EXAGGERATION;
+        faces.push({
+          ...common,
+          bias: 0.015,
+          pts: [
+            { x: p.plan.x - half, y: p.plan.y, z: p.zPostTop },
+            { x: p.plan.x + half, y: p.plan.y, z: p.zPostTop },
+            { x: p.plan.x + half, y: p.plan.y, z: capZ },
+            { x: p.plan.x - half, y: p.plan.y, z: capZ },
+          ],
+          cap,
+        });
+      }
     }
 
     const rings: V3[][] = parcelRings.map((ring) =>
@@ -1409,30 +1529,128 @@ export function Fence3D({
       );
     }
     if (kind === "post") {
-      const baseFill = postUpgrade === "steel" ? "#8B9298" : style.post;
-      const subFill = postUpgrade === "steel" ? "#767D83" : style.shade;
+      // A post belongs to ITS OWN system, not the job's primary type —
+      // the chain-link stretch across the back gets galvanized pipe even
+      // on a cedar job.
+      const pT = fenceType((f.face.tid ?? typeId) as FenceTypeId);
+      const pStyle = styleOf(pT);
+      const ps = pT.spec;
+      const steel = postUpgrade === "steel";
+      const baseFill = steel ? "#8B9298" : pStyle.post;
+      const subFill = steel ? "#767D83" : pStyle.shade;
+      const strokeC = steel ? "#666D74" : pStyle.stroke;
       const q = f.poly;
-      // Concrete footing collar — visible once the post is big enough on
-      // screen (zoomed orbit or walk mode): the "how it's built" cue.
       const wPx = f.isQuad ? Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) : 0;
+      const mix = (a: Pt, b: Pt, s: number): Pt => ({
+        x: a.x + (b.x - a.x) * s,
+        y: a.y + (b.y - a.y) * s,
+      });
+
+      // ---------------------------- caps ----------------------------
+      if (f.face.cap) {
+        if (!f.isQuad) return null;
+        const [c0, c1, t1, t0] = q;
+        const mid = mix(c0, c1, 0.5);
+        const apex = mix(t0, t1, 0.5);
+        if (f.face.cap === "loop") {
+          // A loop cap is a ring the top rail runs THROUGH — drawing it
+          // as a slab is what makes bad chain-link renders look wooden.
+          const rx = Math.max(0.9, wPx * 0.5);
+          return (
+            <ellipse
+              key={i}
+              cx={mid.x}
+              cy={(mid.y + apex.y) / 2}
+              rx={rx}
+              ry={Math.max(0.6, rx * 0.55)}
+              fill="none"
+              stroke={baseFill}
+              strokeWidth={Math.max(0.7, wPx * 0.3)}
+            />
+          );
+        }
+        const capPath =
+          f.face.cap === "dome"
+            ? // parabola peaking at the post centerline
+              `M${c0.x.toFixed(1)} ${c0.y.toFixed(1)} Q${(mid.x + (apex.x - mid.x) * 2).toFixed(1)} ${(mid.y + (apex.y - mid.y) * 2).toFixed(1)} ${c1.x.toFixed(1)} ${c1.y.toFixed(1)} Z`
+            : f.face.cap === "gothic"
+              ? polyPath([c0, c1, mix(t1, apex, 0.6), apex, mix(t0, apex, 0.6)])
+              : f.face.cap === "pyramid"
+                ? polyPath([c0, c1, mix(t1, apex, 0.5), mix(t0, apex, 0.5)])
+                : polyPath(q); // flat
+        return (
+          <path
+            key={i}
+            d={capPath}
+            fill={baseFill}
+            stroke={strokeC}
+            strokeWidth={0.7}
+            strokeLinejoin="round"
+          />
+        );
+      }
+
+      // ---------------------------- shaft ---------------------------
+      // Footing collar — concrete on every system but split rail, which
+      // is dropped in and tamped with gravel so rails can be re-seated.
       const footing =
         !f.face.sub && f.isQuad && wPx >= 3.4 ? (
           <path
             d={`M${q[0].x - wPx * 0.26} ${q[0].y} L${q[1].x + wPx * 0.26} ${q[1].y} L${q[1].x + wPx * 0.16} ${q[1].y + wPx * 0.55} L${q[0].x - wPx * 0.16} ${q[0].y + wPx * 0.55} Z`}
-            fill="#BDBAB0"
-            stroke="#9C998F"
+            fill={ps.setInConcrete ? "#BDBAB0" : "#A9A296"}
+            stroke={ps.setInConcrete ? "#9C998F" : "#8B8478"}
             strokeWidth={0.6}
+            strokeDasharray={ps.setInConcrete ? undefined : "1.5 1.2"}
           />
         ) : null;
+
+      // Round stock reads as a cylinder: one hot highlight down the
+      // shaft instead of the flat facet a square post shows.
+      const highlight =
+        f.face.round && !f.face.sub && f.isQuad && wPx >= 1.3 ? (
+          <line
+            x1={mix(q[0], q[1], 0.33).x}
+            y1={mix(q[0], q[1], 0.33).y}
+            x2={mix(q[3], q[2], 0.33).x}
+            y2={mix(q[3], q[2], 0.33).y}
+            stroke="rgba(255,255,255,0.34)"
+            strokeWidth={Math.max(0.5, wPx * 0.24)}
+            strokeLinecap="round"
+          />
+        ) : null;
+
+      // Chain-link terminals wear the tension bands that clamp the
+      // fabric — the giveaway that this post is an end, not a line post.
+      const bands =
+        pT.category === "chain-link" &&
+        f.face.term &&
+        !f.face.sub &&
+        f.isQuad &&
+        wPx >= 1.6
+          ? [0.18, 0.52, 0.86].map((s) => (
+              <line
+                key={`bd-${s}`}
+                x1={mix(q[0], q[3], s).x - wPx * 0.34}
+                y1={mix(q[0], q[3], s).y}
+                x2={mix(q[1], q[2], s).x + wPx * 0.34}
+                y2={mix(q[1], q[2], s).y}
+                stroke="#6E767D"
+                strokeWidth={Math.max(0.6, wPx * 0.26)}
+              />
+            ))
+          : null;
+
       return (
         <g key={i}>
           {footing}
           <path
             d={polyPath(q)}
             fill={f.face.sub ? subFill : baseFill}
-            stroke={postUpgrade === "steel" ? "#666D74" : style.stroke}
+            stroke={strokeC}
             strokeWidth={f.face.heavy ? 1.2 : 0.8}
           />
+          {highlight}
+          {bands}
         </g>
       );
     }
@@ -1441,15 +1659,18 @@ export function Fence3D({
       // an ornamental fence a steel one — with X-bracing and hinges.
       const cat = styleKey;
       const metal = cat === "aluminum" || cat === "steel";
+      // A gate leaf is denser than the fence beside it (frame + infill),
+      // but it still takes the finish of ITS system — a black chain-link
+      // gate is black, not galvanized gray.
       const gFill =
         cat === "vinyl"
           ? "#F1F1EA"
           : cat === "chain-link"
-            ? "rgba(148,158,166,0.30)"
+            ? style.face
             : metal
-              ? "#33373D"
+              ? style.post
               : "#EAD9BC";
-      const gStroke = metal ? "#101215" : cat === "chain-link" ? "#6E767D" : style.stroke;
+      const gStroke = style.stroke;
       const braceStroke = metal || cat === "chain-link" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.22)";
       if (!f.isQuad) {
         return <path key={i} d={polyPath(f.poly)} fill={gFill} stroke={gStroke} strokeWidth={1.4} strokeLinejoin="round" />;
@@ -1495,7 +1716,8 @@ export function Fence3D({
       );
     }
     // panel — mixed-type sections swap in THAT fence's style
-    const st = f.face.alt ? (STYLES[f.face.alt.cat] ?? style) : style;
+    const panelT = fenceType((f.face.alt?.id ?? typeId) as FenceTypeId);
+    const st = f.face.alt ? styleOf(panelT) : style;
     const rc = f.face.alt?.rails ?? railCount;
     const cap = f.face.alt ? f.face.alt.cap : capRail;
     const fill = f.face.shaded ? st.shade : st.face;
@@ -1505,6 +1727,12 @@ export function Fence3D({
     const [a, b, tb, ta] = f.poly;
     const ftLen = f.face.baseLenPx / world.scale;
     const projW = Math.hypot(b.x - a.x, b.y - a.y) * lodK;
+    // Board / picket / bar counts come from the system's REAL pitch, not
+    // a look-nice multiplier: 5½″ cedar pickets, 2″ chain-link diamonds,
+    // ornamental pickets under the 4″ pool-code gap.
+    const pspec = panelT.spec;
+    const pitchIn = pspec.infillPitchIn ?? 6;
+    const infillCount = Math.max(2, Math.round((ftLen * 12) / pitchIn));
     const atB = (s2: number): Pt => ({ x: a.x + (b.x - a.x) * s2, y: a.y + (b.y - a.y) * s2 });
     const atT = (s2: number): Pt => ({ x: ta.x + (tb.x - ta.x) * s2, y: ta.y + (tb.y - ta.y) * s2 });
     const sliceD = (s0: number, s1: number): string => {
@@ -1520,8 +1748,9 @@ export function Fence3D({
     const hFt = f.face.hFt ?? 6;
 
     if (detailKind === "hboards") {
-      // Horizontal-modern: stacked boards with visible gaps between them.
-      const m = Math.max(3, Math.min(9, Math.round(hFt * 1.4)));
+      // Horizontal-modern: 1×6 slats stacked up the bay at a ¾″ reveal —
+      // a 6' fence is ~11 boards, not a decorative half-dozen.
+      const m = Math.max(3, Math.min(18, Math.round((hFt * 12) / pitchIn)));
       const els: React.ReactNode[] = [];
       for (let j = 0; j < m; j++) {
         const t0 = j / m;
@@ -1555,7 +1784,7 @@ export function Fence3D({
     if (detailKind === "spaced") {
       // Picket fence: individual pickets with REAL gaps — the backer
       // rails and the yard show through, exactly how it's built.
-      const np = Math.max(3, Math.round(ftLen * 1.6));
+      const np = infillCount;
       const pw = projW / np;
       const isWoodPk = (f.face.alt?.cat ?? styleKey) === "wood";
       const pkFill = isWoodPk && f.face.shaded ? "#AC7B47" : st.face;
@@ -1576,7 +1805,9 @@ export function Fence3D({
         );
       }
       if (pw >= 1.5) {
-        const duty = 0.6;
+        // Picket face over pitch — a 1×4 on 6″ centers covers 58%, so
+        // the gap the client sees through is the gap they'll get.
+        const duty = Math.min(0.9, (panelT.picketWidthIn ?? pitchIn * 0.58) / pitchIn);
         for (let k = 0; k < np; k++) {
           const c0 = k / np + (1 - duty) / 2 / np;
           const c1 = c0 + duty / np;
@@ -1629,7 +1860,7 @@ export function Fence3D({
     if (detailKind === "shadowbox") {
       // Good-neighbor stagger: shaded back boards behind, proud front
       // boards with gaps that let the back layer read through.
-      const boards = Math.max(3, Math.round(ftLen * 1.4));
+      const boards = infillCount;
       const bw = projW / boards;
       const els: React.ReactNode[] = [
         <path key="back" d={polyPath(f.poly)} fill={st.shade} stroke={st.stroke} strokeWidth={0.9} strokeLinejoin="round" />,
@@ -1654,7 +1885,7 @@ export function Fence3D({
     if (detailKind === "bob") {
       // Board-on-board: a dark under-course with over-boards lapped at
       // the half pitch — the double layer reads at any zoom.
-      const boards = Math.max(3, Math.round(ftLen * 1.5));
+      const boards = infillCount;
       const bw = projW / boards;
       if (bw >= 2.4) {
         for (let k = 0; k < boards; k++) {
@@ -1694,7 +1925,7 @@ export function Fence3D({
     if (st.lines === "pickets" && !detailKind) {
       // Wood reads as WOOD: ~6-inch boards with per-board tone variation
       // and occasional grain streaks — board counts derive from real feet.
-      const boards = Math.max(2, Math.round(ftLen * 2));
+      const boards = infillCount;
       const bw = projW / boards;
       if (bw >= 2.4) {
         for (let k = 0; k < boards; k++) {
@@ -1741,43 +1972,86 @@ export function Fence3D({
         );
       }
     } else if (st.lines === "bars") {
-      // Ornamental — slender bars between top/bottom rails, spear finials.
-      const bars = Math.max(3, Math.round(ftLen * 1.6));
-      const n = Math.max(3, Math.min(bars, Math.floor(projW / 3)));
-      const showFinials = projW / n >= 4;
+      // Ornamental is mostly AIR — you see dark pickets against the yard,
+      // not a dark slab. So the pickets are the drawn thing: ¾″ tubes on
+      // 4⅝″ centers, dark, with the lawn showing between them.
+      const bars = infillCount;
+      const n = Math.max(3, Math.min(bars, Math.floor(projW / 2.4)));
+      const barW = Math.max(0.9, Math.min(2.4, (projW / n) * 0.34));
+      const showFinials = projW / n >= 5;
       for (let k = 1; k < n; k++) {
         const s2 = k / n;
         const bp = atB(s2);
         const bq = atT(s2);
-        details.push(<line key={`bar-${k}`} x1={bp.x} y1={bp.y} x2={bq.x} y2={bq.y} stroke="rgba(255,255,255,0.13)" strokeWidth={1.6} />);
+        details.push(
+          <line key={`bar-${k}`} x1={bp.x} y1={bp.y} x2={bq.x} y2={bq.y} stroke={st.post} strokeWidth={barW} />,
+        );
         if (showFinials) {
           details.push(
-            <circle key={`fin-${k}`} cx={bq.x + (bq.x - bp.x) * 0.05} cy={bq.y + (bq.y - bp.y) * 0.05} r={1.5} fill={st.stroke} />,
+            <circle key={`fin-${k}`} cx={bq.x + (bq.x - bp.x) * 0.05} cy={bq.y + (bq.y - bp.y) * 0.05} r={barW * 0.8} fill={st.post} />,
           );
         }
       }
+      // Top and bottom channel rails carry the pickets.
       for (const s2 of [0.07, 0.9]) {
         details.push(
-          <line key={`rl-${s2}`} x1={a.x + (ta.x - a.x) * s2} y1={a.y + (ta.y - a.y) * s2} x2={b.x + (tb.x - b.x) * s2} y2={b.y + (tb.y - b.y) * s2} stroke="rgba(255,255,255,0.20)" strokeWidth={2.2} strokeLinecap="round" />,
+          <line key={`rl-${s2}`} x1={a.x + (ta.x - a.x) * s2} y1={a.y + (ta.y - a.y) * s2} x2={b.x + (tb.x - b.x) * s2} y2={b.y + (tb.y - b.y) * s2} stroke={st.post} strokeWidth={2.4} strokeLinecap="round" />,
         );
       }
     } else if (st.lines === "mesh") {
-      // Chain-link — diamond weave, galvanized top rail + tension wire.
-      const n = Math.max(3, Math.min(Math.round(ftLen * 1.3), Math.floor(projW / 2.6)));
-      for (let k = 0; k <= n; k++) {
-        const s2 = k / n;
-        details.push(
-          <line key={`m1-${k}`} x1={atB(s2).x} y1={atB(s2).y} x2={atT(Math.min(1, s2 + 0.18)).x} y2={atT(Math.min(1, s2 + 0.18)).y} stroke="rgba(90,100,108,0.42)" strokeWidth={0.8} />,
-          <line key={`m2-${k}`} x1={atB(s2).x} y1={atB(s2).y} x2={atT(Math.max(0, s2 - 0.18)).x} y2={atT(Math.max(0, s2 - 0.18)).y} stroke="rgba(90,100,108,0.42)" strokeWidth={0.8} />,
-        );
+      // Chain link — 2″ fabric woven at a true 45°, so the wire climbs
+      // the panel in the same feet it travels along it. (The old fixed
+      // 18% slant drew stretched cross-hatch, not diamonds.) Galvanized
+      // top rail above, 7-ga tension wire along the bottom.
+      const meshIn = pspec.meshDiamondIn ?? 2;
+      const runFt = Math.max(0.5, ftLen);
+      const slant = hFt / runFt; // 45° expressed in panel-normalized space
+      // Diagonals at 45° cross the bottom edge every mesh×√2 inches.
+      const want = Math.ceil((runFt * 12) / (meshIn * Math.SQRT2));
+      const n = Math.max(4, Math.min(want, Math.floor(projW / 2.2)));
+      const step = 1 / n;
+      /** Panel-normalized (along, up) → screen. */
+      const at2 = (s2: number, t2: number): Pt => {
+        const bp = atB(s2);
+        const tp = atT(s2);
+        return { x: bp.x + (tp.x - bp.x) * t2, y: bp.y + (tp.y - bp.y) * t2 };
+      };
+      const spread = Math.ceil(slant * n);
+      for (const dir of [1, -1] as const) {
+        for (let k = -spread; k <= n + spread; k++) {
+          const s0 = k * step; // where this wire meets the bottom edge
+          const d = dir * slant;
+          let tLo = 0;
+          let tHi = 1;
+          if (Math.abs(d) > 1e-6) {
+            const tA = -s0 / d;
+            const tB = (1 - s0) / d;
+            tLo = Math.max(0, Math.min(tA, tB));
+            tHi = Math.min(1, Math.max(tA, tB));
+          }
+          if (tHi - tLo < 0.02) continue;
+          const p0 = at2(s0 + d * tLo, tLo);
+          const p1 = at2(s0 + d * tHi, tHi);
+          details.push(
+            <line
+              key={`m${dir}-${k}`}
+              x1={p0.x.toFixed(1)}
+              y1={p0.y.toFixed(1)}
+              x2={p1.x.toFixed(1)}
+              y2={p1.y.toFixed(1)}
+              stroke={st.mesh ?? "rgba(88,98,106,0.46)"}
+              strokeWidth={0.8}
+            />,
+          );
+        }
       }
       details.push(
-        <line key="toprail" x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke="#9AA3AA" strokeWidth={2.6} strokeLinecap="round" />,
-        <line key="tension" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#8B949B" strokeWidth={1.1} />,
+        <line key="toprail" x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.rail ?? "#9AA3AA"} strokeWidth={2.6} strokeLinecap="round" />,
+        <line key="tension" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={st.rail ?? "#8B949B"} strokeWidth={1.1} />,
       );
-    } else if (st === STYLES.vinyl) {
-      // Vinyl — tongue-and-groove seams every foot.
-      const n = Math.max(2, Math.min(Math.round(ftLen), Math.floor(projW / 4)));
+    } else if (panelT.category === "vinyl") {
+      // Vinyl — tongue-and-groove seams at the real 6″ board pitch.
+      const n = Math.max(2, Math.min(infillCount, Math.floor(projW / 4)));
       for (let k = 1; k < n; k++) {
         const vp = atB(k / n);
         const vq = atT(k / n);
