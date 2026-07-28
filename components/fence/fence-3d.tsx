@@ -147,6 +147,25 @@ function hash2(r: number, c: number): number {
   return n - Math.floor(n);
 }
 
+/** Smooth 2D value noise (0..1) — LARGE soft patches of tone so the
+ *  lawn reads as grass, not per-tile pixels. ~150 px patch size. */
+function smoothNoise(x: number, y: number): number {
+  const gx = x / 150;
+  const gy = y / 150;
+  const x0 = Math.floor(gx);
+  const y0 = Math.floor(gy);
+  const fx = gx - x0;
+  const fy = gy - y0;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  return (
+    hash2(x0, y0) * (1 - sx) * (1 - sy) +
+    hash2(x0 + 1, y0) * sx * (1 - sy) +
+    hash2(x0, y0 + 1) * (1 - sx) * sy +
+    hash2(x0 + 1, y0 + 1) * sx * sy
+  );
+}
+
 /** Ray-cast point-in-polygon (trees must stay out of buildings). */
 function pointInPoly(p: Pt, ring: Pt[]): boolean {
   let inside = false;
@@ -164,11 +183,11 @@ function pointInPoly(p: Pt, ring: Pt[]): boolean {
 }
 
 /** Lawn color for a ground cell from its slope (light from the NW) with
- *  a touch of natural tone variation. */
+ *  smooth, large-scale tone variation — never per-tile noise. */
 function lawnFill(gxFt: number, gyFt: number, jitter: number): string {
   const b =
-    Math.max(0.64, Math.min(1.08, 0.88 - gxFt * 2.4 + gyFt * 1.2)) *
-    (0.97 + jitter * 0.07);
+    Math.max(0.66, Math.min(1.06, 0.9 - gxFt * 2.0 + gyFt * 1.0)) *
+    (0.98 + jitter * 0.045);
   const r = Math.round(172 * b);
   const g = Math.round(206 * b);
   const bl = Math.round(152 * b);
@@ -406,7 +425,7 @@ export function Fence3D({
             ],
             shaded: false,
             baseLenPx: stepX,
-            fill: lawnFill(gx, gy, hash2(r, c)),
+            fill: lawnFill(gx, gy, smoothNoise(mx, my)),
           });
         }
       }
