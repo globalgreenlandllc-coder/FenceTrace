@@ -6,7 +6,18 @@ import { lineLengthFt } from "@/components/estimate/aerial-canvas";
 import { AerialReadonly } from "@/components/estimate/aerial-shared";
 import { GutterDiagram } from "@/components/estimate/gutter-diagram";
 import { PresentationCanvas } from "./presentation-canvas";
-import { Fence3D } from "@/components/fence/fence-3d";
+import dynamic from "next/dynamic";
+// The 3D engine sits behind a tab — lazy-load it so the client portal's
+// first paint doesn't pay for it.
+const Fence3D = dynamic(
+  () => import("@/components/fence/fence-3d").then((m) => m.Fence3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[16/10] animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
+    ),
+  },
+);
 import { GutterSystemBreakdown } from "./gutter-system-breakdown";
 import { ManualMeasurementsCard } from "./manual-measurements-card";
 import { sampleEaves, sampleDownspouts } from "@/lib/mock-estimate";

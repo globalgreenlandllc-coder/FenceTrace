@@ -614,6 +614,88 @@ export function FenceCanvas({
     setTool("select");
   };
 
+  // The contour layer is static per (topo, zoom) — memoized so the
+  // per-mousemove hover re-renders don't rebuild 100+ SVG nodes.
+  const uiScale = 1 / cam.k;
+  const topoLayer = useMemo(() => {
+    const ui = uiScale;
+    return (
+      <>
+        {/* Topo overlay — measured elevation contours with ft labels.
+              Purely informational: never intercepts pointer events. */}
+          {topo && topo.lines.length > 0 && (
+            <g pointerEvents="none">
+              {topo.lines.map((line) =>
+                line.chains.map((ch, i) => (
+                  <polyline
+                    key={`c-${line.levelFt}-${i}`}
+                    points={ch.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+                    fill="none"
+                    stroke="#FCD34D"
+                    strokeWidth={1.3}
+                    vectorEffect="non-scaling-stroke"
+                    strokeOpacity={0.85}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                )),
+              )}
+              {topo.lines.map((line) =>
+                line.chains.slice(0, 3).map((ch, i) => {
+                  let len = 0;
+                  for (let k = 1; k < ch.length; k++) {
+                    len += Math.hypot(ch[k].x - ch[k - 1].x, ch[k].y - ch[k - 1].y);
+                  }
+                  if (len < 70) return null;
+                  const mid = ch[Math.floor(ch.length / 2)];
+                  // keep labels clear of the canvas border so they never clip
+                  if (
+                    mid.x < 26 ||
+                    mid.x > CANVAS_W - 26 ||
+                    mid.y < 16 ||
+                    mid.y > CANVAS_H - 16
+                  )
+                    return null;
+                  return (
+                    <g
+                      key={`cl-${line.levelFt}-${i}`}
+                      transform={`translate(${mid.x}, ${mid.y}) scale(${ui})`}
+                    >
+                      <text
+                        y={-3}
+                        textAnchor="middle"
+                        fontSize={10}
+                        fontWeight={700}
+                        fill="#FDE68A"
+                        stroke="#1C1917"
+                        strokeWidth={2.6}
+                        style={{ paintOrder: "stroke" }}
+                      >
+                        +{line.levelFt}′
+                      </text>
+                    </g>
+                  );
+                }),
+              )}
+              <g transform={`translate(${CANVAS_W - 10}, 20) scale(${ui})`}>
+                <text
+                  textAnchor="end"
+                  fontSize={10.5}
+                  fontWeight={600}
+                  fill="#FDE68A"
+                  stroke="#1C1917"
+                  strokeWidth={2.6}
+                  style={{ paintOrder: "stroke" }}
+                >
+                  Topo lines every {topo.intervalFt}′ — feet above the low point
+                </text>
+              </g>
+            </g>
+          )}
+      </>
+    );
+  }, [topo, uiScale]);
+
   // Counter-scale for zoom: strokes use vector-effect, but dot radii,
   // label chips and text live in world units — multiply by `ui` so they
   // stay the same SCREEN size at any zoom instead of blowing up.
@@ -863,77 +945,7 @@ export function FenceCanvas({
             preserveAspectRatio="xMidYMid slice"
           />
 
-          {/* Topo overlay — measured elevation contours with ft labels.
-              Purely informational: never intercepts pointer events. */}
-          {topo && topo.lines.length > 0 && (
-            <g pointerEvents="none">
-              {topo.lines.map((line) =>
-                line.chains.map((ch, i) => (
-                  <polyline
-                    key={`c-${line.levelFt}-${i}`}
-                    points={ch.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
-                    fill="none"
-                    stroke="#FCD34D"
-                    strokeWidth={1.3}
-                    vectorEffect="non-scaling-stroke"
-                    strokeOpacity={0.85}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                )),
-              )}
-              {topo.lines.map((line) =>
-                line.chains.slice(0, 3).map((ch, i) => {
-                  let len = 0;
-                  for (let k = 1; k < ch.length; k++) {
-                    len += Math.hypot(ch[k].x - ch[k - 1].x, ch[k].y - ch[k - 1].y);
-                  }
-                  if (len < 70) return null;
-                  const mid = ch[Math.floor(ch.length / 2)];
-                  // keep labels clear of the canvas border so they never clip
-                  if (
-                    mid.x < 26 ||
-                    mid.x > CANVAS_W - 26 ||
-                    mid.y < 16 ||
-                    mid.y > CANVAS_H - 16
-                  )
-                    return null;
-                  return (
-                    <g
-                      key={`cl-${line.levelFt}-${i}`}
-                      transform={`translate(${mid.x}, ${mid.y}) scale(${ui})`}
-                    >
-                      <text
-                        y={-3}
-                        textAnchor="middle"
-                        fontSize={10}
-                        fontWeight={700}
-                        fill="#FDE68A"
-                        stroke="#1C1917"
-                        strokeWidth={2.6}
-                        style={{ paintOrder: "stroke" }}
-                      >
-                        +{line.levelFt}′
-                      </text>
-                    </g>
-                  );
-                }),
-              )}
-              <g transform={`translate(${CANVAS_W - 10}, 20) scale(${ui})`}>
-                <text
-                  textAnchor="end"
-                  fontSize={10.5}
-                  fontWeight={600}
-                  fill="#FDE68A"
-                  stroke="#1C1917"
-                  strokeWidth={2.6}
-                  style={{ paintOrder: "stroke" }}
-                >
-                  Topo lines every {topo.intervalFt}′ — feet above the low point
-                </text>
-              </g>
-            </g>
-          )}
+          {topoLayer}
 
           {/* Building footprints — the house the fence ties into */}
           {buildings.map((ring, i) => (

@@ -21,7 +21,17 @@ import {
   FenceCanvas,
   type FenceLayout,
 } from "@/components/fence/fence-canvas";
-import { Fence3D } from "@/components/fence/fence-3d";
+import dynamic from "next/dynamic";
+// 3D loads on first toggle — the scan canvas paints faster without it.
+const Fence3D = dynamic(
+  () => import("@/components/fence/fence-3d").then((m) => m.Fence3D),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="aspect-[16/10] animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
+    ),
+  },
+);
 import {
   FENCE_TYPES,
   fenceType,
@@ -34,6 +44,7 @@ import { fenceTiers, priceFence } from "@/lib/fence/pricing";
 import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, walkPostPositions } from "@/lib/fence/geo";
 import { buildContours, pickContourInterval } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
+import { getScanBuildings } from "@/app/actions/fence-buildings";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { Mountain } from "lucide-react";
 import type { Downspout, EditableLine, Measurements } from "@/lib/types";
@@ -172,6 +183,23 @@ export function FenceEstimator() {
     if (!t.heightsFt.includes(heightFt)) setHeightFt(t.defaultHeightFt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeId]);
+
+  // Building footprints arrive AFTER the scan renders — Overpass takes
+  // 1–9 s and used to block the whole scan. Never clobber a footprint
+  // the contractor already traced by hand.
+  useEffect(() => {
+    if (!scan) return;
+    let cancelled = false;
+    void getScanBuildings({ center: scan.center, zoom: scan.zoom }).then(
+      (res) => {
+        if (cancelled || res.buildings.length === 0) return;
+        setBuildings((cur) => (cur.length === 0 ? res.buildings : cur));
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [scan]);
 
   // Topo lattice: one 18×12 elevation grid per scan (216 points, one
   // batched call) → contour lines drawn over the satellite canvas.
