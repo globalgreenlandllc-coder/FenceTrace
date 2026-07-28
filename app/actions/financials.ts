@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getMe } from "./me";
 import {
   deriveCostBasisCents,
+  deriveEffectiveTaxRate,
   jobProfit,
   monthlyOverheadCents,
   overheadCoverage,
@@ -213,6 +214,9 @@ export async function getFinancialsOverview(): Promise<FinancialsOverview | null
       manualCostCents,
       workerPayCents,
       extraExpensesCents: approvedExtraCents,
+      // Fence jobs tax only the taxable share — strip the rate this
+      // contract actually carries, not the legacy flat rate.
+      taxRate: deriveEffectiveTaxRate(p.data, p.selectedPackageId),
     });
     return {
       proposalId: p.id,

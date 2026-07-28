@@ -489,6 +489,9 @@ export function packageTotal(
   total: number;
   addOns: number;
   discount: number;
+  /** Tax embedded in `total` — job costing derives the job's real
+   *  effective rate from this. */
+  tax: number;
 } {
   const items = packageLineItems(p, measurements);
   const baseSubtotal = items.reduce(
@@ -527,6 +530,10 @@ export function packageTotal(
     subtotal,
     addOns,
     discount,
+    /** The tax embedded in `total` — job costing derives each job's
+     *  REAL effective rate from this (fence jobs tax only the taxable
+     *  share, so a flat rate would misstate profit). */
+    tax,
     total: afterMarkup - discount + tax,
   };
 }

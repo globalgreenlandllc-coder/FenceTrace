@@ -215,3 +215,29 @@ test("suggestNextAction ladder hits the key rungs", () => {
     "requote",
   );
 });
+
+test("fence jobs strip the REAL embedded tax rate, not the flat legacy rate", async () => {
+  const { blankProposal, FENCE_TAX_RATE } = await import("./proposal-mock");
+  const { deriveEffectiveTaxRate } = await import("./job-costing");
+  const blank = blankProposal(); // FenceTrace blanks carry fence packages
+  const rate = deriveEffectiveTaxRate(blank, blank.packages[1]!.id);
+  // Only the taxable share (materials/gates) carries sales tax, so the
+  // effective rate sits strictly between 0 and the plain rate — and
+  // BELOW the legacy flat gutter rate the old math used.
+  assert.ok(rate > 0 && rate < FENCE_TAX_RATE, `rate=${rate}`);
+  assert.ok(rate < EFFECTIVE_TAX_RATE, `rate=${rate} vs flat=${EFFECTIVE_TAX_RATE}`);
+  const base = {
+    contractCents: 3_000_000,
+    aiCostCents: 1_500_000,
+    manualCostCents: null,
+    workerPayCents: 200_000,
+    extraExpensesCents: 0,
+  };
+  const flat = jobProfit(base);
+  const real = jobProfit({ ...base, taxRate: rate });
+  // Correct rate ⇒ more ex-tax revenue ⇒ more profit on the same job.
+  assert.ok(real.revenueExTaxCents > flat.revenueExTaxCents);
+  assert.equal(real.profitCents - flat.profitCents, real.revenueExTaxCents - flat.revenueExTaxCents);
+  // Malformed blobs fall back to the legacy flat rate.
+  assert.equal(deriveEffectiveTaxRate({}, null), EFFECTIVE_TAX_RATE);
+});

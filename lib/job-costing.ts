@@ -25,10 +25,7 @@ import { EFFECTIVE_TAX_RATE, packageTotal, type Proposal } from "./proposal-mock
  * pick priority mirrors `deriveTotalCentsFromData` so cost and revenue
  * always describe the same tier. Returns 0 when the blob is malformed.
  */
-export function deriveCostBasisCents(
-  data: unknown,
-  preferPackageId?: string | null,
-): number {
+function pickPackage(data: unknown, preferPackageId?: string | null) {
   const proposal = data as Partial<Proposal> | null;
   if (
     !proposal ||
@@ -36,7 +33,7 @@ export function deriveCostBasisCents(
     proposal.packages.length === 0 ||
     !proposal.measurements
   ) {
-    return 0;
+    return null;
   }
   const packages = proposal.packages;
   const selectedId =
@@ -47,12 +44,54 @@ export function deriveCostBasisCents(
     packages.find((p) => p.recommended) ??
     packages[1] ??
     packages[0];
-  if (!pick) return 0;
+  return pick ? { pick, proposal } : null;
+}
+
+export function deriveCostBasisCents(
+  data: unknown,
+  preferPackageId?: string | null,
+): number {
+  const found = pickPackage(data, preferPackageId);
+  if (!found) return 0;
   try {
-    const { subtotal } = packageTotal(pick, proposal.measurements, 0);
+    const { subtotal } = packageTotal(found.pick, found.proposal.measurements!, 0);
     return Math.max(0, Math.round(subtotal * 100));
   } catch {
     return 0;
+  }
+}
+
+/**
+ * The tax rate actually embedded in this job's contract. Fence packages
+ * tax only the taxable share of the bill (materials/gates/stain — labor
+ * and tear-out untaxed), so their effective rate is well below the flat
+ * legacy gutter rate; stripping the wrong rate misstates every fence
+ * job's ex-tax revenue and profit by ~2-3% of the contract. Falls back
+ * to the legacy flat rate when the blob can't be priced.
+ */
+export function deriveEffectiveTaxRate(
+  data: unknown,
+  preferPackageId?: string | null,
+): number {
+  const found = pickPackage(data, preferPackageId);
+  if (!found) return EFFECTIVE_TAX_RATE;
+  try {
+    const discountPct =
+      typeof (found.proposal as { discountPct?: number }).discountPct === "number"
+        ? (found.proposal as { discountPct: number }).discountPct
+        : 0;
+    const { tax, total } = packageTotal(
+      found.pick,
+      found.proposal.measurements!,
+      discountPct,
+    );
+    if (!(total > 0) || !Number.isFinite(tax)) return EFFECTIVE_TAX_RATE;
+    // total = preTax + tax  ⇒  the divisor that strips tax is
+    // (1 + tax/preTax); express as a rate on the pre-tax base.
+    const preTax = total - tax;
+    return preTax > 0 ? tax / preTax : EFFECTIVE_TAX_RATE;
+  } catch {
+    return EFFECTIVE_TAX_RATE;
   }
 }
 
@@ -67,6 +106,9 @@ export type JobProfitInputs = {
   workerPayCents: number;
   /** Approved extra expenses (owner-logged + approved worker receipts). */
   extraExpensesCents: number;
+  /** The tax rate embedded in the contract (deriveEffectiveTaxRate).
+   *  Defaults to the legacy flat rate for old callers. */
+  taxRate?: number;
 };
 
 export type JobProfitBreakdown = {
@@ -82,8 +124,9 @@ export type JobProfitBreakdown = {
 };
 
 export function jobProfit(i: JobProfitInputs): JobProfitBreakdown {
+  const rate = Number.isFinite(i.taxRate) ? Math.max(0, i.taxRate!) : EFFECTIVE_TAX_RATE;
   const revenueExTaxCents = Math.round(
-    Math.max(0, i.contractCents) / (1 + EFFECTIVE_TAX_RATE),
+    Math.max(0, i.contractCents) / (1 + rate),
   );
   const usingManual = i.manualCostCents != null;
   const baseCostCents = Math.max(0, i.manualCostCents ?? i.aiCostCents);
