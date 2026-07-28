@@ -6,9 +6,9 @@ import { Container } from "./ui";
 import { Reveal } from "./reveal";
 
 const STATS = [
-  { label: "Quoted through FenceTrace", value: "$10M+" },
-  { label: "Fence feet measured", value: "2M+" },
-  { label: "Active contractors", value: "250+" },
+  { label: "Seconds to a priced proposal", value: "60" },
+  { label: "Tiers in every quote", value: "3" },
+  { label: "Tape measures required", value: "0" },
 ];
 
 /**

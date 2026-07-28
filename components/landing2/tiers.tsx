@@ -116,7 +116,7 @@ export function Tiers() {
                 high-intent homeowners
               </>
             }
-            copy="Measured properties command confident pricing. Every proposal ships with three tiers built from your own materials and margins — no guesswork, no race to the bottom."
+            copy="Three tiers, your materials, your margins. No race to the bottom."
           />
         </Reveal>
 

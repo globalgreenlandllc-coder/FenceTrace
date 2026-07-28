@@ -5,7 +5,7 @@ import { Reveal } from "./reveal";
 const ROWS = [
   {
     title: "Fence lines traced from the sky",
-    body: "The fastest-growing way to win fence work. A full afternoon by wheel and tape. Instant for our engine.",
+    body: "An afternoon by wheel and tape. Instant here.",
     open: true,
   },
   { title: "Property lines pulled automatically", open: false },

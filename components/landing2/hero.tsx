@@ -137,11 +137,8 @@ export function Hero() {
             </h1>
             <div className="max-w-sm md:justify-self-end md:pt-3">
               <p className="text-[15px] leading-relaxed text-zinc-600">
-                Type an address — FenceTrace pulls the satellite view and
-                county property lines, you draw the fence, and a priced
-                proposal is ready in
-                60 seconds, sent with e-sign and payments. No wheel, no tape
-                measure.
+                Type the address. Draw the line. Send the proposal —
+                60&nbsp;seconds, no tape measure.
               </p>
               <div className="mt-6 flex items-center gap-3">
                 <PillLink href="/sign-up">Start free</PillLink>

@@ -145,7 +145,7 @@ export function Detection() {
                 signed proposal
               </>
             }
-            copy="Our geometry engine pulls the property lines, splits the fence into runs, corners, and gate openings, and maps measured lengths to your own pricing — tiers, materials, and margins included."
+            copy="Property lines in, priced runs out — corners, gates and your margins included."
           />
         </Reveal>
 

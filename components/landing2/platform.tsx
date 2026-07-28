@@ -61,7 +61,7 @@ export function Platform() {
                 The whole job.
               </>
             }
-            copy="FenceTrace doesn't stop at the measurement. Every takeoff flows into a tiered proposal, an e-signature, a schedule, and a paid, receipted job — in one place."
+            copy="Takeoff → proposal → signature → schedule → paid. One place."
           />
         </Reveal>
 

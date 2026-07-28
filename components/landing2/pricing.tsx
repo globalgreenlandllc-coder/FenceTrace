@@ -26,7 +26,7 @@ export function Pricing({ pricing }: { pricing: PricingView }) {
                 the whole job.
               </>
             }
-            copy="Every takeoff becomes a proposal, a signature, a schedule, and a tracked payment — the entire platform is included."
+            copy="Everything included. Cancel anytime."
           />
         </Reveal>
 
