@@ -1,15 +1,17 @@
 "use client";
 
-import { Check, Layers, Sparkles, Star } from "lucide-react";
+import { Check, ChevronDown, Layers, Sparkles, Star } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { DUR, EASE } from "@/lib/motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
   markupPctForTarget,
+  packageClientBreakdown,
   packageTotal,
   type Package,
   type Proposal,
 } from "@/lib/proposal-mock";
+import type { Measurements } from "@/lib/types";
 import { AiPriceSwitch } from "./ai-price-switch";
 import { EditablePrice } from "./editable-price";
 
@@ -62,6 +64,43 @@ export function PackagesSection({
           ) : undefined
         }
       />
+
+      {/* How pricing presents to the CLIENT — contractor editor only.
+          "Totals" protects margin; "split" adds materials/labor
+          subtotals; "itemized" prices every line. */}
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-label text-zinc-500">Client sees</span>
+          {(
+            [
+              { id: "totals", label: "Totals only" },
+              { id: "split", label: "Materials + labor" },
+              { id: "itemized", label: "Every line priced" },
+            ] as const
+          ).map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onChange({ ...proposal, priceDisplay: m.id })}
+              className={cn(
+                "transition-smooth ring-focus rounded-full border px-2.5 py-1 font-medium",
+                (proposal.priceDisplay ?? "totals") === m.id
+                  ? "border-accent-500 bg-accent-50 text-accent-900"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+              )}
+            >
+              {m.label}
+            </button>
+          ))}
+          <span className="text-zinc-400">
+            {(proposal.priceDisplay ?? "totals") === "totals"
+              ? "Scope listed, one confident price — recommended."
+              : (proposal.priceDisplay ?? "totals") === "split"
+                ? "Adds Materials & parts vs Labor & installation subtotals."
+                : "Full itemization — for commercial / insurance work."}
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {proposal.packages.map((p) => {
@@ -215,6 +254,13 @@ export function PackagesSection({
                 </div>
               )}
 
+              <IncludedBreakdown
+                pkg={p}
+                measurements={proposal.measurements}
+                discountPct={proposal.discountPct ?? 0}
+                mode={proposal.priceDisplay ?? "totals"}
+              />
+
               {interactive && (
                 <button
                   type="button"
@@ -296,5 +342,77 @@ export function SectionHeader({
       </div>
       {action}
     </div>
+  );
+}
+
+/** "Everything included" — the client-facing breakdown, presented per
+ *  the proposal's priceDisplay mode. Collapsed by default so package
+ *  cards stay scannable; the click is the client leaning in. */
+function IncludedBreakdown({
+  pkg,
+  measurements,
+  discountPct,
+  mode,
+}: {
+  pkg: Package;
+  measurements: Measurements;
+  discountPct: number;
+  mode: "totals" | "split" | "itemized";
+}) {
+  const b = packageClientBreakdown(pkg, measurements, discountPct);
+  if (b.lines.length === 0) return null;
+  const qty = (n: number) =>
+    Number.isInteger(n) ? String(n) : n.toFixed(1);
+  return (
+    <details
+      className="group mt-5 border-t border-zinc-100 pt-3"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium text-zinc-500 transition-smooth hover:text-accent-700 [&::-webkit-details-marker]:hidden">
+        Everything included
+        <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+      </summary>
+      <ul className="mt-2.5 space-y-1.5">
+        {b.lines.map((l) => (
+          <li
+            key={l.id}
+            className="flex items-baseline justify-between gap-3 text-xs text-zinc-600"
+          >
+            <span className="min-w-0">
+              {l.name}
+              <span className="text-zinc-400">
+                {" "}
+                · {qty(l.quantity)} {l.unit}
+              </span>
+            </span>
+            {mode === "itemized" && (
+              <span className="shrink-0 tabular-nums text-zinc-700">
+                {l.clientPrice === 0 ? "Included" : formatCurrency(l.clientPrice)}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {mode !== "totals" && (
+        <div className="mt-3 space-y-1 border-t border-zinc-100 pt-2.5 text-xs">
+          <div className="flex items-center justify-between text-zinc-600">
+            <span>Materials &amp; parts</span>
+            <span className="tabular-nums">{formatCurrency(b.materials)}</span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-600">
+            <span>Labor &amp; installation</span>
+            <span className="tabular-nums">{formatCurrency(b.labor)}</span>
+          </div>
+          <div className="flex items-center justify-between text-zinc-600">
+            <span>Sales tax</span>
+            <span className="tabular-nums">{formatCurrency(b.tax)}</span>
+          </div>
+          <div className="flex items-center justify-between pt-1 font-semibold text-zinc-900">
+            <span>Total</span>
+            <span className="tabular-nums">{formatCurrency(b.total)}</span>
+          </div>
+        </div>
+      )}
+    </details>
   );
 }

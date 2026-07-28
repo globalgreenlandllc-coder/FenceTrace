@@ -192,6 +192,14 @@ export type Proposal = {
   terms: TermsBlock[];
   depositPct: number;
   validDays: number;
+  /** How package pricing presents to the CLIENT:
+   *  - "totals"  — everything included is listed, priced at the package
+   *    level only (default — protects margin, reads confident)
+   *  - "split"   — adds Materials & parts vs Labor & installation
+   *    subtotals (transparency without per-line shopping)
+   *  - "itemized"— every line priced (commercial/insurance work)
+   *  Absent on legacy blobs ⇒ "totals". */
+  priceDisplay?: "totals" | "split" | "itemized";
   /** Per-proposal discount applied to every package total. Stored as
    *  a percentage (0-50). 0 = no discount. Optional + defaulted to 0
    *  on load so older proposals without this field still render. */
@@ -475,6 +483,88 @@ export const EFFECTIVE_TAX_RATE = 0.0825 * 0.85;
 /** Plain sales-tax rate applied to the TAXABLE share of fence packages
  *  (materials/gates/stain — labor and removal are untaxed). */
 export const FENCE_TAX_RATE = 0.0825;
+
+/** One client-facing breakdown row (marked-up, discount-applied). */
+export type ClientBreakdownLine = {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  /** SELLING price for this line (markup + discount allocated
+   *  proportionally), pre-tax dollars. */
+  clientPrice: number;
+  taxable: boolean;
+};
+
+export type ClientBreakdown = {
+  lines: ClientBreakdownLine[];
+  /** Σ taxable lines (materials, gates, stain, hardware) — pre-tax. */
+  materials: number;
+  /** Σ untaxed lines (installation labor, tear-out) — pre-tax. */
+  labor: number;
+  tax: number;
+  total: number;
+};
+
+/**
+ * The breakdown a CLIENT may see, in selling prices: every line scaled
+ * by the package's markup and the proposal discount so the rows sum to
+ * exactly the quoted pre-tax price (largest line absorbs the rounding
+ * remainder). The materials/labor buckets ride the taxable flag — the
+ * same split the tax math already uses.
+ */
+export function packageClientBreakdown(
+  p: Package,
+  measurements: Measurements,
+  discountPct: number = 0,
+): ClientBreakdown {
+  const items = packageLineItems(p, measurements);
+  const totals = packageTotal(p, measurements, discountPct);
+  const preTax = totals.total - totals.tax;
+  const base = totals.subtotal; // items + included add-ons, pre-markup
+  const factor = base > 0 ? preTax / base : 0;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  const lines: ClientBreakdownLine[] = items.map((it) => ({
+    id: it.id,
+    name: it.name,
+    quantity: it.quantity,
+    unit: it.unit,
+    clientPrice: r2(it.quantity * it.unitPrice * factor),
+    taxable: it.taxable,
+  }));
+  for (const a of p.addOns) {
+    if (!a.included) continue;
+    lines.push({
+      id: `addon-${a.id}`,
+      name: a.name,
+      quantity: 1,
+      unit: "ea",
+      clientPrice: r2(a.price * factor),
+      taxable: true,
+    });
+  }
+  // Cent-exact: park the rounding drift on the largest line so the
+  // itemization always reconciles to the quoted price.
+  const drift = r2(preTax - lines.reduce((acc, l) => acc + l.clientPrice, 0));
+  if (drift !== 0 && lines.length > 0) {
+    const biggest = lines.reduce((m, l) =>
+      l.clientPrice > m.clientPrice ? l : m,
+    );
+    biggest.clientPrice = r2(biggest.clientPrice + drift);
+  }
+  return {
+    lines,
+    materials: r2(
+      lines.filter((l) => l.taxable).reduce((a, l) => a + l.clientPrice, 0),
+    ),
+    labor: r2(
+      lines.filter((l) => !l.taxable).reduce((a, l) => a + l.clientPrice, 0),
+    ),
+    tax: r2(totals.tax),
+    total: r2(totals.total),
+  };
+}
 
 export function packageTotal(
   p: Package,
