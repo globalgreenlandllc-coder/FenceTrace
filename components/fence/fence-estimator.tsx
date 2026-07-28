@@ -408,8 +408,11 @@ export function FenceEstimator() {
       wallTopLf: effWallLf,
       postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
       mixed: mixedByType.length > 0 ? mixedByType : undefined,
+      // Local market resolved from the scanned address's state + ZIP —
+      // scales every catalog rate and carries the local tax rule.
+      market: scan?.market,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType, scan?.market],
   );
 
   const takeoff = useMemo(
@@ -488,6 +491,7 @@ export function FenceEstimator() {
         wallTopLf: effWallLf,
         postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
         mixed: mixedByType.length > 0 ? mixedByType : undefined,
+        market: scan.market,
       },
       fenceSections: layout.sections,
     });
@@ -906,7 +910,14 @@ export function FenceEstimator() {
               {/* Tier pricing */}
               {tierPrices.length > 0 && (
                 <section className="surface space-y-2 p-4">
-                  <h3 className="font-label text-zinc-500">Price options</h3>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="font-label text-zinc-500">Price options</h3>
+                    {scan?.market && scan.market.resolution !== "national" && (
+                      <span className="text-[11px] font-medium text-zinc-500">
+                        {scan.market.label} rates
+                      </span>
+                    )}
+                  </div>
                   {tierPrices.map(({ tier, label, price }) => (
                     <div
                       key={tier.id}
@@ -930,6 +941,24 @@ export function FenceEstimator() {
                       </div>
                     </div>
                   ))}
+                  {/* Where these numbers come from. Contractors get asked
+                      "why is this more than the guy down the road" — this
+                      is the answer, in the contractor's own hands. */}
+                  {scan?.market && (
+                    <details className="group mt-1">
+                      <summary className="cursor-pointer list-none text-[11px] font-medium text-zinc-500 hover:text-zinc-800">
+                        How this market is priced
+                        <span className="ml-1 inline-block transition-transform group-open:rotate-90">
+                          ›
+                        </span>
+                      </summary>
+                      <ul className="mt-2 space-y-1 border-l-2 border-zinc-200 pl-3 text-[11px] leading-relaxed text-zinc-500">
+                        {scan.market.basis.map((b, i) => (
+                          <li key={i}>{b}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </section>
               )}
 

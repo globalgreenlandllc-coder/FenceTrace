@@ -414,7 +414,21 @@ function IncludedBreakdown({
             <span className="tabular-nums">{formatCurrency(b.labor)}</span>
           </div>
           <div className="flex items-center justify-between text-zinc-600">
-            <span>Sales tax</span>
+            {/* Name the local rate the job was actually taxed at — a
+                homeowner checking the math against their own county
+                should be able to find the number. */}
+            <span>
+              Sales tax
+              {pkg.config.fence?.market && (
+                <span className="text-zinc-400">
+                  {" "}
+                  · {(pkg.config.fence.market.salesTaxRate * 100).toFixed(2)}%
+                  {pkg.config.fence.market.state
+                    ? ` ${pkg.config.fence.market.state}`
+                    : ""}
+                </span>
+              )}
+            </span>
             <span className="tabular-nums">{formatCurrency(b.tax)}</span>
           </div>
           <div className="flex items-center justify-between pt-1 font-semibold text-zinc-900">

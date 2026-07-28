@@ -15,6 +15,13 @@ import {
   type FenceTypeId,
   type Terrain,
 } from "./fence/catalog";
+import {
+  blendedFactor,
+  laborFactor,
+  LINE_MATERIAL_SHARE,
+  materialFactor,
+  type MarketSnapshot,
+} from "./fence/market";
 
 type GutterKey = `${GutterSize}-${GutterStyle}-${GutterMaterial}`;
 
@@ -103,6 +110,12 @@ function buildFenceLineItems(
   const t = fenceType(fence.type as FenceTypeId);
   const hf = heightFactor(t, fence.heightFt);
   const waste = 1 + Math.max(0, measurements.wasteFactorPct) / 100;
+  // Local market calibration (state + ZIP). Undefined → every factor is
+  // 1 and this prices at the catalog's national rates, exactly as it did
+  // before market pricing existed.
+  const mk = fence.market;
+  const matF = materialFactor(mk, t.id);
+  const labF = laborFactor(mk);
   const totalLfAll = Math.max(0, measurements.eaveLF);
   // Mixed-type sections price at their OWN catalog rates; their footage
   // comes out of the primary type's lines so nothing double-bills.
@@ -142,7 +155,7 @@ function buildFenceLineItems(
       description: "Posts, rails/panels, fabric, concrete, hardware & caps",
       quantity: lf,
       unit: "LF",
-      unitPrice: round2(t.materialPerLf * hf * waste),
+      unitPrice: round2(t.materialPerLf * hf * waste * matF),
       taxable: true,
     },
     {
@@ -154,20 +167,26 @@ function buildFenceLineItems(
           : `Layout, post setting, build & cleanup — ${fence.terrain} ground`,
       quantity: lf,
       unit: "LF",
-      unitPrice: round2(t.laborPerLf * hf * TERRAIN_FACTOR[fence.terrain as Terrain]),
+      unitPrice: round2(
+        t.laborPerLf * hf * TERRAIN_FACTOR[fence.terrain as Terrain] * labF,
+      ),
       taxable: false,
     },
   ];
   for (const m of mixed) {
     const mt = fenceType(m.type as FenceTypeId);
     const mLf = Math.round(m.lf);
+    // A mixed section is a DIFFERENT commodity — chain link across the
+    // back of a cedar job is steel, not lumber — so it takes its own
+    // material factor, not the primary type's.
+    const mMatF = materialFactor(mk, mt.id);
     lines.push({
       id: `fence-mixed-${mt.id}`,
       name: `${mt.label} section — ${mt.defaultHeightFt}' (${mLf} LF)`,
       description: "Built at its own rate along the marked stretch",
       quantity: mLf,
       unit: "LF",
-      unitPrice: round2(mt.materialPerLf * waste),
+      unitPrice: round2(mt.materialPerLf * waste * mMatF),
       taxable: true,
     });
     lines.push({
@@ -175,10 +194,16 @@ function buildFenceLineItems(
       name: `${mt.label} section — installation`,
       quantity: mLf,
       unit: "LF",
-      unitPrice: round2(mt.laborPerLf * TERRAIN_FACTOR[fence.terrain as Terrain]),
+      unitPrice: round2(
+        mt.laborPerLf * TERRAIN_FACTOR[fence.terrain as Terrain] * labF,
+      ),
       taxable: false,
     });
   }
+  // Gates, steps, wall anchors, stain and tear-out are part bought /
+  // part worked — each takes a blend of the market's material and labor
+  // factors at the split documented in LINE_MATERIAL_SHARE.
+  const gateF = blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.gate);
   if (gatesSingle > 0)
     lines.push({
       id: "gate-single",
@@ -186,7 +211,7 @@ function buildFenceLineItems(
       description: "Heavy-set posts, hinges & latch included",
       quantity: gatesSingle,
       unit: "ea",
-      unitPrice: t.gateSingle,
+      unitPrice: round2(t.gateSingle * gateF),
       taxable: true,
     });
   if (gatesDouble > 0)
@@ -196,14 +221,15 @@ function buildFenceLineItems(
       description: "Double swing, drop rod & latch included",
       quantity: gatesDouble,
       unit: "ea",
-      unitPrice: round2(t.gateSingle * 2.4),
+      unitPrice: round2(t.gateSingle * 2.4 * gateF),
       taxable: true,
     });
   customWidths.slice(0, gatesCustom).forEach((w, i) => {
     // Anchor pricing on the presets: ≤5' ≈ a walk gate; wider scales
     // linearly through the 10' drive-gate price (2.4× walk).
-    const price =
-      w <= 5 ? t.gateSingle : round2(t.gateSingle * 2.4 * (w / 10));
+    const price = round2(
+      (w <= 5 ? t.gateSingle : t.gateSingle * 2.4 * (w / 10)) * gateF,
+    );
     lines.push({
       id: `gate-custom-${i}`,
       name: `Custom gate (${w}') — framed & hung`,
@@ -221,7 +247,7 @@ function buildFenceLineItems(
       description: `${fence.steppedSections} stepped ${fence.steppedSections === 1 ? "section" : "sections"} on the grade`,
       quantity: fence.steppedSections!,
       unit: "ea",
-      unitPrice: 28,
+      unitPrice: round2(28 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.step)),
       taxable: true,
     });
   if (fence.postUpgrade) {
@@ -247,7 +273,16 @@ function buildFenceLineItems(
           : `${posts} posts — heavy 6×6 stock at every post`,
       quantity: posts,
       unit: "ea",
-      unitPrice: fence.postUpgrade === "steel" ? 24 : 14,
+      // A post upgrade is a pure material swap — the hole gets dug
+      // either way — so it moves with the market's material factor for
+      // the stock being swapped in (steel posts are a metal buy).
+      unitPrice: round2(
+        (fence.postUpgrade === "steel" ? 24 : 14) *
+          materialFactor(
+            mk,
+            fence.postUpgrade === "steel" ? "steel-ornamental" : "pt-pine-privacy",
+          ),
+      ),
       taxable: true,
     });
   }
@@ -263,7 +298,9 @@ function buildFenceLineItems(
       description: `${wallPosts} posts anchored on ${Math.round(fence.wallTopLf!)} LF of wall top (no digging on the wall)`,
       quantity: wallPosts,
       unit: "ea",
-      unitPrice: 72,
+      unitPrice: round2(
+        72 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.wallMount),
+      ),
       taxable: true,
     });
   }
@@ -273,7 +310,8 @@ function buildFenceLineItems(
       name: "Tear out & haul away existing fence",
       quantity: fence.removalLf,
       unit: "LF",
-      unitPrice: 4,
+      // Tear-out is crew time plus the dump fee — pure labor.
+      unitPrice: round2(4 * labF),
       taxable: false,
     });
   if (fence.stain && t.stainable)
@@ -283,10 +321,48 @@ function buildFenceLineItems(
       description: "Premium penetrating stain, 2 coats",
       quantity: Math.ceil(lf * fence.heightFt * 2),
       unit: "sq ft",
-      unitPrice: 1.1,
+      unitPrice: round2(
+        1.1 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.stain),
+      ),
       taxable: true,
     });
   return lines;
+}
+
+/**
+ * The fraction of a fence bill that sales tax actually lands on.
+ *
+ * Most states tax the materials on an improvement to real property and
+ * leave the installation labor alone — that's the `taxable` flag each
+ * BOM line already carries. A handful (AZ, CT, HI, NM, SD, WV) tax the
+ * contract as a whole, and there the share is 1. Shared by the
+ * estimator rail (priceFence) and the saved proposal (packageTotal) so
+ * the two can never disagree about tax.
+ */
+export function fenceTaxableShare(
+  items: { quantity: number; unitPrice: number; taxable: boolean }[],
+  market: MarketSnapshot | undefined,
+  extraTaxable = 0,
+): number {
+  const subtotal =
+    items.reduce((acc, i) => acc + i.quantity * i.unitPrice, 0) + extraTaxable;
+  if (subtotal <= 0) return 0;
+  if (market?.laborTaxable) return 1;
+  const taxable =
+    items.reduce(
+      (acc, i) => acc + (i.taxable ? i.quantity * i.unitPrice : 0),
+      0,
+    ) + extraTaxable;
+  return taxable / subtotal;
+}
+
+/** Sales-tax rate for a fence job — the resolved local rate when the
+ *  estimate carries a market, else the legacy national default. */
+export function fenceTaxRate(
+  market: MarketSnapshot | undefined,
+  fallback: number,
+): number {
+  return market ? market.salesTaxRate : fallback;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;

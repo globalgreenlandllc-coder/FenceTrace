@@ -1,97 +1,72 @@
 import { Container, Eyebrow, PillLink } from "./ui";
-import { PlanTrace } from "./house-scene";
 import { Reveal } from "./reveal";
+import { DemoWalkthrough } from "./demo-walkthrough";
+import { DEMO_ADDRESS, TOTAL_LF } from "./demo-property";
 
-const ROWS = [
-  {
-    title: "Fence lines traced from the sky",
-    body: "An afternoon by wheel and tape. Instant here.",
-    open: true,
-  },
-  { title: "Property lines pulled automatically", open: false },
-  { title: "Proposals sent the same hour", open: false },
-];
-
-function TracePanel() {
-  return (
-    <div className="w-[240px] rounded-2xl border border-zinc-200/70 bg-white p-4 shadow-[0_20px_45px_-20px_rgba(12,27,36,0.25)]">
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] font-semibold text-zinc-900">Fence Trace</p>
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
-          Complete
-        </span>
-      </div>
-      <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3">
-        {[
-          ["Address", "1425 Maple Ave"],
-          ["Fence line", "186 LF"],
-          ["Gates", "3"],
-          ["Confidence", "94%"],
-        ].map(([k, v]) => (
-          <div key={k} className="flex items-center justify-between text-[11px]">
-            <span className="text-zinc-500">{k}</span>
-            <span className="font-medium text-zinc-900">{v}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-700">
-        $5,301 estimate ready
-      </div>
-    </div>
-  );
-}
-
-
+/**
+ * The Smart Takeoffs section — and the page's main proof. It leads with
+ * the demo property: a prebuilt address that scans itself, draws its own
+ * backyard fence, builds in 3D, prices into a proposal and gets signed,
+ * all in about forty seconds and all off the real engine.
+ */
 export function Engine() {
   return (
     <section id="takeoffs" className="bg-paper py-24 md:py-32">
       <Container>
         <Reveal>
-          <div className="grid gap-14 md:grid-cols-2 md:gap-20">
+          <div className="grid gap-8 md:grid-cols-[1.05fr_0.95fr] md:items-end md:gap-16">
             <div>
               <Eyebrow>Smart Takeoffs</Eyebrow>
               <h2 className="mt-6 text-[30px] font-semibold leading-[1.05] tracking-tight text-zinc-900 md:text-[40px]">
-                FenceScan measures the yards{" "}
-                <span className="text-zinc-400">you never visit</span>
+                Watch a whole job happen{" "}
+                <span className="text-zinc-400">
+                  between two sips of coffee
+                </span>
               </h2>
-              <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-600">
-                Every address hides a full takeoff &mdash; fence runs, corners,
-                gate openings, property lines &mdash; that your current process
-                only reveals with a truck roll. FenceScan makes it visible.
+            </div>
+            <div className="max-w-md md:justify-self-end">
+              <p className="text-[15px] leading-relaxed text-zinc-600">
+                This is {DEMO_ADDRESS} — a demo property wired to the live
+                engine. The boundary, the {TOTAL_LF} feet of fence, the post
+                count, the packages: every number below is computed, not typed
+                in. Nothing here is a mockup.
               </p>
-              <div className="mt-7">
-                <PillLink href="/sign-in">Get Started</PillLink>
-              </div>
-
-              <div className="mt-12 divide-y divide-zinc-200 border-t border-zinc-200">
-                {ROWS.map((r) => (
-                  <div key={r.title} className="py-5">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[15px] font-semibold tracking-tight text-zinc-900">
-                        {r.title}
-                      </p>
-                      <span className="text-[18px] leading-none text-zinc-400">
-                        {r.open ? "–" : "+"}
-                      </span>
-                    </div>
-                    {r.body ? (
-                      <p className="mt-2 max-w-sm text-[13.5px] leading-relaxed text-zinc-500">
-                        {r.body}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
+              <div className="mt-6">
+                <PillLink href="/sign-in">Run it on a real address</PillLink>
               </div>
             </div>
+          </div>
+        </Reveal>
 
-            <div className="relative flex items-center rounded-3xl bg-accent-50 p-6 md:p-10">
-              <div className="w-full">
-                <PlanTrace />
+        <Reveal delay={0.05}>
+          <DemoWalkthrough />
+        </Reveal>
+
+        <Reveal delay={0.1}>
+          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+            {[
+              {
+                t: "Fence lines traced from the sky",
+                b: "An afternoon with a wheel and a tape. Instant here.",
+              },
+              {
+                t: "Property lines pulled automatically",
+                b: "County parcel records, not a guess off a satellite photo.",
+              },
+              {
+                t: "Proposals sent the same hour",
+                b: "3D model, e-signature and deposit in the same link.",
+              },
+            ].map((r) => (
+              <div key={r.t} className="bg-white p-6">
+                <p className="text-[14.5px] font-semibold tracking-tight text-zinc-900">
+                  {r.t}
+                </p>
+                <p className="mt-2 text-[13px] leading-relaxed text-zinc-500">
+                  {r.b}
+                </p>
               </div>
-              <div className="absolute bottom-8 right-6 md:right-10">
-                <TracePanel />
-              </div>
-            </div>
+            ))}
           </div>
         </Reveal>
       </Container>

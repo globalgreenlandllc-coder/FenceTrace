@@ -6,15 +6,23 @@
  * lib/fence/takeoff.test.mts.
  *
  * total = lines(materials+labor+gates+removal+stain) × (1 + markup%)
- *         − discount% → + FENCE_TAX_RATE on the TAXABLE share only
- *           (materials/gates/stain; labor and tear-out untaxed).
+ *         − discount% → + sales tax on the TAXABLE share only
+ *           (materials/gates/stain; labor and tear-out untaxed —
+ *           unless the job's market taxes installation labor too).
+ *
+ * Every per-LF and per-each rate underneath is the CATALOG's national
+ * rate scaled by the job's market snapshot (lib/fence/market.ts) —
+ * state + ZIP, resolved once at scan time and frozen onto the layout.
+ * No snapshot → national rates, which is what every estimate priced at
+ * before market pricing existed.
  */
 import {
   fenceType,
   type FenceTypeId,
 } from "./catalog";
 import { computeFenceTakeoff, type FenceLayoutInput } from "./takeoff";
-import { buildLineItems } from "@/lib/pricing";
+import type { MarketSnapshot } from "./market";
+import { buildLineItems, fenceTaxRate, fenceTaxableShare } from "@/lib/pricing";
 import { FENCE_TAX_RATE } from "@/lib/proposal-mock";
 import type { EstimateConfig, Measurements } from "@/lib/types";
 
@@ -42,6 +50,11 @@ export type FencePriceBreakdown = {
   tax: number;
   total: number;
   pricePerLf: number; // total ÷ net fence LF (headline number)
+  /** The market these numbers were priced in — undefined when the
+   *  layout carried none (national catalog rates). */
+  market?: MarketSnapshot;
+  /** Effective sales-tax rate applied. */
+  taxRate: number;
 };
 
 /** The Measurements + EstimateConfig a layout maps to — exported so the
@@ -90,6 +103,9 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       wallTopLf: Math.max(0, layout.wallTopLf ?? 0),
       postUpgrade: layout.postUpgrade,
       mixed: layout.mixed,
+      // Local market rides along so the proposal prices at the same
+      // state/ZIP rates the estimator quoted.
+      market: layout.market,
     },
   };
   return { measurements, config, netFenceLf: take.netFenceLf };
@@ -106,17 +122,15 @@ export function priceFence(
   const subtotal = round2(
     items.reduce((acc, i) => acc + i.quantity * i.unitPrice, 0),
   );
-  const taxableBase = items.reduce(
-    (acc, i) => acc + (i.taxable ? i.quantity * i.unitPrice : 0),
-    0,
-  );
   const markup = round2(subtotal * (Math.max(0, c.markupPct) / 100));
   const afterMarkup = subtotal + markup;
   const discount = round2(
     afterMarkup * (Math.min(50, Math.max(0, c.discountPct)) / 100),
   );
-  const share = subtotal > 0 ? taxableBase / subtotal : 0;
-  const tax = round2((afterMarkup - discount) * share * FENCE_TAX_RATE);
+  const share = fenceTaxableShare(items, layout.market);
+  const tax = round2(
+    (afterMarkup - discount) * share * fenceTaxRate(layout.market, FENCE_TAX_RATE),
+  );
   const total = round2(afterMarkup - discount + tax);
 
   return {
@@ -131,6 +145,8 @@ export function priceFence(
     tax,
     total,
     pricePerLf: netFenceLf > 0 ? round2(total / netFenceLf) : 0,
+    market: layout.market,
+    taxRate: fenceTaxRate(layout.market, FENCE_TAX_RATE),
   };
 }
 

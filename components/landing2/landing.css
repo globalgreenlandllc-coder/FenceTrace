@@ -44,9 +44,24 @@
   transform-box: fill-box;
 }
 
+/* Working ellipsis on the demo walkthrough's status pill */
+@keyframes ls-ellipsis {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.anim-ellipsis {
+  animation: ls-ellipsis 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ls-drip,
-  .ls-pop {
+  .ls-pop,
+  .anim-ellipsis {
     animation: none;
     opacity: 1;
     transform: none;

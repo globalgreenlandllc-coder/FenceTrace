@@ -1,3 +1,5 @@
+import type { MarketSnapshot } from "./fence/market";
+
 export type GutterStyle = "k-style" | "half-round";
 export type GutterSize = "5" | "6" | "7";
 export type GutterMaterial = "aluminum" | "copper" | "steel";
@@ -194,6 +196,13 @@ export type FenceEstimateConfig = {
    *  carved OUT of the primary type's lines and priced at their own
    *  catalog rates. */
   mixed?: { type: string; lf: number }[];
+  /** Local market calibration resolved from the property's state + ZIP
+   *  (lib/fence/market.ts), FROZEN at estimate time. Catalog rates are
+   *  national; this scales material and labor to what the job actually
+   *  costs in that market and carries the local sales-tax rule.
+   *  Absent = priced at national rates — every proposal saved before
+   *  market pricing existed keeps the total it was sent with. */
+  market?: MarketSnapshot;
 };
 
 export type EstimateConfig = {

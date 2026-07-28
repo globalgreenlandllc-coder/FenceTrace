@@ -6,7 +6,7 @@ import type {
   Measurements,
   RoofStructure,
 } from "./types";
-import { buildLineItems } from "./pricing";
+import { buildLineItems, fenceTaxRate, fenceTaxableShare } from "./pricing";
 import { sampleMeasurements } from "./mock-estimate";
 
 export type PackageId = "good" | "better" | "best";
@@ -687,13 +687,13 @@ export function packageTotal(
   // asserted in lib/fence/takeoff.test.mts.
   let tax: number;
   if (p.config.fence) {
-    const taxableBase =
-      items.reduce(
-        (acc, i) => acc + (i.taxable ? i.quantity * i.unitPrice : 0),
-        0,
-      ) + addOns;
-    const share = subtotal > 0 ? taxableBase / subtotal : 0;
-    tax = (afterMarkup - discount) * share * FENCE_TAX_RATE;
+    // Rate and taxable share both come from the job's frozen market
+    // snapshot when it has one (local rate; whole contract taxable in
+    // the states that tax installation labor). No snapshot → the
+    // legacy national rate, materials only.
+    const market = p.config.fence.market;
+    const share = fenceTaxableShare(items, market, addOns);
+    tax = (afterMarkup - discount) * share * fenceTaxRate(market, FENCE_TAX_RATE);
   } else {
     tax = (afterMarkup - discount) * EFFECTIVE_TAX_RATE;
   }

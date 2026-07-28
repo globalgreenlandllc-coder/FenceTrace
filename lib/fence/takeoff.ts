@@ -13,6 +13,7 @@ import {
   type FenceTypeId,
   type Terrain,
 } from "./catalog";
+import type { MarketSnapshot } from "./market";
 
 export type FenceLayoutInput = {
   type: FenceTypeId;
@@ -49,6 +50,11 @@ export type FenceLayoutInput = {
    *  job): total LF per secondary type. Carved out of the primary
    *  fabric and materialized as their own BOM block. */
   mixed?: { type: FenceTypeId; lf: number }[];
+  /** Local market calibration (state + ZIP) — see lib/fence/market.ts.
+   *  Takeoff QUANTITIES don't care where the job is; this rides on the
+   *  layout only so pricing can scale the catalog's national rates and
+   *  the same object can hand off to the proposal. */
+  market?: MarketSnapshot;
 };
 
 export type BomLine = {

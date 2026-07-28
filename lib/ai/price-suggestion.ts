@@ -334,8 +334,20 @@ export async function suggestMarketPrices(
   // FenceScan packages carry config.fence — brief and prompt speak
   // fence; the gutter path stays for legacy configs.
   const isFence = packages.some((p) => p.config.fence);
+  // Anchor the AI on the SAME market the engine priced in — the resolved
+  // state/ZIP indices and the local tax rule, never the contractor's own
+  // numbers. That keeps the suggestion an independent second opinion
+  // while stopping it from wandering into a different city's rates.
+  const market = packages.find((p) => p.config.fence?.market)?.config.fence
+    ?.market;
   const jobBrief = [
     `Property address: ${address}`,
+    ...(market && market.resolution !== "national"
+      ? [
+          `Resolved market: ${market.label}${market.zip ? ` (ZIP ${market.zip})` : ""} — price against THIS market.`,
+          `Local cost context: installation labor runs ${Math.round((market.labor - 1) * 100)}% vs the US average; sales tax ${(market.salesTaxRate * 100).toFixed(2)}%${market.laborTaxable ? " on the full contract (this state taxes installation labor)" : " on materials only"}.`,
+        ]
+      : []),
     ``,
     `Measurements (same property for every package):`,
     ...(isFence

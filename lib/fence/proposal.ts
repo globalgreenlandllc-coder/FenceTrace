@@ -4,6 +4,7 @@
  */
 import { fenceType, type FenceTypeId, type Terrain } from "./catalog";
 import { fenceTiers } from "./pricing";
+import type { MarketSnapshot } from "./market";
 import type { FenceEstimateConfig } from "@/lib/types";
 
 export type FenceDraftInput = {
@@ -21,6 +22,10 @@ export type FenceDraftInput = {
   wallTopLf?: number;
   postUpgrade?: "steel" | "6x6";
   mixed?: { type: FenceTypeId; lf: number }[];
+  /** The market the estimator quoted in, frozen at scan time. Copied
+   *  onto every tier so the saved proposal reprices at the same
+   *  state/ZIP rates the contractor saw on the rail. */
+  market?: MarketSnapshot;
 };
 
 export type FenceTierPatch = {
@@ -94,6 +99,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         wallTopLf: input.wallTopLf ?? 0,
         postUpgrade: input.postUpgrade,
         mixed: input.mixed,
+        market: input.market,
       },
       highlights,
       markupPct: tier.markupPct,

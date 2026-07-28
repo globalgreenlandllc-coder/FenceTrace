@@ -13,6 +13,7 @@ import {
   type LatLng,
   type Pt,
 } from "@/lib/fence/geo";
+import { resolveMarket, type MarketSnapshot } from "@/lib/fence/market";
 
 /**
  * scan-core.ts — the FenceScan measuring pipeline, shared between the
@@ -44,6 +45,10 @@ export type FenceScanResult = {
    *  ties into. Empty when OSM has nothing here. */
   buildings: Pt[][];
   parcel: { acres: number | null; apn: string | null } | null;
+  /** Local pricing market resolved from the geocoded state + ZIP.
+   *  Frozen here and carried through takeoff → proposal so a quote
+   *  never reprices itself when the market table is revised. */
+  market: MarketSnapshot;
 };
 
 export type FenceScanError = { ok: false; reason: string };
@@ -62,8 +67,38 @@ async function googleMapsKeys(): Promise<string[]> {
 }
 
 type GeocodeOutcome =
-  | { ok: true; loc: LatLng; formatted: string }
+  | {
+      ok: true;
+      loc: LatLng;
+      formatted: string;
+      /** Two-letter state and 5-digit ZIP from the geocoder's structured
+       *  components — the inputs the market resolver prices on. Null
+       *  when Google didn't return them (rare, non-US, or a rooftop
+       *  match with no postal code). */
+      state: string | null;
+      zip: string | null;
+    }
   | { ok: false; kind: "not_found" | "service" };
+
+/** Pull state + postal code out of a Geocoding API result. Structured
+ *  components beat regex-ing the formatted string: they're already
+ *  normalized and they don't confuse a street name for a state. */
+function addressParts(hit: any): { state: string | null; zip: string | null } {
+  const comps: any[] = Array.isArray(hit?.address_components)
+    ? hit.address_components
+    : [];
+  const pick = (type: string, short = true) => {
+    const c = comps.find((x) => Array.isArray(x?.types) && x.types.includes(type));
+    if (!c) return null;
+    const v = short ? c.short_name : c.long_name;
+    return typeof v === "string" && v.length > 0 ? v : null;
+  };
+  const zipRaw = pick("postal_code");
+  return {
+    state: pick("administrative_area_level_1"),
+    zip: zipRaw ? zipRaw.slice(0, 5) : null,
+  };
+}
 
 async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome> {
   let outcome: GeocodeOutcome = { ok: false, kind: "service" };
@@ -91,7 +126,12 @@ async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome>
       const loc = hit?.geometry?.location;
       if (typeof loc?.lat !== "number" || typeof loc?.lng !== "number")
         return { ok: false, kind: "not_found" };
-      return { ok: true, loc: { lat: loc.lat, lng: loc.lng }, formatted: hit.formatted_address ?? address };
+      return {
+        ok: true,
+        loc: { lat: loc.lat, lng: loc.lng },
+        formatted: hit.formatted_address ?? address,
+        ...addressParts(hit),
+      };
     } catch {
       outcome = { ok: false, kind: "service" };
     }
@@ -212,5 +252,12 @@ export async function fenceScanCore(
     // latency (1–9 s) used to sit here and made every scan feel slow.
     buildings: [],
     parcel: parcel ? { acres: parcel.acres, apn: parcel.apn } : null,
+    // Structured components first; the formatted string is the fallback
+    // for the odd result that carries no postal_code component.
+    market: resolveMarket({
+      state: geo.state,
+      zip: geo.zip,
+      address: geo.formatted,
+    }),
   };
 }
