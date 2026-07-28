@@ -31,8 +31,6 @@ export function BusinessCard({ business }: { business: BusinessStats }) {
   const proposals = [...business.proposals].sort(
     (a, b) => PROPOSAL_ORDER.indexOf(a.status) - PROPOSAL_ORDER.indexOf(b.status),
   );
-  const creditsAvailable =
-    business.credits.included + business.credits.bonus - business.credits.used;
 
   return (
     <section className="surface p-5 shadow-card">
@@ -81,7 +79,6 @@ export function BusinessCard({ business }: { business: BusinessStats }) {
               label="Property scans"
               value={`${compact(business.estimates.inRange)} in range · ${compact(business.estimates.total)} total`}
             />
-            <Row label="Crew members" value={compact(business.workers)} />
           </div>
           {proposals.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
