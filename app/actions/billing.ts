@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { FREE_PROPOSALS_PER_MONTH } from "@/lib/stripe";
 import { PRO_PLAN, getStripe } from "@/lib/stripe";
 import { getPlanPricing, packBlurb } from "@/lib/plan-pricing";
 import { getMe, type MeData } from "./me";
@@ -35,12 +36,18 @@ export type MyBilling = {
   wallet: MeData["credits"];
   features: string[];
   recentTopups: Array<{ id: string; description: string; amountCents: number; at: string }>;
+  /** Proposals sent this calendar month — the number the free plan caps. */
+  sentThisMonth: number;
+  freeSendCap: number;
 };
 
 export async function getMyBilling(): Promise<MyBilling | null> {
   const me = await getMe();
   if (!me) return null;
-  const [stripe, pricing, sub, topups] = await Promise.all([
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+  const [stripe, pricing, sub, topups, sentThisMonth] = await Promise.all([
     getStripe(),
     getPlanPricing(),
     db.subscription.findUnique({ where: { userId: me.user.id } }),
@@ -49,6 +56,9 @@ export async function getMyBilling(): Promise<MyBilling | null> {
       orderBy: { createdAt: "desc" },
       take: 5,
       select: { id: true, description: true, grossCents: true, createdAt: true },
+    }),
+    db.proposal.count({
+      where: { userId: me.user.id, sentAt: { gte: monthStart } },
     }),
   ]);
   return {
@@ -73,6 +83,8 @@ export async function getMyBilling(): Promise<MyBilling | null> {
       amountCents: t.grossCents,
       at: t.createdAt.toISOString(),
     })),
+    sentThisMonth,
+    freeSendCap: FREE_PROPOSALS_PER_MONTH,
   };
 }
 
@@ -165,7 +177,7 @@ export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
             product_data: {
               name: pricing.pro.name,
               description:
-                "Monthly blueprint takeoffs · proposals, e-sign, scheduling & payment tracking",
+                "Unlimited proposals · e-sign, scheduling, payments & crew tools",
             },
           },
         },
@@ -188,74 +200,20 @@ export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
 }
 
 export async function createCreditsCheckout(
-  packId: string,
+  _packId: string,
 ): Promise<CheckoutResult> {
-  try {
-    const me = await getMe();
-    if (!me) return { ok: false, reason: "Not signed in" };
-    const pricing = await getPlanPricing();
-    const pack = pricing.packs.find((p) => p.id === packId) ?? null;
-    if (!pack) return { ok: false, reason: "Unknown credit pack" };
-    const stripe = await getStripe();
-    if (!stripe) {
-      return {
-        ok: false,
-        reason:
-          "Payments aren't configured yet — add a Stripe secret key in /admin/api-keys.",
-      };
-    }
-
-    const customerId = await ensureStripeCustomer(
-      me.user.id,
-      me.user.email,
-      me.profile.contractorName || me.user.name,
-    );
-    const base = appBaseUrl();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer: customerId,
-      client_reference_id: me.user.id,
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: pack.amountCents,
-            product_data: {
-              name: `${pack.credits} blueprint credits`,
-              description: `${packBlurb(pack)} · credits never expire`,
-            },
-          },
-        },
-      ],
-      metadata: {
-        userId: me.user.id,
-        kind: "credits",
-        credits: String(pack.credits),
-        packId: pack.id,
-      },
-      payment_intent_data: {
-        metadata: {
-          userId: me.user.id,
-          kind: "credits",
-          credits: String(pack.credits),
-        },
-      },
-      success_url: `${base}/dashboard/settings?billing=credits`,
-      cancel_url: `${base}/dashboard/settings?billing=cancelled`,
-    });
-    if (!session.url) return { ok: false, reason: "Stripe returned no checkout URL" };
-    return { ok: true, url: session.url };
-  } catch (e) {
-    console.error("[createCreditsCheckout] threw", e);
-    return {
-      ok: false,
-      reason: e instanceof Error ? e.message : "Couldn't start checkout",
-    };
-  }
+  // FenceTrace sells ONE thing: Pro (unlimited proposal sending).
+  // Blueprint credits metered a feature the fence platform doesn't
+  // have — never let anyone pay for them. The full checkout body lives
+  // in git history; re-enable only alongside a real credit-metered
+  // feature.
+  return {
+    ok: false,
+    reason:
+      "Credit top-ups aren't a FenceTrace thing — scans and takeoffs are free, and Pro is unlimited proposals.",
+  };
 }
 
-/** Stripe-hosted customer portal: update card, cancel, invoices. */
 export async function openBillingPortal(): Promise<CheckoutResult> {
   try {
     const me = await getMe();

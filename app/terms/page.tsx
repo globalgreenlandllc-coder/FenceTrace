@@ -68,9 +68,8 @@ export default function TermsPage() {
       <LegalSection id="billing" title="5. Plans, credits, and billing">
         <LegalList
           items={[
-            "FenceTrace Pro is billed monthly through Stripe and includes a monthly allowance of AI takeoff credits; unused included credits reset at each renewal.",
-            "Credit packs are one-time purchases that stack on top of your subscription and do not expire with the monthly reset.",
-            "Re-running a recently scanned address within the free re-run window does not consume a credit.",
+            "FenceTrace Pro is billed monthly through Stripe and unlocks unlimited proposal sending; the free plan sends up to three proposals per calendar month.",
+            "Property scans, measurements, and takeoffs are free on every plan.",
             "You can cancel anytime from Settings; your plan stays active until the end of the paid period. Fees already paid are non-refundable except where required by law.",
             "We may change pricing with at least 30 days' notice before it affects your next renewal.",
           ]}

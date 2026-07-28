@@ -309,7 +309,6 @@ export function buildPricingView(cfg: PlanPricing): PricingView {
     priceLabel: usd(cfg.pro.priceCents),
     badge: cfg.pro.badge,
     features: [
-      `${cfg.pro.includedCredits} plan takeoffs every month`,
       ...cfg.pro.features,
     ],
     freeBlueprintCredits: cfg.free.blueprintCredits,

@@ -75,43 +75,27 @@ export function Pricing({ pricing }: { pricing: PricingView }) {
                 </span>
               </div>
               <p className="mt-3 text-xs leading-relaxed text-zinc-500">
-                The free plan includes unlimited satellite property scans,
-                3 sent proposals a month
-                {pricing.freeBlueprintCredits > 0 && (
-                  <>
-                    {" "}
-                    and {pricing.freeBlueprintCredits} plan takeoff
-                    {pricing.freeBlueprintCredits === 1 ? "" : "s"} to try
-                  </>
-                )}
-                .
+                The free plan includes unlimited property scans and 3 sent
+                proposals a month.
               </p>
             </div>
 
             <div className="flex flex-col rounded-3xl bg-accent-950 p-6 text-white">
               <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
-                Need more takeoffs
+                Free plan
               </p>
               <h3 className="mt-2 text-[18px] font-semibold tracking-tight">
-                Top up anytime
+                $0 — start today
               </h3>
-              <ul className="mt-4 divide-y divide-white/10">
-                {pricing.packs.map((p) => (
-                  <li key={p.qty} className="py-3.5 first:pt-1">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="text-sm font-semibold">{p.qty}</p>
-                      <p className="text-sm font-semibold tabular-nums">
-                        {p.price}
-                      </p>
-                    </div>
-                    <p className="mt-0.5 text-xs text-white/50">{p.per}</p>
-                  </li>
-                ))}
+              <ul className="mt-4 divide-y divide-white/10 text-sm">
+                <li className="py-3.5 first:pt-1">Unlimited property scans</li>
+                <li className="py-3.5">Full takeoff, 3D &amp; topo tools</li>
+                <li className="py-3.5">3 sent proposals a month</li>
+                <li className="py-3.5">No card required</li>
               </ul>
               <p className="mt-auto pt-5 text-xs leading-relaxed text-white/40">
-                Credits meter plan takeoffs only — property scans are free on
-                every plan. Packs stack on top of your subscription and never
-                expire.
+                Outgrow it? Pro is one flat price — unlimited proposals,
+                everything included.
               </p>
             </div>
           </div>

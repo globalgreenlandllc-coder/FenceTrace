@@ -31,14 +31,6 @@ const RAIN_DROPS: { x: number; y: number; d: string }[] = [
 
 export default async function SignUpPage() {
   const pricing = await getPlanPricing();
-  const included = pricing.pro.includedCredits;
-  const freeBlueprints = pricing.free.blueprintCredits;
-  // Cheapest per-takeoff top-up rate, for the "per extra" stat.
-  const cheapestPack = pricing.packs.length
-    ? pricing.packs.reduce((a, b) =>
-        a.amountCents / a.credits <= b.amountCents / b.credits ? a : b,
-      )
-    : null;
   return (
     <div className="relative grid min-h-screen bg-white lg:grid-cols-2">
       <div className="relative flex flex-col justify-between p-8 sm:p-12">
@@ -51,11 +43,8 @@ export default async function SignUpPage() {
             Create your account
           </h1>
           <p className="mt-2 mb-6 text-zinc-600">
-            Start free — unlimited address estimates
-            {freeBlueprints > 0
-              ? ` plus ${freeBlueprints} plan takeoff${freeBlueprints === 1 ? "" : "s"}`
-              : ""}
-            . No card required.
+            Start free — unlimited scans and 3 proposals a month. No card
+            required.
           </p>
 
           <SignUp
@@ -124,28 +113,17 @@ export default async function SignUpPage() {
               <span className="text-white">in under a minute.</span>
             </h2>
             <p className="mt-4 max-w-md text-white/60">
-              Property scans are free on every plan. Pro adds{" "}
-              {included} plan takeoffs a month
-              {cheapestPack
-                ? `, with top-ups from ${packBlurb(cheapestPack)}`
-                : ""}
-              .
+              Scans and takeoffs are free on every plan. Pro sends
+              unlimited proposals.
             </p>
           </div>
           <div className="anim-enter stagger-3 grid gap-3 sm:grid-cols-2">
-            <Stat n="Free" l="property scans, every plan" />
+            <Stat n="Free" l="scans & takeoffs, every plan" />
             <Stat
               n={`${usd(pricing.pro.priceCents)}/mo`}
-              l={`${included} plan takeoffs on Pro`}
+              l="unlimited proposals on Pro"
             />
-            {cheapestPack ? (
-              <Stat
-                n={`$${(cheapestPack.amountCents / cheapestPack.credits / 100).toFixed(2)}`}
-                l="per extra plan takeoff"
-              />
-            ) : (
-              <Stat n="Top-ups" l="buy credits anytime" />
-            )}
+            <Stat n="3" l="free proposals every month" />
             <Stat n="Cancel" l="anytime" />
           </div>
         </div>
