@@ -11,10 +11,10 @@ import type { ProposalTakeoff } from "@/lib/proposal-mock";
  */
 
 export const JOB_KIND_LABEL: Record<JobKind, string> = {
-  // Enum values are legacy (GUTTERS_*) — labels are what workers see.
+  // Enum values are legacy (GUTTERS_*/ROOF) — labels are what everyone sees.
   GUTTERS_REPLACEMENT: "Fence — replacement",
   GUTTERS_NEW: "Fence — new install",
-  ROOF: "Roof",
+  ROOF: "Other trade work",
   REPAIR: "Repair",
   OTHER: "Other",
 };
