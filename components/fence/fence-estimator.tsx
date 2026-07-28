@@ -384,11 +384,13 @@ export function FenceEstimator() {
       )
     : 0;
   // Wall sections are mounts, not slope steps — don't double-charge.
+  // Subtract the SPLIT step count those sections contributed (a 4'
+  // sheer drop counted as 4 code-sized steps until the wall confirmed).
   const effSteppedSections = slopeFromRuns
     ? Math.max(
         0,
         (slope?.steppedSections ?? 0) -
-          (wallTop ? (slope?.wallSections ?? 0) : 0),
+          (wallTop ? (slope?.wallSteppedSections ?? 0) : 0),
       )
     : 0;
 
@@ -791,9 +793,10 @@ export function FenceEstimator() {
                         {layout.runs.length > 0 && slope.steppedSections > 0 ? (
                           <>
                             <strong>{slope.steppedSections}</strong>{" "}
-                            {slope.steppedSections === 1 ? "section steps" : "sections step"}{" "}
-                            down the slope — {slope.stepPostLengthFt}&apos; posts there,{" "}
-                            {slope.basePostLengthFt}&apos; elsewhere.
+                            {slope.steppedSections === 1 ? "step" : "steps"} down
+                            the slope (each ≤ 1&apos; so the top line stays at
+                            code height) — {slope.stepPostLengthFt}&apos; posts
+                            there, {slope.basePostLengthFt}&apos; elsewhere.
                           </>
                         ) : (
                           <>Racks with the grade — {slope.basePostLengthFt}&apos; posts throughout.</>

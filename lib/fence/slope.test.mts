@@ -33,13 +33,18 @@ test("same 10% grade FORCES steps for prefab panels (0.5' racking limit)", () =>
   assert.equal(s.stepPostLengthFt, 10);
 });
 
-test("steep hillside: steep terrain + stepped sections for stick too", () => {
-  // 1.6 ft per 8' section = 20% grade — over the 1.0 stick limit
+test("steep hillside: big drops split into code-sized steps", () => {
+  // 1.6 ft per 8' section = 20% grade — over the 1.0 stick limit.
+  // Each section splits into TWO ≤1' steps (shorter panels + an extra
+  // post) so no point of the fence face runs over nominal height.
   const elev = [100, 101.6, 103.2, 104.8];
   const s = summarizeSlopes([elev], 8, 6, "stick");
   assert.equal(s.suggestedTerrain, "steep");
-  assert.equal(s.steppedSections, 3);
+  assert.equal(s.steppedSections, 6); // 3 sections × 2 splits
   assert.equal(s.maxGradePct, 20);
+  // per-step drop after splitting: 1.6 / 2 = 0.8 ft → 10' step posts
+  assert.ok(Math.abs(s.runs[0]!.maxStepFt - 0.8) < 1e-9);
+  assert.equal(s.stepPostLengthFt, 10);
 });
 
 test("chain-link racks the most; burial floors at 2 feet", () => {
@@ -54,11 +59,15 @@ test("retaining-wall detection: a sheer one-section drop reads wall-like", () =>
   const s = summarizeSlopes([[100, 100, 96, 96]], 8, 6, "stick");
   assert.equal(s.wallSections, 1);
   assert.equal(s.wallLikeLf, 8);
-  // still counted as a step until the contractor confirms the wall
-  assert.ok(s.steppedSections >= 1);
+  // Until the contractor confirms the wall it's priced as code-sized
+  // steps (4' → four ≤1' steps) — and wallSteppedSections carries the
+  // same count so confirming the wall removes exactly those steps.
+  assert.equal(s.steppedSections, 4);
+  assert.equal(s.wallSteppedSections, 4);
   // an ordinary 10% grade never reads as a wall
   const g = summarizeSlopes([[100, 100.8, 101.6]], 8, 6, "stick");
   assert.equal(g.wallSections, 0);
+  assert.equal(g.wallSteppedSections, 0);
 });
 
 test("analyzeRunSlope: too-short runs are inert", () => {

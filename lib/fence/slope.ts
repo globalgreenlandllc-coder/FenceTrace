@@ -20,14 +20,20 @@ import type { Terrain } from "./catalog";
 export type RunSlope = {
   /** Rise per section, ft (signed, one entry per section). */
   sectionRises: number[];
-  /** Sections that must STEP rather than rack. */
+  /** STEPS the crew must build (code-sized): a section whose rise beats
+   *  the racking limit contributes ceil(rise / MAX_STEP_DROP_FT) steps —
+   *  big drops split into shorter panels with extra posts so no point
+   *  of the fence face runs more than ~1' over nominal height. */
   steppedSections: number;
   /** Sections whose one-section rise reads as a sheer drop — a
-   *  retaining wall or cut bank rather than walkable grade. Subset of
-   *  steppedSections; surfaced as a "mounting on a wall?" suggestion,
-   *  never auto-priced. */
+   *  retaining wall or cut bank rather than walkable grade. Surfaced as
+   *  a "mounting on a wall?" suggestion, never auto-priced. */
   wallSections: number;
-  /** Largest single-section drop, ft. */
+  /** Steps attributable to wall-like sections (so confirming the wall
+   *  can stop double-charging them as slope steps). */
+  wallSteppedSections: number;
+  /** Largest PER-STEP drop after splitting, ft (≤ MAX_STEP_DROP_FT for
+   *  walkable grade — drives the extended-post length). */
   maxStepFt: number;
   /** Average absolute grade along the run, percent. */
   avgGradePct: number;
@@ -43,6 +49,9 @@ export type SlopeSummary = {
   steppedSections: number;
   /** Wall-like sections across all runs (see RunSlope.wallSections). */
   wallSections: number;
+  /** Steps counted inside wall-like sections (subtract these when the
+   *  contractor confirms the wall — mounts replace steps). */
+  wallSteppedSections: number;
   /** LF of fence sitting over wall-like drops — seed for the estimator's
    *  "mount on the retaining wall" toggle. */
   wallLikeLf: number;
@@ -58,6 +67,15 @@ export type SlopeSummary = {
  *  or cut bank, not walkable grade. 2.5' over an 8' section ≈ 31% in a
  *  single step, concentrated where neighboring sections aren't. */
 export const WALL_RISE_FT = 2.5;
+
+/** Max drop a SINGLE step may take (ft). Codes measure fence height
+ *  from the grade directly below — one big step would push the face
+ *  over the permitted height at the downhill post (a 6' fence stepping
+ *  3' reads as 9' there). Installers split big drops into shorter
+ *  panels with extra posts; capping each step at 1' keeps every point
+ *  of the fence within ~1' of nominal height, inside common municipal
+ *  measuring tolerance. Tunable if a jurisdiction is stricter. */
+export const MAX_STEP_DROP_FT = 1.0;
 
 /** How much rise one section can absorb by racking, by build kind. */
 export function rackingLimitFt(build: "stick" | "panel" | "mesh" | "rail"): number {
@@ -81,6 +99,7 @@ export function analyzeRunSlope(
       sectionRises: [],
       steppedSections: 0,
       wallSections: 0,
+      wallSteppedSections: 0,
       maxStepFt: 0,
       avgGradePct: 0,
       maxGradePct: 0,
@@ -92,12 +111,30 @@ export function analyzeRunSlope(
     rises.push(elevationsFt[i] - elevationsFt[i - 1]);
   }
   const grades = rises.map((r) => Math.abs(r / sectionLenFt) * 100);
-  const stepped = rises.filter((r) => Math.abs(r) > rackLimitFt);
+  // A section that can't rack SPLITS into code-sized steps: shorter
+  // panels + extra posts so each drop stays ≤ MAX_STEP_DROP_FT (both
+  // directions — uphill and downhill use the absolute rise).
+  let steps = 0;
+  let wallSections = 0;
+  let wallSteps = 0;
+  let maxPerStep = 0;
+  for (const r of rises) {
+    const rise = Math.abs(r);
+    if (rise <= rackLimitFt) continue;
+    const splits = Math.max(1, Math.ceil(rise / MAX_STEP_DROP_FT));
+    steps += splits;
+    maxPerStep = Math.max(maxPerStep, rise / splits);
+    if (rise >= WALL_RISE_FT) {
+      wallSections += 1;
+      wallSteps += splits;
+    }
+  }
   return {
     sectionRises: rises.map((r) => round2(r)),
-    steppedSections: stepped.length,
-    wallSections: rises.filter((r) => Math.abs(r) >= WALL_RISE_FT).length,
-    maxStepFt: round2(stepped.reduce((m, r) => Math.max(m, Math.abs(r)), 0)),
+    steppedSections: steps,
+    wallSections,
+    wallSteppedSections: wallSteps,
+    maxStepFt: round2(maxPerStep),
     avgGradePct: round2(grades.reduce((a, b) => a + b, 0) / grades.length),
     maxGradePct: round2(Math.max(...grades)),
     totalRiseFt: round2(
@@ -125,6 +162,7 @@ export function summarizeSlopes(
   const maxG = all.reduce((m, r) => Math.max(m, r.maxGradePct), 0);
   const stepped = all.reduce((a, r) => a + r.steppedSections, 0);
   const walls = all.reduce((a, r) => a + r.wallSections, 0);
+  const wallSteps = all.reduce((a, r) => a + r.wallSteppedSections, 0);
   const maxStep = all.reduce((m, r) => Math.max(m, r.maxStepFt), 0);
 
   const suggestedTerrain: Terrain =
@@ -137,6 +175,7 @@ export function summarizeSlopes(
     maxGradePct: round2(maxG),
     steppedSections: stepped,
     wallSections: walls,
+    wallSteppedSections: wallSteps,
     wallLikeLf: round2(walls * sectionLenFt),
     suggestedTerrain,
     basePostLengthFt: roundPost(base),

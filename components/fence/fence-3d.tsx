@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
-import { rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
+import { MAX_STEP_DROP_FT, rackingLimitFt, WALL_RISE_FT } from "@/lib/fence/slope";
 import {
   CANVAS_H,
   CANVAS_W,
@@ -613,10 +613,32 @@ export function Fence3D({
           continue;
         }
 
+        // Chunks whose rise beats the racking limit SPLIT into
+        // code-sized steps (extra posts, each drop ≤ MAX_STEP_DROP_FT)
+        // — the same rule the slope engine prices.
         const sections = Math.max(1, Math.ceil(len / spacingPx));
+        const bounds: number[] = [];
+        for (let c = 0; c <= sections; c++) {
+          bounds.push(iv.s + (len * c) / sections);
+        }
+        const cuts: number[] = [bounds[0]];
         for (let c = 0; c < sections; c++) {
-          const d0 = iv.s + (len * c) / sections;
-          const d1 = iv.s + (len * (c + 1)) / sections;
+          const c0 = bounds[c];
+          const c1 = bounds[c + 1];
+          const rise = hasGroundFor(ri)
+            ? Math.abs(elevAt(ri, c1) - elevAt(ri, c0))
+            : 0;
+          const splits =
+            rise > rackFt && rise < WALL_RISE_FT
+              ? Math.max(1, Math.ceil(rise / MAX_STEP_DROP_FT))
+              : 1;
+          for (let k = 1; k <= splits; k++) {
+            cuts.push(c0 + ((c1 - c0) * k) / splits);
+          }
+        }
+        for (let c = 0; c < cuts.length - 1; c++) {
+          const d0 = cuts[c];
+          const d1 = cuts[c + 1];
           const A = pointAt(rg.pts, rg.cum, d0);
           const B = pointAt(rg.pts, rg.cum, d1);
           const zA = zOf(ri, d0);
@@ -624,7 +646,11 @@ export function Fence3D({
           const riseFt = hasGroundFor(ri) ? elevAt(ri, d1) - elevAt(ri, d0) : 0;
           const wallish =
             retainingWall && hasGroundFor(ri) && Math.abs(riseFt) >= WALL_RISE_FT;
-          const stepped = !wallish && hasGroundFor(ri) && Math.abs(riseFt) > rackFt;
+          // Racking is an ANGLE limit — a half-length panel can only
+          // absorb half the rise before it must step level.
+          const rackAllowFt = rackFt * Math.max(0.15, (d1 - d0) / spacingPx);
+          const stepped =
+            !wallish && hasGroundFor(ri) && Math.abs(riseFt) > rackAllowFt;
           const level = stepped || wallish;
           const bzA = level ? Math.max(zA, zB) : zA;
           const bzB = level ? Math.max(zA, zB) : zB;
