@@ -862,11 +862,22 @@ export async function deleteProposal(
 
     const row = await db.proposal.findUnique({
       where: { id },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, paidCents: true },
     });
     if (!row) return { ok: false, reason: "Proposal not found" };
     if (row.userId !== me.user.id) {
       return { ok: false, reason: "Not your proposal" };
+    }
+    // Jobs with recorded payments are financial history — receipts,
+    // installments and profit rollups all hang off this row, and
+    // deleting it would silently erase revenue. Payments must be
+    // un-recorded first (payments drawer), which is deliberate friction.
+    if (row.paidCents > 0) {
+      return {
+        ok: false,
+        reason:
+          "This job has recorded payments. Un-record them in Payments before deleting.",
+      };
     }
 
     await db.proposal.delete({ where: { id } });
