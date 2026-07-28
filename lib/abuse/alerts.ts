@@ -46,8 +46,8 @@ export async function alertAdmins(args: {
     for (const to of recipients) {
       await sendEmailViaResend({
         to,
-        fromName: "FenceTrace Abuse Guard",
-        subject: `[FenceTrace] ${args.subject}`,
+        fromName: "FenceScan Abuse Guard",
+        subject: `[FenceScan] ${args.subject}`,
         html,
         text,
         skipAbuseGuard: true,

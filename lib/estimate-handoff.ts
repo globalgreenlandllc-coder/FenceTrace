@@ -25,7 +25,7 @@ import type {
  * editing eaves/downspouts from inside the proposal view.
  */
 
-const STORAGE_KEY = "fencetrace:estimate-handoff";
+const STORAGE_KEY = "fencescan:estimate-handoff";
 
 export interface EstimateHandoffAerial {
   imageDataUrl: string;

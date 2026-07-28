@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { cookies } from "next/headers";
 
-const COOKIE_NAME = "fencetrace.impersonate";
+const COOKIE_NAME = "fencescan.impersonate";
 export const IMPERSONATION_MAX_AGE_MS = 60 * 60 * 1000;
 
 function getSigningKey(): Buffer {

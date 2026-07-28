@@ -96,7 +96,7 @@ export function LiveActivityFeed({
           <MousePointerClick className="mx-auto h-5 w-5 text-zinc-300" aria-hidden />
           <p className="mt-2 text-sm text-zinc-400">
             Clicks and page views stream in here the moment someone browses
-            FenceTrace.
+            FenceScan.
           </p>
         </div>
       ) : (

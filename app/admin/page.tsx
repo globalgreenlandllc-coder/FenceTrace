@@ -27,7 +27,7 @@ export default async function AdminOverviewPage() {
             Platform overview
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Live counts and money flowing through FenceTrace right now.
+            Live counts and money flowing through FenceScan right now.
           </p>
         </div>
         <Badge tone="emerald">

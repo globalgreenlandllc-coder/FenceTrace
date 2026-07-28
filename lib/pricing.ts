@@ -91,7 +91,7 @@ export type LineItemPlan = {
   taxable: boolean;
 };
 
-/** Fence bill of materials — the FenceTrace pricing path. measurements
+/** Fence bill of materials — the FenceScan pricing path. measurements
  *  carries the drawn layout (eaveLF = fence LF, downspoutCount = gates);
  *  the fence config carries type/height/terrain/extras. Quantities and
  *  unit prices are chosen so the materials-builder table reads naturally

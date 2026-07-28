@@ -203,9 +203,9 @@ export async function broadcastAnnouncementEmail(
     <h1 style="font-size:20px;line-height:1.25;margin:0 0 14px;color:#16262e">${escapeHtml(a.title)}</h1>
     ${bodyHtml}
     <hr style="border:none;border-top:1px solid #e6ebef;margin:22px 0 12px">
-    <p style="font-size:12px;color:#8a97a1;margin:0">You're receiving this because you have a FenceTrace account.</p>
+    <p style="font-size:12px;color:#8a97a1;margin:0">You're receiving this because you have a FenceScan account.</p>
   </div>`;
-  const text = `${style.label.toUpperCase()}\n\n${a.title}\n\n${a.body}\n\n— FenceTrace`;
+  const text = `${style.label.toUpperCase()}\n\n${a.title}\n\n${a.body}\n\n— FenceScan`;
 
   let sent = 0;
   let failed = 0;
@@ -214,7 +214,7 @@ export async function broadcastAnnouncementEmail(
   for (const r of recipients) {
     const res = await sendEmailViaResend({
       to: r.email,
-      fromName: "FenceTrace",
+      fromName: "FenceScan",
       subject: a.title,
       html,
       text,
@@ -292,7 +292,7 @@ export async function polishAnnouncementCopy(input: {
       messages: [
         {
           role: "user",
-          content: `Write a product announcement for FenceTrace (a fence-estimating web app). Audience: ${audienceWord}. Tone: ${toneWord}. Keep it tight and concrete — no fluff, no emoji, no markdown. Notes from the founder:\n\n${prompt}`,
+          content: `Write a product announcement for FenceScan (a fence-estimating web app). Audience: ${audienceWord}. Tone: ${toneWord}. Keep it tight and concrete — no fluff, no emoji, no markdown. Notes from the founder:\n\n${prompt}`,
         },
       ],
     });

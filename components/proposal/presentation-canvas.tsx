@@ -187,12 +187,12 @@ export function PresentationCanvas({
   /** Satellite trace's canvas-px-per-foot (from the takeoff). Omit for
    *  plan takeoffs — lineLengthFt falls back to PX_PER_FT. */
   pxPerFt?: number;
-  /** FenceTrace: building footprints (canvas coords). With
+  /** FenceScan: building footprints (canvas coords). With
    *  onBuildingsChange, the contractor can trace the house right here —
    *  it then shows in the client's diagram + 3D. */
   buildings?: { x: number; y: number }[][];
   onBuildingsChange?: (next: { x: number; y: number }[][]) => void;
-  /** FenceTrace: mixed-type stretches (a different fence from here to
+  /** FenceScan: mixed-type stretches (a different fence from here to
    *  here). Rendered as colored overlays; with onFenceSectionsChange,
    *  selecting a span shows a type picker to build that stretch as
    *  another fence — priced + drawn everywhere. */

@@ -80,7 +80,7 @@ test("half refund claws back half the credits", () => {
 test("non-pack descriptions claw back nothing", () => {
   assert.equal(
     computeCreditClawback({
-      description: "FenceTrace Pro — monthly",
+      description: "FenceScan Pro — monthly",
       deltaCents: 3900,
       originalGrossCents: 3900,
     }),

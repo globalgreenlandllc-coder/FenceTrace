@@ -102,7 +102,7 @@ export async function GET(request: Request) {
       });
       const res = await sendEmailViaResend({
         to: p.clientEmail,
-        fromName: snap.company || "FenceTrace",
+        fromName: snap.company || "FenceScan",
         subject: email.subject,
         html: email.html,
         text: email.text,

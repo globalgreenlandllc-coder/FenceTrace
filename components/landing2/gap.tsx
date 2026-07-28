@@ -62,7 +62,7 @@ function GaugeIllo() {
         </svg>
         <div className="text-center">
           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-500">
-            Without FenceTrace
+            Without FenceScan
           </p>
           <p className="text-[30px] font-semibold leading-none tracking-tight text-zinc-900">0%</p>
           <p className="text-[9px] text-zinc-400">measured remotely</p>

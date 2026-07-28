@@ -1,7 +1,7 @@
 "use server";
 
 // TODO(fence): the satellite/blueprint roof measuring engine that powered
-// runEstimate / runEstimateFromPlan was removed in the FenceTrace demolition
+// runEstimate / runEstimateFromPlan was removed in the FenceScan demolition
 // phase. The exported names, signatures, and response shapes are preserved so
 // the estimate-job provider, /estimate page, and start page keep compiling —
 // the pipeline functions now return a friendly "engine being installed"

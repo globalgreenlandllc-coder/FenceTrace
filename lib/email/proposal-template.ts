@@ -92,10 +92,10 @@ export function renderProposalEmail(v: ProposalEmailVars): {
           </table>
 
           <div style="margin-top:14px;font-size:11px;color:#a1a1aa;">
-            Sent securely via FenceTrace on behalf of ${escapeHtml(v.contractorCompany)}.
+            Sent securely via FenceScan on behalf of ${escapeHtml(v.contractorCompany)}.
             <br />
             <a href="${escapeAttr(originOf(v.portalUrl))}/?ref=proposal-email" style="color:#a1a1aa;text-decoration:underline;">
-              Powered by FenceTrace — send quotes like this in 60 seconds
+              Powered by FenceScan — send quotes like this in 60 seconds
             </a>
           </div>
         </td>
@@ -140,6 +140,6 @@ function originOf(url: string): string {
   try {
     return new URL(url).origin;
   } catch {
-    return "https://fencetrace.com";
+    return "https://fencescan.com";
   }
 }

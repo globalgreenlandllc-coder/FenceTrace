@@ -7,13 +7,13 @@ import {
 } from "@/components/legal/legal-shell";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — FenceTrace",
+  title: "Terms of Service — FenceScan",
   description:
-    "The terms that govern use of FenceTrace, the AI takeoff and proposal platform by FenceTrace Inc.",
+    "The terms that govern use of FenceScan, the AI takeoff and proposal platform by FenceScan Inc.",
 };
 
 const UPDATED = "July 11, 2026";
-const CONTACT = "hello@fencetrace.com";
+const CONTACT = "hello@fencescan.com";
 
 export default function TermsPage() {
   return (
@@ -21,21 +21,21 @@ export default function TermsPage() {
       <LegalSection id="agreement" title="1. The agreement">
         <p>
           These Terms of Service (&ldquo;Terms&rdquo;) are a contract between
-          you and <strong>FenceTrace Inc.</strong> (&ldquo;FenceTrace&rdquo;,
+          you and <strong>FenceScan Inc.</strong> (&ldquo;FenceScan&rdquo;,
           &ldquo;we&rdquo;, &ldquo;us&rdquo;) governing your use of the
-          FenceTrace application and website at fencetrace.com. By creating an
+          FenceScan application and website at fencescan.com. By creating an
           account or using the service you agree to these Terms and to our{" "}
           <Link href="/privacy" className="text-accent-700 underline">
             Privacy Policy
           </Link>
-          . If you use FenceTrace on behalf of a company, you represent that
+          . If you use FenceScan on behalf of a company, you represent that
           you can bind that company to these Terms.
         </p>
       </LegalSection>
 
       <LegalSection id="service" title="2. The service">
         <p>
-          FenceTrace provides AI-assisted fence takeoffs from
+          FenceScan provides AI-assisted fence takeoffs from
           property addresses and construction plans, plus tools to build, send,
           and collect on proposals. You must be at least 18 and use the service
           only for lawful business purposes.
@@ -48,7 +48,7 @@ export default function TermsPage() {
           and are provided <strong>for estimating purposes only</strong>. They
           can be wrong. You are responsible for verifying measurements,
           pricing, and scope before relying on them, bidding, ordering
-          materials, or performing work. FenceTrace is not liable for job
+          materials, or performing work. FenceScan is not liable for job
           outcomes, bid losses, or material overruns resulting from measurement
           differences.
         </p>
@@ -68,7 +68,7 @@ export default function TermsPage() {
       <LegalSection id="billing" title="5. Plans, credits, and billing">
         <LegalList
           items={[
-            "FenceTrace Pro is billed monthly through Stripe and unlocks unlimited proposal sending; the free plan sends up to three proposals per calendar month.",
+            "FenceScan Pro is billed monthly through Stripe and unlocks unlimited proposal sending; the free plan sends up to three proposals per calendar month.",
             "Property scans, measurements, and takeoffs are free on every plan.",
             "You can cancel anytime from Settings; your plan stays active until the end of the paid period. Fees already paid are non-refundable except where required by law.",
             "We may change pricing with at least 30 days' notice before it affects your next renewal.",
@@ -96,7 +96,7 @@ export default function TermsPage() {
         <p>
           The service depends on third-party providers (identified in our
           Privacy Policy), including the Google Maps Platform. Your use of
-          Google Maps features through FenceTrace is also subject to the{" "}
+          Google Maps features through FenceScan is also subject to the{" "}
           <a
             href="https://maps.google.com/help/terms_maps/"
             target="_blank"
@@ -116,7 +116,7 @@ export default function TermsPage() {
           The service is provided <strong>&ldquo;as is&rdquo;</strong> without
           warranties of any kind, express or implied, including fitness for a
           particular purpose and accuracy of measurements. To the maximum
-          extent permitted by law, FenceTrace Inc. will not be liable for
+          extent permitted by law, FenceScan Inc. will not be liable for
           indirect, incidental, special, consequential, or punitive damages, or
           lost profits; and our total liability for any claim is limited to the
           amounts you paid us in the 12 months before the claim arose.
@@ -125,7 +125,7 @@ export default function TermsPage() {
 
       <LegalSection id="termination" title="9. Termination">
         <p>
-          You may stop using FenceTrace and request account deletion at any
+          You may stop using FenceScan and request account deletion at any
           time. We may suspend or terminate the service for material breach of
           these Terms, with notice where practicable. Sections that by their
           nature should survive (ownership, disclaimers, liability limits)
@@ -143,7 +143,7 @@ export default function TermsPage() {
 
       <LegalSection id="contact" title="11. Contact">
         <p>
-          FenceTrace Inc. &middot;{" "}
+          FenceScan Inc. &middot;{" "}
           <a href={`mailto:${CONTACT}`} className="text-accent-700 underline">
             {CONTACT}
           </a>

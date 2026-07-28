@@ -95,7 +95,7 @@ function BillingSection() {
     }
   }
 
-  // FenceTrace's one real limit: proposals SENT per month on the free
+  // FenceScan's one real limit: proposals SENT per month on the free
   // plan. Scans, takeoffs and drafts are free on every plan.
   const sent = billing?.sentThisMonth ?? 0;
   const cap = billing?.freeSendCap ?? 3;

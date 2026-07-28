@@ -148,9 +148,9 @@ export default clerkMiddleware(async (auth, req) => {
   // First touch wins — an existing cookie is never overwritten.
   let res: NextResponse | undefined;
   const ref = req.nextUrl.searchParams.get("ref");
-  if (ref && /^[a-z0-9-]{4,32}$/i.test(ref) && !req.cookies.get("fencetrace_ref")) {
+  if (ref && /^[a-z0-9-]{4,32}$/i.test(ref) && !req.cookies.get("fencescan_ref")) {
     res = NextResponse.next();
-    res.cookies.set("fencetrace_ref", ref, {
+    res.cookies.set("fencescan_ref", ref, {
       maxAge: 30 * 86400,
       path: "/",
       sameSite: "lax",

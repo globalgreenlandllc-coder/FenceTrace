@@ -27,10 +27,10 @@ const mono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FenceTrace — Smart Takeoffs, Proposals & Payments for Fence Contractors",
+  title: "FenceScan — Smart Takeoffs, Proposals & Payments for Fence Contractors",
   description:
     "Type one address. Get a satellite-measured fence takeoff, a three-tier proposal your client e-signs, then run the schedule, crew, and payments — all in one platform.",
-  metadataBase: new URL("https://fencetrace.com"),
+  metadataBase: new URL("https://fencescan.com"),
 };
 
 export default function RootLayout({

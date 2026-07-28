@@ -8,10 +8,10 @@ const WRAP = (inner: string) =>
   `<!doctype html><html><body style="margin:0;background:#f4f5f8;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#0d0d12">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
   <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e6e8ee">
-  <tr><td style="padding:22px 28px;border-bottom:1px solid #eef0f4;font-size:15px;font-weight:700;letter-spacing:-.01em">FenceTrace</td></tr>
+  <tr><td style="padding:22px 28px;border-bottom:1px solid #eef0f4;font-size:15px;font-weight:700;letter-spacing:-.01em">FenceScan</td></tr>
   <tr><td style="padding:28px">${inner}</td></tr>
   </table>
-  <div style="color:#9aa0ac;font-size:12px;padding:16px">Sent by FenceTrace on behalf of your contractor.</div>
+  <div style="color:#9aa0ac;font-size:12px;padding:16px">Sent by FenceScan on behalf of your contractor.</div>
   </td></tr></table></body></html>`;
 
 const BTN = (href: string, label: string) =>
@@ -27,14 +27,14 @@ export function renderWorkerInviteEmail(args: {
 }): RenderedEmail {
   const hi = args.workerName ? `Hi ${args.workerName},` : "Hi,";
   const who = args.company || args.ownerName;
-  const subject = `${who} invited you to their crew on FenceTrace`;
+  const subject = `${who} invited you to their crew on FenceScan`;
   const html = WRAP(
     `<p style="margin:0 0 14px;font-size:16px">${hi}</p>
-     <p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#3a3f4a"><strong>${who}</strong> invited you to join their crew on FenceTrace. Accept to set up your account and see the jobs they assign you — schedule, address, what to do, and your pay.</p>
+     <p style="margin:0 0 16px;font-size:15px;line-height:1.55;color:#3a3f4a"><strong>${who}</strong> invited you to join their crew on FenceScan. Accept to set up your account and see the jobs they assign you — schedule, address, what to do, and your pay.</p>
      <p style="margin:0 0 22px">${BTN(args.acceptUrl, "Accept invite &amp; set up account")}</p>
      <p style="margin:0;font-size:13px;color:#9aa0ac">If the button doesn't work, paste this link:<br><span style="color:#14688C">${args.acceptUrl}</span></p>`,
   );
-  const text = `${hi}\n\n${who} invited you to join their crew on FenceTrace. Accept to set up your account and see your assigned jobs.\n\nAccept: ${args.acceptUrl}\n`;
+  const text = `${hi}\n\n${who} invited you to join their crew on FenceScan. Accept to set up your account and see your assigned jobs.\n\nAccept: ${args.acceptUrl}\n`;
   return { subject, html, text };
 }
 

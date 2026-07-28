@@ -169,7 +169,7 @@ export async function inviteWorker(input: {
   });
   const sent = await sendEmailViaResend({
     to: email,
-    fromName: me.profile.company || "FenceTrace",
+    fromName: me.profile.company || "FenceScan",
     replyTo: me.user.email,
     subject: tmpl.subject,
     html: tmpl.html,
@@ -240,7 +240,7 @@ export async function resendWorkerInvite(workerId: string): Promise<Result<{ inv
   });
   const sent = await sendEmailViaResend({
     to: worker.email,
-    fromName: me.profile.company || "FenceTrace",
+    fromName: me.profile.company || "FenceScan",
     replyTo: me.user.email,
     subject: tmpl.subject,
     html: tmpl.html,
@@ -476,7 +476,7 @@ export async function assignJob(input: {
   });
   const sent = await sendEmailViaResend({
     to: worker.email,
-    fromName: me.profile.company || "FenceTrace",
+    fromName: me.profile.company || "FenceScan",
     replyTo: me.user.email,
     ...renderJobOfferEmail({
       company: me.profile.company || "Your contractor",

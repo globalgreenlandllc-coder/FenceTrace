@@ -24,7 +24,7 @@ import {
   type UserAnnouncement,
 } from "@/app/actions/announcements";
 
-const SEEN_KEY = "fencetrace:worker-activity-seen";
+const SEEN_KEY = "fencescan:worker-activity-seen";
 
 /* Compact per-level styling for announcements read inside the dropdown. */
 const ANN_STYLE: Record<

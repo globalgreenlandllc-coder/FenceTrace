@@ -5,7 +5,7 @@ export function Banner() {
     <div className="flex h-9 items-center bg-accent-950 px-4 text-[12px] text-white/60 md:px-8">
       <span className="hidden h-[7px] w-[7px] rounded-[2px] bg-accent-400 md:inline-block" />
       <p className="mx-auto min-w-0 truncate font-mono text-[10.5px] font-bold uppercase tracking-wide">
-        FenceTrace now measures properties in all 50 states &middot; Proposals,
+        FenceScan now measures properties in all 50 states &middot; Proposals,
         payments &amp; scheduling are live
       </p>
       <Link

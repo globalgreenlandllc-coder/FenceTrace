@@ -133,5 +133,5 @@ export async function sendEmailViaResend(
  */
 function escapeFromName(name: string): string {
   const cleaned = name.replace(/["<>]/g, "").trim();
-  return cleaned.length > 0 ? cleaned : "FenceTrace";
+  return cleaned.length > 0 ? cleaned : "FenceScan";
 }

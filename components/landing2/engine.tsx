@@ -51,13 +51,13 @@ export function Engine() {
             <div>
               <Eyebrow>Smart Takeoffs</Eyebrow>
               <h2 className="mt-6 text-[30px] font-semibold leading-[1.05] tracking-tight text-zinc-900 md:text-[40px]">
-                FenceTrace measures the yards{" "}
+                FenceScan measures the yards{" "}
                 <span className="text-zinc-400">you never visit</span>
               </h2>
               <p className="mt-5 max-w-md text-[15px] leading-relaxed text-zinc-600">
                 Every address hides a full takeoff &mdash; fence runs, corners,
                 gate openings, property lines &mdash; that your current process
-                only reveals with a truck roll. FenceTrace makes it visible.
+                only reveals with a truck roll. FenceScan makes it visible.
               </p>
               <div className="mt-7">
                 <PillLink href="/sign-in">Get Started</PillLink>

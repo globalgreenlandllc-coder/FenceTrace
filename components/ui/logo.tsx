@@ -16,7 +16,7 @@ export function Logo({
     <div className={cn("flex flex-col leading-none text-ink", className)}>
       <span className="flex items-center gap-1.5">
         <span className="font-display text-[17px] uppercase tracking-[-0.01em]">
-          Fencetrace
+          FenceScan
         </span>
         <span
           aria-hidden

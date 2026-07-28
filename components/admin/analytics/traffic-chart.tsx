@@ -289,7 +289,7 @@ export function TrafficChart({
         {isEmpty && (
           <div className="absolute inset-0 flex items-center justify-center">
             <p className="text-sm text-zinc-400">
-              Visits will chart here as people open FenceTrace.
+              Visits will chart here as people open FenceScan.
             </p>
           </div>
         )}

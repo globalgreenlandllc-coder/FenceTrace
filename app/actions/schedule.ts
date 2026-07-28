@@ -121,7 +121,7 @@ async function notifyWorkerOfAppointment(
   try {
     await sendEmailViaResend({
       to: worker.email,
-      fromName: from.company || "FenceTrace",
+      fromName: from.company || "FenceScan",
       replyTo: from.replyTo,
       ...renderAppointmentAssignedEmail({
         company: from.company || "Your contractor",

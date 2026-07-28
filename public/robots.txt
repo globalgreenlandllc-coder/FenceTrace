@@ -5,4 +5,4 @@ Disallow: /admin
 Disallow: /worker
 Disallow: /api
 
-Sitemap: https://fencetrace.com/sitemap.xml
+Sitemap: https://fencescan.com/sitemap.xml

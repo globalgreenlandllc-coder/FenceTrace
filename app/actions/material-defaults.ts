@@ -97,7 +97,7 @@ export async function listMaterialDefaults(): Promise<MaterialDefaultRow[]> {
     orderBy: [{ category: "asc" }, { sortOrder: "asc" }, { label: "asc" }],
   });
   // One-time migration: DBs seeded before the fence conversion hold the
-  // GUTTER price book — meaningless in FenceTrace. Replace it with the
+  // GUTTER price book — meaningless in FenceScan. Replace it with the
   // fence seed on first load (audit-logged).
   const legacy = rows.some(
     (r) =>

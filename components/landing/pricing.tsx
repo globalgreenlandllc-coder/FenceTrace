@@ -117,7 +117,7 @@ export function Pricing() {
         <p className="mt-8 text-center text-xs text-zinc-500">
           Need a higher volume team plan?{" "}
           <a
-            href="mailto:hello@fencetrace.com"
+            href="mailto:hello@fencescan.com"
             className="font-medium text-accent-700 hover:text-accent-800"
           >
             Talk to sales

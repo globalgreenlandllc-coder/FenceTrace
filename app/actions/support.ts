@@ -196,14 +196,14 @@ export async function adminReplyToTicket(input: {
   // Email the requester their reply.
   void sendEmailViaResend({
     to: ticket.user.email,
-    fromName: "FenceTrace Support",
+    fromName: "FenceScan Support",
     subject: `Re: ${ticket.subject}`,
     html: `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:560px;margin:0 auto">
       <p style="color:#27303a;font-size:15px;line-height:1.6;white-space:pre-wrap">${escapeHtml(body)}</p>
       <hr style="border:none;border-top:1px solid #e6ebef;margin:20px 0 10px">
       <p style="font-size:12px;color:#8a97a1">Reply to this email or open Support in your dashboard to continue the conversation.</p>
     </div>`,
-    text: `${body}\n\n— FenceTrace Support`,
+    text: `${body}\n\n— FenceScan Support`,
   });
 
   revalidatePath("/admin/support");
@@ -250,7 +250,7 @@ export async function suggestSupportReply(
       model: "claude-sonnet-5",
       max_tokens: 700,
       system:
-        "You are a support agent for FenceTrace, a web app that lets fence contractors estimate jobs from a satellite property scan and send proposals. Write a concise, warm, professional reply the human agent can send as-is. No greeting boilerplate beyond a short hello, no sign-off name (the app appends one). If you're unsure of an app specific, say you'll look into it rather than inventing steps.",
+        "You are a support agent for FenceScan, a web app that lets fence contractors estimate jobs from a satellite property scan and send proposals. Write a concise, warm, professional reply the human agent can send as-is. No greeting boilerplate beyond a short hello, no sign-off name (the app appends one). If you're unsure of an app specific, say you'll look into it rather than inventing steps.",
       messages: [
         {
           role: "user",
@@ -352,7 +352,7 @@ async function notifyAdminsOfNewTicket(args: {
     for (const a of admins) {
       await sendEmailViaResend({
         to: a.email,
-        fromName: "FenceTrace",
+        fromName: "FenceScan",
         replyTo: args.fromEmail,
         subject: `[Support] ${args.subject}`,
         html,

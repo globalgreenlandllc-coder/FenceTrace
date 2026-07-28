@@ -147,7 +147,7 @@ export async function sendProposal(args: {
 
   const result = await sendEmailViaResend({
     to: proposal.client.email,
-    fromName: proposal.contractor.company || me.profile.company || "FenceTrace",
+    fromName: proposal.contractor.company || me.profile.company || "FenceScan",
     replyTo: proposal.contractor.email || me.user.email,
     subject: subject.trim() || `Your fence proposal — `,
     html,
@@ -292,23 +292,23 @@ export async function saveDraftFromEstimate(args: {
    *  re-measuring when the proposal canvas edits fence runs (missing =
    *  legacy plan scale fallback, which mis-prices satellite scans). */
   canvasPxPerFt?: number;
-  /** FenceTrace: the drawn fence layout — when present the draft's
+  /** FenceScan: the drawn fence layout — when present the draft's
    *  Good/Better/Best packages are rebuilt around it (type ladder,
    *  gates/corners/terrain/removal baked into every tier's config). */
   fence?: FenceDraftInput;
-  /** FenceTrace: measured ground elevations per run (same order as
+  /** FenceScan: measured ground elevations per run (same order as
    *  `eaves`) — stored on the takeoff blob so the client-facing 3D
    *  preview shows the fence stepping down the real slope. */
   runElevationsFt?: number[][];
   /** Walk spacing (canvas px) the elevations were sampled at. */
   elevationSpacingPx?: number;
-  /** FenceTrace: the scan's topo lattice for the proposal 3D's terrain. */
+  /** FenceScan: the scan's topo lattice for the proposal 3D's terrain. */
   topoGridFt?: number[][];
-  /** FenceTrace: the frozen 3D camera — the client's opening view. */
+  /** FenceScan: the frozen 3D camera — the client's opening view. */
   view3d?: { yawDeg: number; squash: number };
-  /** FenceTrace: building footprints for the client diagram + 3D. */
+  /** FenceScan: building footprints for the client diagram + 3D. */
   buildings?: { x: number; y: number }[][];
-  /** FenceTrace: mixed-type stretches for the client 3D. */
+  /** FenceScan: mixed-type stretches for the client 3D. */
   fenceSections?: { a: { x: number; y: number }; b: { x: number; y: number }; type: string }[];
 }): Promise<SaveDraftResult> {
   try {
@@ -379,7 +379,7 @@ async function saveDraftFromEstimateImpl(args: {
         },
       };
       if (!args.fence) return base;
-      // FenceTrace: rebuild each tier around the drawn layout.
+      // FenceScan: rebuild each tier around the drawn layout.
       const patch = fenceTierPatches(args.fence).find((t) => t.id === p.id);
       if (!patch) return base;
       return {
@@ -792,7 +792,7 @@ export async function acceptProposalByToken(args: {
           `Accepted at ${now.toISOString()}.`;
         const res = await sendEmailViaResend({
           to: contractorEmail,
-          fromName: "FenceTrace",
+          fromName: "FenceScan",
           subject: `✓ Proposal accepted — ${row.address}`,
           html,
           text,

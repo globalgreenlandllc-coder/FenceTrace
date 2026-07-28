@@ -15,7 +15,7 @@ import {
 } from "@/lib/fence/geo";
 
 /**
- * scan-core.ts — the FenceTrace measuring pipeline, shared between the
+ * scan-core.ts — the FenceScan measuring pipeline, shared between the
  * authed estimator scan (app/actions/fence-scan.ts adds auth + rate
  * limit + recents) and the anonymous landing teaser (app/api/teaser
  * adds its own fail-closed IP/global caps).

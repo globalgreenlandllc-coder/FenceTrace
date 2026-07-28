@@ -76,7 +76,7 @@ export function CampaignsCard({ campaigns }: { campaigns: CampaignStat[] }) {
             and every campaign shows up here with its own sign-up count:
           </p>
           <code className="mt-2 block overflow-x-auto whitespace-nowrap rounded-lg bg-white px-3 py-2 font-mono text-xs text-accent-700">
-            https://fencetrace.com/?utm_source=google&utm_medium=cpc&utm_campaign=spring-launch
+            https://fencescan.com/?utm_source=google&utm_medium=cpc&utm_campaign=spring-launch
           </code>
           <p className="mt-2 text-xs text-zinc-400">
             Google Ads (gclid) and Facebook Ads (fbclid) clicks are also

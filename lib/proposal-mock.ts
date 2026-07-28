@@ -219,7 +219,7 @@ export type ProposalTakeoff = {
    *  estimate so the proposal's eave LF + re-price use the same scale
    *  (not the plan-mode PX_PER_FT=2.4). Absent for plan/older takeoffs. */
   canvasPxPerFt?: number;
-  /** FenceTrace: ground elevation (ft) sampled at every post position
+  /** FenceScan: ground elevation (ft) sampled at every post position
    *  along each run, same order as `eaves` — lets the proposal's 3D
    *  preview draw the fence stepping down the real slope. Absent (or
    *  misaligned after canvas edits) ⇒ the preview renders flat. */
@@ -228,18 +228,18 @@ export type ProposalTakeoff = {
    *  quote a fence type with a different post spacing, so the sampling
    *  spacing must travel with the samples to re-pair them to the runs. */
   elevationSpacingPx?: number;
-  /** FenceTrace: the scan's topo lattice (rows × cols of ft spanning the
+  /** FenceScan: the scan's topo lattice (rows × cols of ft spanning the
    *  full canvas) — the proposal 3D renders the yard as a shaded terrain
    *  surface from it. ~200 numbers; absent on older drafts. */
   topoGridFt?: number[][];
-  /** FenceTrace: the 3D camera the contractor froze when building the
+  /** FenceScan: the 3D camera the contractor froze when building the
    *  proposal — the client's portal opens on this exact angle (and they
    *  can spin it from there). */
   view3d?: { yawDeg: number; squash: number };
-  /** FenceTrace: building footprints (canvas coords) — the house renders
+  /** FenceScan: building footprints (canvas coords) — the house renders
    *  in the client's diagram + 3D so wall-connected fence reads right. */
   buildings?: { x: number; y: number }[][];
-  /** FenceTrace: mixed-type stretches of the drawn fence (from-here-to-
+  /** FenceScan: mixed-type stretches of the drawn fence (from-here-to-
    *  here spans built as a different type) — the 3D renders each with
    *  its own material. */
   fenceSections?: {

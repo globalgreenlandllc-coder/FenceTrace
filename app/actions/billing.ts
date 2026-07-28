@@ -202,7 +202,7 @@ export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
 export async function createCreditsCheckout(
   _packId: string,
 ): Promise<CheckoutResult> {
-  // FenceTrace sells ONE thing: Pro (unlimited proposal sending).
+  // FenceScan sells ONE thing: Pro (unlimited proposal sending).
   // Blueprint credits metered a feature the fence platform doesn't
   // have — never let anyone pay for them. The full checkout body lives
   // in git history; re-enable only alongside a real credit-metered
@@ -210,7 +210,7 @@ export async function createCreditsCheckout(
   return {
     ok: false,
     reason:
-      "Credit top-ups aren't a FenceTrace thing — scans and takeoffs are free, and Pro is unlimited proposals.",
+      "Credit top-ups aren't a FenceScan thing — scans and takeoffs are free, and Pro is unlimited proposals.",
   };
 }
 

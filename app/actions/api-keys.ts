@@ -686,7 +686,7 @@ export async function testApiKey(
           error_message?: string;
         };
         if (body.status === "OK") {
-          // FenceTrace also needs the Elevation service (terrain-aware
+          // FenceScan also needs the Elevation service (terrain-aware
           // estimating) — probe it too so a disabled toggle is caught
           // HERE, on the Test button, not as a blank readout in the
           // estimator.
@@ -861,23 +861,23 @@ export async function sendTestEmail(args: {
       };
     }
     const { sendEmailViaResend } = await import("@/lib/email/resend");
-    const fromName = me.profile.contractorName || "FenceTrace Admin";
+    const fromName = me.profile.contractorName || "FenceScan Admin";
     const fromEmail =
       process.env.RESEND_FROM_EMAIL?.trim() || "onboarding@resend.dev";
     const res = await sendEmailViaResend({
       to: trimmed,
       fromName,
       replyTo: me.user.email,
-      subject: "FenceTrace — Resend deliverability test",
+      subject: "FenceScan — Resend deliverability test",
       html:
         `<div style="font-family:system-ui,sans-serif;color:#0f172a;line-height:1.5">` +
         `<h2 style="margin:0 0 8px">Resend test ✓</h2>` +
         `<p>If you're reading this, your Resend API key + sender domain are wired correctly and proposals will go out.</p>` +
-        `<p style="color:#64748b;font-size:13px">Sent from the FenceTrace admin console at ${new Date().toISOString()}.</p>` +
+        `<p style="color:#64748b;font-size:13px">Sent from the FenceScan admin console at ${new Date().toISOString()}.</p>` +
         `</div>`,
       text:
         "Resend test — if you're reading this, your Resend API key + sender domain are wired correctly and proposals will go out.\n\n" +
-        `Sent from the FenceTrace admin console at ${new Date().toISOString()}.`,
+        `Sent from the FenceScan admin console at ${new Date().toISOString()}.`,
     });
     if (res.ok) {
       return {

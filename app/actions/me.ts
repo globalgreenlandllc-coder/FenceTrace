@@ -540,7 +540,7 @@ export async function consumeMyCredit(address: string): Promise<{
 /*  farm can't mint unlimited credits.                                 */
 /* ------------------------------------------------------------------ */
 
-const REFERRAL_COOKIE = "fencetrace_ref";
+const REFERRAL_COOKIE = "fencescan_ref";
 const REFERRAL_BONUS_CREDITS = 3;
 const REFERRAL_GRANT_CAP = 10;
 
@@ -612,7 +612,7 @@ export async function getMyReferral(): Promise<MyReferral | null> {
   });
   const base =
     process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "") ||
-    "https://fencetrace.com";
+    "https://fencescan.com";
   return {
     code,
     url: `${base}/?ref=${code}`,

@@ -71,7 +71,7 @@ export default async function AdminAnalyticsPage({
             Analytics
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Who&apos;s on FenceTrace right now, where they came from, and how
+            Who&apos;s on FenceScan right now, where they came from, and how
             visitors turn into paying contractors.
           </p>
         </div>

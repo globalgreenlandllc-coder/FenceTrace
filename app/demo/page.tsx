@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Map, FileText } from "lucide-react";
 
 export const metadata = {
-  title: "Takeoff Demos — FenceTrace",
+  title: "Takeoff Demos — FenceScan",
   description:
     "Two interactive ways to measure fence linear footage: from satellite imagery or from an uploaded site plan.",
 };

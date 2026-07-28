@@ -19,7 +19,7 @@ import type { TeaserPayload } from "@/lib/fence/teaser";
  * dashboard can offer to finish exactly this scan.
  */
 
-export const PENDING_SCAN_KEY = "fencetrace.pendingAddress";
+export const PENDING_SCAN_KEY = "fencescan.pendingAddress";
 
 const SCAN_STEPS = [
   "Locating the property…",

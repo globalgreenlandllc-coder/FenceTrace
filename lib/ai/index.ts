@@ -1,5 +1,5 @@
 // TODO(fence): the roof/satellite/blueprint measuring engine that lived here
-// was removed in the FenceTrace demolition phase. This module now carries ONLY
+// was removed in the FenceScan demolition phase. This module now carries ONLY
 // the data-shape types the surviving UI (results-view, estimate-job, the
 // estimate actions) still compiles against. The fence measuring engine will
 // re-introduce a pipeline entry point here.

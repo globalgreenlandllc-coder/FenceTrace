@@ -526,10 +526,10 @@ A: Daily cron (piggybacked on payment reminders). Buckets kept one extra window 
 
 ---
 
-## FenceTrace Endpoint Coverage (audited 2026-07-28)
+## FenceScan Endpoint Coverage (audited 2026-07-28)
 
 The system above was inherited from the platform; this section maps every
-FenceTrace-specific surface added since the conversion to its guards.
+FenceScan-specific surface added since the conversion to its guards.
 All three layers apply on top: edge per-IP limiting (middleware),
 durable per-user buckets (Postgres, `lib/abuse/policies.ts`), and the
 AI spend caps + circuit breaker (`lib/abuse/spend-guard.ts`).

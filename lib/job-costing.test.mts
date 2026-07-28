@@ -219,7 +219,7 @@ test("suggestNextAction ladder hits the key rungs", () => {
 test("fence jobs strip the REAL embedded tax rate, not the flat legacy rate", async () => {
   const { blankProposal, FENCE_TAX_RATE } = await import("./proposal-mock");
   const { deriveEffectiveTaxRate } = await import("./job-costing");
-  const blank = blankProposal(); // FenceTrace blanks carry fence packages
+  const blank = blankProposal(); // FenceScan blanks carry fence packages
   const rate = deriveEffectiveTaxRate(blank, blank.packages[1]!.id);
   // Only the taxable share (materials/gates) carries sales tax, so the
   // effective rate sits strictly between 0 and the plain rate — and

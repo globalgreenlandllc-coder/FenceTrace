@@ -89,7 +89,7 @@ function ShowcaseCard() {
         <div className="rounded-2xl border border-white/70 bg-white/90 p-6 shadow-[0_24px_60px_-24px_rgba(12,27,36,0.35)] backdrop-blur md:p-7">
           <p className="text-[14px] leading-[1.9] text-zinc-700 md:text-[15px]">
             A homeowner at <Token tone="blue">1425 Maple Ave</Token> requests a
-            fence quote. FenceTrace pulls the satellite view and property lines
+            fence quote. FenceScan pulls the satellite view and property lines
             with <Token tone="green">94% confidence</Token>, measures the fence
             line at <Token tone="orange">186 LF</Token>, and prices it as{" "}
             <Token tone="blue">6&#8242; Cedar Privacy &middot; $28.50/LF</Token>.
@@ -117,7 +117,7 @@ function ShowcaseCard() {
       </div>
 
       <p className="absolute bottom-5 right-7 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-accent-900/60">
-        Powered by Fencetrace &#9632;
+        Powered by Fencescan &#9632;
       </p>
     </div>
   );

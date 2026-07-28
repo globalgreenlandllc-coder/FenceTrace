@@ -37,7 +37,7 @@ export function Footer() {
           </a>
         </div>
         <div className="text-xs text-white/40 sm:pr-16">
-          © {new Date().getFullYear()} FenceTrace Inc.
+          © {new Date().getFullYear()} FenceScan Inc.
         </div>
       </div>
     </footer>

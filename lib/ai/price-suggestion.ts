@@ -331,7 +331,7 @@ export async function suggestMarketPrices(
     return { ok: false, reason: "No packages to price" };
   }
 
-  // FenceTrace packages carry config.fence — brief and prompt speak
+  // FenceScan packages carry config.fence — brief and prompt speak
   // fence; the gutter path stays for legacy configs.
   const isFence = packages.some((p) => p.config.fence);
   const jobBrief = [

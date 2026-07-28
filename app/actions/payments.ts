@@ -554,7 +554,7 @@ export async function recordInstallmentPayment(args: {
       });
       const res = await sendEmailViaResend({
         to: inst.proposal.clientEmail,
-        fromName: snap.company || me.profile.company || "FenceTrace",
+        fromName: snap.company || me.profile.company || "FenceScan",
         replyTo: me.profile.email || me.user.email,
         subject: receipt.subject,
         html: receipt.html,
@@ -810,7 +810,7 @@ export async function sendInstallmentReminder(args: {
     });
     const res = await sendEmailViaResend({
       to: inst.proposal.clientEmail,
-      fromName: snap.company || me.profile.company || "FenceTrace",
+      fromName: snap.company || me.profile.company || "FenceScan",
       replyTo: me.profile.email || me.user.email,
       subject: reminder.subject,
       html: reminder.html,
@@ -890,7 +890,7 @@ export async function resendReceipt(args: {
     });
     const res = await sendEmailViaResend({
       to: inst.proposal.clientEmail,
-      fromName: snap.company || me.profile.company || "FenceTrace",
+      fromName: snap.company || me.profile.company || "FenceScan",
       replyTo: me.profile.email || me.user.email,
       subject: receipt.subject,
       html: receipt.html,
@@ -1026,7 +1026,7 @@ export async function sendChangeOrder(args: {
     });
     const res = await sendEmailViaResend({
       to: co.proposal.clientEmail,
-      fromName: snap.company || me.profile.company || "FenceTrace",
+      fromName: snap.company || me.profile.company || "FenceScan",
       replyTo: me.profile.email || me.user.email,
       subject: email.subject,
       html: email.html,
@@ -1341,7 +1341,7 @@ export async function respondToChangeOrder(args: {
         });
         await sendEmailViaResend({
           to: contractorEmail,
-          fromName: "FenceTrace",
+          fromName: "FenceScan",
           subject: email.subject,
           html: email.html,
           text: email.text,

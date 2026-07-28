@@ -2,7 +2,7 @@ import "server-only";
 import Stripe from "stripe";
 import { getActiveApiKey } from "@/lib/api-keys";
 
-// Platform billing (FenceTrace Pro subscriptions + credit packs).
+// Platform billing (FenceScan Pro subscriptions + credit packs).
 // Keys come from the admin vault (/admin/api-keys) with env fallbacks,
 // same resolution pattern as the AI providers:
 //   STRIPE_SECRET  → sk_live_… / sk_test_…   (vault) | STRIPE_SECRET_KEY (env)
@@ -18,7 +18,7 @@ import { getActiveApiKey } from "@/lib/api-keys";
 
 export const PRO_PLAN = {
   id: "pro_monthly",
-  name: "FenceTrace Pro",
+  name: "FenceScan Pro",
   // Founding-contractor launch price — the plan is worth $50 and the
   // landing badge says so; raise here (or at /admin/pricing, which
   // overrides this default) once traction justifies it.

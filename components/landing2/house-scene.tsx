@@ -63,7 +63,7 @@ function SvgChip({
 /**
  * Animated hero scene: a house sits inside its yard, the county property
  * line glows around it, and a fence builds along the front with a gate —
- * the FenceTrace story. The active pipeline tab layers its overlay on
+ * the FenceScan story. The active pipeline tab layers its overlay on
  * top: Detection traces the property boundary, Measurement pops dimension
  * labels and the "186 LF" tag, Pricing drops per-run price chips,
  * Proposal slides a mini proposal card over the scene. Pointer parallax

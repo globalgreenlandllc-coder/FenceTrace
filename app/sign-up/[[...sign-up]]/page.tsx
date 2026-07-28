@@ -74,7 +74,7 @@ export default async function SignUpPage() {
         </div>
 
         <div className="text-xs text-zinc-400">
-          © {new Date().getFullYear()} FenceTrace Inc. · Secured with Clerk
+          © {new Date().getFullYear()} FenceScan Inc. · Secured with Clerk
         </div>
       </div>
 

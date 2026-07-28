@@ -7,29 +7,29 @@ import {
 } from "@/components/legal/legal-shell";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — FenceTrace",
+  title: "Privacy Policy — FenceScan",
   description:
-    "How FenceTrace (FenceTrace Inc.) collects, uses, and protects your information, including data received from Google APIs.",
+    "How FenceScan (FenceScan Inc.) collects, uses, and protects your information, including data received from Google APIs.",
 };
 
 const UPDATED = "July 11, 2026";
-const CONTACT = "hello@fencetrace.com";
+const CONTACT = "hello@fencescan.com";
 
 export default function PrivacyPolicyPage() {
   return (
     <LegalShell title="Privacy Policy" updated={UPDATED}>
       <LegalSection id="who-we-are" title="1. Who we are">
         <p>
-          FenceTrace is an AI takeoff and proposal platform for fence
-          contractors, operated by <strong>FenceTrace Inc.</strong>{" "}
-          (&ldquo;FenceTrace&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). This
-          policy explains what information we collect through the FenceTrace
+          FenceScan is an AI takeoff and proposal platform for fence
+          contractors, operated by <strong>FenceScan Inc.</strong>{" "}
+          (&ldquo;FenceScan&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;). This
+          policy explains what information we collect through the FenceScan
           application and website at{" "}
           <Link href="/" className="text-accent-700 underline">
-            fencetrace.com
+            fencescan.com
           </Link>
           , how we use it, and the choices you have. It applies to contractors
-          who create FenceTrace accounts and to the homeowner information
+          who create FenceScan accounts and to the homeowner information
           contractors enter while preparing estimates and proposals.
         </p>
         <p>
@@ -110,12 +110,12 @@ export default function PrivacyPolicyPage() {
           If you sign in with Google, we receive your Google account&rsquo;s
           basic profile information: your name, email address, and profile
           picture. We use this information solely to create and secure your
-          FenceTrace account and to display your identity inside the app. We do
+          FenceScan account and to display your identity inside the app. We do
           not request access to your Gmail, Drive, Calendar, or any other
           Google content.
         </p>
         <p>
-          FenceTrace&rsquo;s use and transfer to any other app of information
+          FenceScan&rsquo;s use and transfer to any other app of information
           received from Google APIs will adhere to the{" "}
           <a
             href="https://developers.google.com/terms/api-services-user-data-policy"
@@ -139,7 +139,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="google-maps" title="5. Google Maps and aerial imagery">
         <p>
-          FenceTrace uses the Google Maps Platform (including geocoding and the
+          FenceScan uses the Google Maps Platform (including geocoding and the
           Google Solar API) and other imagery providers to locate the property
           addresses you enter and to retrieve aerial imagery and roof geometry
           for measurement. Addresses you submit are shared with these providers
@@ -171,7 +171,7 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="sharing" title="7. When we share information">
         <p>
           We share information only with the service providers required to run
-          FenceTrace, each bound by contractual confidentiality and
+          FenceScan, each bound by contractual confidentiality and
           data-protection obligations:
         </p>
         <LegalList
@@ -189,7 +189,7 @@ export default function PrivacyPolicyPage() {
           Beyond service providers, we disclose information only: to the
           recipients you choose (for example, the client you email a proposal
           to); when required by law or valid legal process; to protect the
-          rights, safety, and security of FenceTrace and its users; or as part
+          rights, safety, and security of FenceScan and its users; or as part
           of a merger, acquisition, or asset sale, with notice to you.
         </p>
       </LegalSection>
@@ -244,7 +244,7 @@ export default function PrivacyPolicyPage() {
         </p>
         <p>
           <strong>If you are a homeowner</strong> whose information was entered
-          by a contractor using FenceTrace: we process that information on the
+          by a contractor using FenceScan: we process that information on the
           contractor&rsquo;s behalf. You may contact your contractor directly,
           or email us and we will assist with your request.
         </p>
@@ -252,7 +252,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="cookies" title="11. Cookies">
         <p>
-          FenceTrace uses only the cookies necessary to run the product:
+          FenceScan uses only the cookies necessary to run the product:
           authentication and session cookies set by our sign-in provider, and
           security cookies used for abuse prevention. We do not use
           third-party advertising or cross-site tracking cookies.
@@ -261,7 +261,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="children" title="12. Children">
         <p>
-          FenceTrace is a business tool intended for users 18 and older. It is
+          FenceScan is a business tool intended for users 18 and older. It is
           not directed to children, and we do not knowingly collect personal
           information from anyone under 13. If you believe a child has provided
           us personal information, contact us and we will delete it.
@@ -273,14 +273,14 @@ export default function PrivacyPolicyPage() {
           We may update this policy as the product evolves. Material changes
           will be announced in the app or by email before they take effect, and
           the &ldquo;Last updated&rdquo; date above always reflects the current
-          version. Continued use of FenceTrace after a change means you accept
+          version. Continued use of FenceScan after a change means you accept
           the updated policy.
         </p>
       </LegalSection>
 
       <LegalSection id="contact" title="14. Contact us">
         <p>
-          FenceTrace Inc.
+          FenceScan Inc.
           <br />
           Email:{" "}
           <a href={`mailto:${CONTACT}`} className="text-accent-700 underline">

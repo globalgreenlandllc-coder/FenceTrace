@@ -84,7 +84,7 @@ export function Footer() {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-3 py-6 text-[12px] text-zinc-500 md:flex-row">
-          <p>&copy; 2026 FenceTrace Inc. All rights reserved.</p>
+          <p>&copy; 2026 FenceScan Inc. All rights reserved.</p>
           <div className="flex items-center gap-5">
             <Link
               href="/sign-in"

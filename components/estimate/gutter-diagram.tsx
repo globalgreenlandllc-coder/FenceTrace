@@ -129,7 +129,7 @@ export function GutterDiagram({
    *  "sign up to reveal" pill. The API already withholds the scale, so
    *  this is presentation-layer consistency, not the security boundary. */
   redactNumbers?: boolean;
-  /** FenceTrace: building footprints (canvas coords) drawn as hatched
+  /** FenceScan: building footprints (canvas coords) drawn as hatched
    *  drafting shapes — the home the fence ties into. */
   buildings?: { x: number; y: number }[][];
   className?: string;

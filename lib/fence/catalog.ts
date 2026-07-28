@@ -1,5 +1,5 @@
 /**
- * FenceTrace fence catalog — every fence family the estimator, designer,
+ * FenceScan fence catalog — every fence family the estimator, designer,
  * takeoff, and pricing understand. Pure data + lookups, no imports.
  *
  * Geometry model used across the app:

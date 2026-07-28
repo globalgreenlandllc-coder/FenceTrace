@@ -23,7 +23,7 @@ export function LegalShell({
         <div className="mx-auto flex h-16 w-full max-w-[860px] items-center justify-between px-5">
           <Link
             href="/"
-            aria-label="FenceTrace home"
+            aria-label="FenceScan home"
             className="ring-focus rounded-md"
           >
             <Logo showSubtitle={false} />
@@ -40,7 +40,7 @@ export function LegalShell({
 
       <div className="anim-enter mx-auto w-full max-w-[860px] px-5 py-12 md:py-16">
         <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-accent-600">
-          FenceTrace legal
+          FenceScan legal
         </p>
         <h1 className="mt-2 text-[34px] font-semibold leading-[1.05] tracking-tight text-zinc-900 sm:text-[40px]">
           {title}
@@ -52,7 +52,7 @@ export function LegalShell({
 
       <footer className="border-t border-zinc-200/70 bg-white">
         <div className="mx-auto flex w-full max-w-[860px] flex-col items-start justify-between gap-2 px-5 py-6 text-xs text-zinc-500 sm:flex-row sm:items-center">
-          <p>&copy; {new Date().getFullYear()} FenceTrace Inc. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} FenceScan Inc. All rights reserved.</p>
           <div className="flex items-center gap-4">
             <Link
               href="/privacy"

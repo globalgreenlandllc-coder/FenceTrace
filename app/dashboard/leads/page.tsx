@@ -4,7 +4,7 @@ import { getActiveApiKey } from "@/lib/api-keys";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Leads Map — FenceTrace",
+  title: "Leads Map — FenceScan",
   description: "Find and track construction permits as actionable leads.",
 };
 

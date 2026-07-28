@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { countryFlag, countryName, timeAgo } from "./format";
 
 /* ------------------------------------------------------------------ */
-/*  Live strip — who is on FenceTrace right now.                       */
+/*  Live strip — who is on FenceScan right now.                       */
 /*                                                                     */
 /*  Hero figure = sessions active in the last 60s (heartbeat window),  */
 /*  split by segment: marketing visitors (prospects), signed-in app    */
@@ -85,7 +85,7 @@ export function LiveNowCard({ live, nowMs }: { live: LiveNow; nowMs: number }) {
         <div className="border-t border-zinc-100 px-5 py-8 text-center sm:px-6">
           <Radio className="mx-auto h-5 w-5 text-zinc-300" aria-hidden />
           <p className="mt-2 text-sm text-zinc-400">
-            No one is on FenceTrace right now. This lights up the moment a
+            No one is on FenceScan right now. This lights up the moment a
             visitor opens any page.
           </p>
         </div>

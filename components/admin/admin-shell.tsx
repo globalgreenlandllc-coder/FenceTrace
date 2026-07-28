@@ -167,7 +167,7 @@ export function AdminShell({
             </button>
 
             <h1 className="truncate text-[22px] font-semibold tracking-tight text-zinc-900">
-              Admin console · FenceTrace
+              Admin console · FenceScan
             </h1>
 
             <div className="ml-auto flex items-center gap-2">

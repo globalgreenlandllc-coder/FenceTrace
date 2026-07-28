@@ -142,7 +142,7 @@ export function renderReceiptEmail(v: ReceiptEmailVars): {
   const html = shell(
     subject,
     inner,
-    `Receipt issued by ${escapeHtml(v.companyName)} via FenceTrace.`,
+    `Receipt issued by ${escapeHtml(v.companyName)} via FenceScan.`,
   );
 
   const text = [
@@ -243,7 +243,7 @@ export function renderReminderEmail(v: ReminderEmailVars): {
   const html = shell(
     subject,
     inner,
-    `Sent by ${escapeHtml(v.companyName)} via FenceTrace.`,
+    `Sent by ${escapeHtml(v.companyName)} via FenceScan.`,
   );
 
   const text = [
@@ -331,7 +331,7 @@ export function renderChangeOrderEmail(v: ChangeOrderEmailVars): {
   const html = shell(
     subject,
     inner,
-    `Sent by ${escapeHtml(v.companyName)} via FenceTrace.`,
+    `Sent by ${escapeHtml(v.companyName)} via FenceScan.`,
   );
 
   const text = [
@@ -400,7 +400,7 @@ export function renderChangeOrderDecisionEmail(v: ChangeOrderDecisionVars): {
       </td>
     </tr>`;
 
-  const html = shell(subject, inner, "FenceTrace · change order update");
+  const html = shell(subject, inner, "FenceScan · change order update");
 
   const text = [
     `Change order ${verb}`,

@@ -29,7 +29,7 @@ export function WorkerShell({
               <HardHat className="h-4 w-4" />
             </div>
             <div className="leading-tight">
-              <div className="text-sm font-semibold text-ink">FenceTrace</div>
+              <div className="text-sm font-semibold text-ink">FenceScan</div>
               <div className="text-[11px] text-zinc-400">Crew portal</div>
             </div>
           </div>

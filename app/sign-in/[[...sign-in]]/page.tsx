@@ -68,7 +68,7 @@ export default function SignInPage() {
         </div>
 
         <div className="text-xs text-zinc-400">
-          © {new Date().getFullYear()} FenceTrace Inc. · Secured with Clerk
+          © {new Date().getFullYear()} FenceScan Inc. · Secured with Clerk
         </div>
       </div>
 
@@ -108,7 +108,7 @@ export default function SignInPage() {
               <span className="text-white">in under a minute.</span>
             </h2>
             <p className="mt-4 max-w-md text-white/60">
-              FenceTrace measures the property line from satellite imagery and
+              FenceScan measures the property line from satellite imagery and
               county records, packages a proposal, and collects the deposit —
               all from your truck.
             </p>

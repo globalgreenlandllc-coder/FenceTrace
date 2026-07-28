@@ -358,7 +358,7 @@ async function emailContractor(
     });
     await sendEmailViaResend({
       to: contact.email,
-      fromName: "FenceTrace",
+      fromName: "FenceScan",
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
@@ -398,7 +398,7 @@ async function emailClient(
     });
     await sendEmailViaResend({
       to,
-      fromName: company || "FenceTrace",
+      fromName: company || "FenceScan",
       replyTo: contractorEmail ?? undefined,
       subject: mail.subject,
       html: mail.html,

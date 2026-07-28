@@ -92,7 +92,7 @@ export function renderDiscountToContractorEmail(v: DiscountToContractorVars): {
       </tr>`;
     return {
       subject,
-      html: shell(subject, inner, "FenceTrace · price request update"),
+      html: shell(subject, inner, "FenceScan · price request update"),
       text: [
         `Price request withdrawn`,
         ``,
@@ -148,7 +148,7 @@ export function renderDiscountToContractorEmail(v: DiscountToContractorVars): {
       </td>
     </tr>`;
 
-  const html = shell(subject, inner, "FenceTrace · price negotiation");
+  const html = shell(subject, inner, "FenceScan · price negotiation");
   const text = [
     `${first} ${verb} for ${v.address} (${v.packageName}).`,
     ``,
@@ -228,7 +228,7 @@ export function renderDiscountToClientEmail(v: DiscountToClientVars): {
       </tr>`;
     return {
       subject,
-      html: shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceTrace.`),
+      html: shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceScan.`),
       text: [
         `Great news, ${v.clientFirstName} — you've got a deal.`,
         ``,
@@ -262,7 +262,7 @@ export function renderDiscountToClientEmail(v: DiscountToClientVars): {
       </tr>`;
     return {
       subject,
-      html: shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceTrace.`),
+      html: shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceScan.`),
       text: [
         `Thanks for asking, ${v.clientFirstName}.`,
         ``,
@@ -317,7 +317,7 @@ export function renderDiscountToClientEmail(v: DiscountToClientVars): {
       </td>
     </tr>`;
 
-  const html = shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceTrace.`);
+  const html = shell(subject, inner, `Sent by ${escapeHtml(v.companyName)} via FenceScan.`);
   const text = [
     `${v.clientFirstName}, ${v.companyName} sent a counter-offer for the ${v.packageName} at ${v.address}.`,
     ``,

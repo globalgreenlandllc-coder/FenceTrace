@@ -38,12 +38,12 @@ const MICROLABEL =
 /*  yet (or while the server action is in flight). Ported from the    */
 /*  old QuickStart card, which this page replaces.                    */
 /* ------------------------------------------------------------------ */
-const LOCAL_RECENTS_KEY = "fencetrace.recentAddresses";
+const LOCAL_RECENTS_KEY = "fencescan.recentAddresses";
 const LOCAL_RECENTS_MAX = 8;
 /** Address typed into the landing-page teaser scan before signup —
  *  same literal as PENDING_SCAN_KEY in landing2/teaser-scan.tsx
  *  (duplicated to keep the landing bundle out of the dashboard). */
-const PENDING_SCAN_KEY = "fencetrace.pendingAddress";
+const PENDING_SCAN_KEY = "fencescan.pendingAddress";
 
 function readLocalRecents(): string[] {
   if (typeof window === "undefined") return [];
@@ -365,7 +365,7 @@ function SatelliteTakeoffCard() {
           </span>
         </div>
         <p className="mt-3.5 text-sm leading-relaxed text-zinc-500">
-          Type an address — FenceTrace pulls satellite imagery and county
+          Type an address — FenceScan pulls satellite imagery and county
           property lines, you confirm the fence. Free on every plan, no
           credits used.
         </p>

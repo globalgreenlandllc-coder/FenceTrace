@@ -1,7 +1,7 @@
-# FenceTrace
+# FenceScan
 
-FenceTrace is the platform fence contractors run their business on. Type an
-address and FenceTrace pulls the satellite view and county property lines; you
+FenceScan is the platform fence contractors run their business on. Type an
+address and FenceScan pulls the satellite view and county property lines; you
 confirm the fence, and a measured, priced, three-tier proposal is ready to send
 in about a minute — with e-sign, scheduling, crew assignments, and payment
 tracking built in.

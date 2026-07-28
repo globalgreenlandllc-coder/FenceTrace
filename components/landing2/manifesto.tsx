@@ -12,7 +12,7 @@ export function Manifesto() {
             from a property line, won by whoever measures first,{" "}
             <span className="text-zinc-400">
               and lost by whoever is still driving out with a wheel and a tape
-              measure. FenceTrace makes every property line measurable,
+              measure. FenceScan makes every property line measurable,
               priceable, and quotable from your desk &mdash; then runs the job
               that follows: the proposal, the signature, the schedule, and
               every payment. Because the future of contracting belongs to the

@@ -210,7 +210,7 @@ export function ClientPortalView({
               rel="noopener"
               className="transition-smooth text-xs text-zinc-400 hover:text-accent-700"
             >
-              ⚡ Powered by <span className="font-semibold">FenceTrace</span> —
+              ⚡ Powered by <span className="font-semibold">FenceScan</span> —
               send quotes like this in 60 seconds →
             </a>
           </div>
@@ -286,7 +286,7 @@ function PortalNav({ proposal }: { proposal: Proposal }) {
         <div className="hidden items-center gap-3 text-xs text-zinc-500 sm:flex">
           <Badge tone="neutral">
             <ShieldCheck className="h-3 w-3" />
-            Secured by FenceTrace
+            Secured by FenceScan
           </Badge>
           <span>·</span>
           <Logo showSubtitle={false} className="opacity-70" />

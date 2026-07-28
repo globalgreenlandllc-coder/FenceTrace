@@ -99,7 +99,7 @@ export type Downspout = {
   x: number;
   y: number;
   heightFt: number;
-  /** FenceTrace: downspouts carry gates. Kind + width let the proposal's
+  /** FenceScan: downspouts carry gates. Kind + width let the proposal's
    *  3D preview draw the gate at its real size with a label; absent on
    *  gutter takeoffs and legacy fence drafts (treated as a 4' walk gate). */
   gateKind?: "single" | "double" | "custom";
@@ -162,7 +162,7 @@ export type GutterAccessories = {
   heatTape: boolean;
 };
 
-/** FenceTrace fence package config. `type` is a FenceTypeId from
+/** FenceScan fence package config. `type` is a FenceTypeId from
  *  lib/fence/catalog (kept as string here so types.ts stays leaf-level).
  *  When a package carries `fence`, buildLineItems prices a FENCE and the
  *  legacy gutter fields above it are ignored; measurements.eaveLF carries
@@ -210,6 +210,6 @@ export type EstimateConfig = {
    *  before this existed — treated as "none" so no already-sent
    *  proposal ever reprices itself. */
   oldGutterRemoval?: "free" | "priced" | "none";
-  /** Present ⇒ this package prices a fence (FenceTrace). */
+  /** Present ⇒ this package prices a fence (FenceScan). */
   fence?: FenceEstimateConfig;
 };
