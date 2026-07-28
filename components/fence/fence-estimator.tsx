@@ -114,6 +114,8 @@ export function FenceEstimator() {
   // default; the topo read only SUGGESTS it when it sees a sheer drop.
   const [wallTop, setWallTop] = useState(false);
   const [wallLfInput, setWallLfInput] = useState<number | null>(null);
+  // Post stock: standard, galvanized steel, or heavy 6×6 PT.
+  const [postUpgrade, setPostUpgrade] = useState<"none" | "steel" | "6x6">("none");
   // Topo overlay: a coarse elevation lattice over the visible yard →
   // contour lines with ft labels on the layout canvas. One batched
   // Elevation call per scan; toggleable, on by default.
@@ -369,8 +371,9 @@ export function FenceEstimator() {
       stain,
       steppedSections: effSteppedSections,
       wallTopLf: effWallLf,
+      postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade],
   );
 
   const takeoff = useMemo(
@@ -447,6 +450,7 @@ export function FenceEstimator() {
         ends,
         steppedSections: effSteppedSections,
         wallTopLf: effWallLf,
+        postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
       },
     });
     setSaving(false);
@@ -606,6 +610,7 @@ export function FenceEstimator() {
                   topoGridFt={topoGrid}
                   buildings={buildings}
                   retainingWall={effWallLf > 0}
+                  postUpgrade={postUpgrade === "none" ? undefined : postUpgrade}
                   initialView={cam3d}
                   onViewChange={setCam3d}
                   className="aspect-[16/10]"
@@ -665,6 +670,39 @@ export function FenceEstimator() {
                       {h}&apos;
                     </button>
                   ))}
+                </div>
+
+                <div className="mt-3">
+                  <span className="font-label text-zinc-500">Posts</span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: "none", label: "Standard" },
+                        { id: "steel", label: "Steel (+$24/post)" },
+                        { id: "6x6", label: "6×6 PT (+$14/post)" },
+                      ] as const
+                    ).map((o) => (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setPostUpgrade(o.id)}
+                        className={cn(
+                          "transition-smooth ring-focus rounded-full border px-2.5 py-1.5 text-xs font-medium",
+                          postUpgrade === o.id
+                            ? "border-accent-500 bg-accent-50 text-accent-900"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                  {postUpgrade === "steel" && (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                      Galvanized steel posts never rot, warp or lean — the
+                      panels stay wood.
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-3">

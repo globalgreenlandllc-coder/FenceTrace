@@ -187,6 +187,7 @@ export function Fence3D({
   topoGridFt = null,
   buildings = null,
   retainingWall = false,
+  postUpgrade,
   initialView,
   onViewChange,
   className,
@@ -217,6 +218,9 @@ export function Fence3D({
    *  drops render as a masonry wall face with the fence anchored on top
    *  (instead of an earth bank), and get a summary chip. */
   retainingWall?: boolean;
+  /** Post stock: steel renders gray galvanized posts, 6×6 renders
+   *  visibly heavier posts. */
+  postUpgrade?: "steel" | "6x6";
   /** Starting camera (yaw + tilt). The contractor's saved angle becomes
    *  the client's opening view; both can drag to orbit from there. */
   initialView?: Fence3DView;
@@ -622,7 +626,7 @@ export function Fence3D({
       }
     });
 
-    const postW = Math.max(3, 0.55 * scale);
+    const postW = Math.max(3, 0.55 * scale) * (postUpgrade === "6x6" ? 1.4 : 1);
     for (const p of posts.values()) {
       const w = p.heavy ? postW * 1.6 : postW;
       faces.push({
@@ -684,7 +688,7 @@ export function Fence3D({
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, retainingWall]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, retainingWall, postUpgrade]);
 
   /* ===================== orbit (axonometric) ======================== */
   const orbitScene = useMemo(() => {
@@ -1142,7 +1146,13 @@ export function Fence3D({
     }
     if (kind === "post") {
       return (
-        <path key={i} d={polyPath(f.poly)} fill={style.post} stroke={style.stroke} strokeWidth={f.face.heavy ? 1.2 : 0.8} />
+        <path
+          key={i}
+          d={polyPath(f.poly)}
+          fill={postUpgrade === "steel" ? "#8B9298" : style.post}
+          stroke={postUpgrade === "steel" ? "#666D74" : style.stroke}
+          strokeWidth={f.face.heavy ? 1.2 : 0.8}
+        />
       );
     }
     if (kind === "gate") {

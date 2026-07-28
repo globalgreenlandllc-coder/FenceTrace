@@ -19,6 +19,7 @@ export type FenceDraftInput = {
   ends: number;
   steppedSections?: number;
   wallTopLf?: number;
+  postUpgrade?: "steel" | "6x6";
 };
 
 export type FenceTierPatch = {
@@ -52,6 +53,11 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
       ...((tier.stain || input.stain) && t.stainable
         ? ["Penetrating stain & seal, both faces"]
         : []),
+      ...(input.postUpgrade === "steel"
+        ? ["Galvanized steel posts — never rot, warp or lean"]
+        : input.postUpgrade === "6x6"
+          ? ["Heavy 6×6 pressure-treated posts throughout"]
+          : []),
       ...((input.wallTopLf ?? 0) > 0
         ? [
             `Core-drilled & epoxy-anchored on the retaining wall — ${Math.round(input.wallTopLf!)} LF`,
@@ -79,6 +85,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         ends: input.ends,
         steppedSections: input.steppedSections ?? 0,
         wallTopLf: input.wallTopLf ?? 0,
+        postUpgrade: input.postUpgrade,
       },
       highlights,
       markupPct: tier.markupPct,

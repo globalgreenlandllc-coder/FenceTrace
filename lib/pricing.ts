@@ -193,6 +193,33 @@ function buildFenceLineItems(
       unitPrice: 28,
       taxable: true,
     });
+  if (fence.postUpgrade) {
+    // Mirror the takeoff's post count from the same inputs: sections at
+    // the type's spacing; line posts = sections − 1 − corners; plus
+    // corner/end posts and a pair per gate.
+    const corners = measurements.outsideCorners + measurements.insideCorners;
+    const sections = Math.max(1, Math.ceil(lf / t.postSpacingFt));
+    const posts =
+      Math.max(0, sections - 1 - corners) +
+      corners +
+      measurements.endCaps +
+      liveGates * 2;
+    lines.push({
+      id: "fence-post-upgrade",
+      name:
+        fence.postUpgrade === "steel"
+          ? "Galvanized steel posts — upgrade"
+          : "6×6 pressure-treated posts — upgrade",
+      description:
+        fence.postUpgrade === "steel"
+          ? `${posts} posts — steel never rots, warps or leans`
+          : `${posts} posts — heavy 6×6 stock at every post`,
+      quantity: posts,
+      unit: "ea",
+      unitPrice: fence.postUpgrade === "steel" ? 24 : 14,
+      taxable: true,
+    });
+  }
   if ((fence.wallTopLf ?? 0) > 0) {
     // Posts on the wall span are core-drilled + epoxy-anchored to the
     // wall cap instead of dug and set in concrete: anchor kit + drilling

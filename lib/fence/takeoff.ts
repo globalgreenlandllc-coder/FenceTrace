@@ -43,6 +43,8 @@ export type FenceLayoutInput = {
    *  span are core-drilled + anchored to the wall cap — mount hardware
    *  and drilling labor instead of dug holes and concrete. */
   wallTopLf?: number;
+  /** Post stock upgrade — steel or 6×6 pressure-treated. */
+  postUpgrade?: "steel" | "6x6";
 };
 
 export type BomLine = {
@@ -187,6 +189,16 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
       "step-posts",
       "Extended posts for stepped sections (slope)",
       input.steppedSections!,
+      "ea",
+    );
+  }
+  if (input.postUpgrade) {
+    add(
+      "post-upgrade",
+      input.postUpgrade === "steel"
+        ? "Post upgrade — galvanized steel (every post)"
+        : "Post upgrade — 6×6 pressure-treated (every post)",
+      totalPosts,
       "ea",
     );
   }

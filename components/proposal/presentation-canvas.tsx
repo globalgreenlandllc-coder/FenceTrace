@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   AerialImage,
@@ -47,6 +47,8 @@ export function PresentationCanvas({
   aerialImageUrl,
   planMode,
   pxPerFt,
+  buildings,
+  onBuildingsChange,
 }: {
   eaves: EditableLine[];
   rakes?: EditableLine[];
@@ -69,10 +71,17 @@ export function PresentationCanvas({
   /** Satellite trace's canvas-px-per-foot (from the takeoff). Omit for
    *  plan takeoffs — lineLengthFt falls back to PX_PER_FT. */
   pxPerFt?: number;
+  /** FenceTrace: building footprints (canvas coords). With
+   *  onBuildingsChange, the contractor can trace the house right here —
+   *  it then shows in the client's diagram + 3D. */
+  buildings?: { x: number; y: number }[][];
+  onBuildingsChange?: (next: { x: number; y: number }[][]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [houseMode, setHouseMode] = useState(false);
+  const [houseDraft, setHouseDraft] = useState<{ x: number; y: number }[]>([]);
   const editable = !!(onEavesChange || onDownspoutsChange);
   const [drag, setDrag] = useState<
     | { kind: "vertex"; lineId: string; index: number }
@@ -369,9 +378,54 @@ export function PresentationCanvas({
     setDrag(null);
   }
 
-  function handleBackgroundClick() {
+  const finishHouse = () => {
+    setHouseDraft((d) => {
+      if (d.length >= 3 && onBuildingsChange) {
+        onBuildingsChange([...(buildings ?? []), d]);
+      }
+      return [];
+    });
+    setHouseMode(false);
+  };
+
+  function handleBackgroundClick(e: React.PointerEvent) {
+    if (houseMode && onBuildingsChange) {
+      const raw = svgPoint(e);
+      const p = frame
+        ? { x: (raw.x - frame.tx) / frame.k, y: (raw.y - frame.ty) / frame.k }
+        : raw;
+      // clicking back on the first corner closes the outline
+      if (
+        houseDraft.length >= 3 &&
+        Math.hypot(p.x - houseDraft[0].x, p.y - houseDraft[0].y) < 14
+      ) {
+        finishHouse();
+        return;
+      }
+      setHouseDraft((d) => [...d, p]);
+      return;
+    }
     setSelectedId(null);
   }
+
+  // Keyboard while tracing: Enter closes, Esc cancels, Backspace steps.
+  useEffect(() => {
+    if (!houseMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setHouseDraft([]);
+        setHouseMode(false);
+      } else if (e.key === "Enter" && houseDraft.length >= 3) {
+        finishHouse();
+      } else if (e.key === "Backspace" && houseDraft.length > 0) {
+        e.preventDefault();
+        setHouseDraft((d) => d.slice(0, -1));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [houseMode, houseDraft.length, buildings]);
 
   // Smart label gate: skip eaves shorter than 8 ft unless hovered or
   // selected. Keeps a clean look on roofs with many short connector
@@ -438,6 +492,46 @@ export function PresentationCanvas({
         </span>
       </div>
 
+      {/* Trace-house control — builder mode only. The traced outline
+          feeds the client diagram + 3D (the home the fence ties into). */}
+      {editable && onBuildingsChange && (
+        <div className="absolute left-3 top-12 z-10 flex items-center gap-1.5">
+          {houseMode ? (
+            <>
+              <button
+                type="button"
+                onClick={finishHouse}
+                disabled={houseDraft.length < 3}
+                className="transition-smooth rounded-full bg-accent-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm ring-1 ring-inset ring-white/20 hover:bg-accent-700 disabled:opacity-50"
+              >
+                ✓ Finish house
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHouseDraft([]);
+                  setHouseMode(false);
+                }}
+                className="transition-smooth rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
+              >
+                ✕ Cancel
+              </button>
+              <span className="pointer-events-none rounded-full bg-slate-950/70 px-2.5 py-1 text-[10px] font-medium text-white/80 ring-1 ring-inset ring-white/10">
+                Click the house corners — green dot (or Enter) closes
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setHouseMode(true)}
+              className="transition-smooth rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
+            >
+              🏠 {(buildings ?? []).length > 0 ? "Edit house outline" : "Trace the house"}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Client legend — explains the ink colors + numbered pins in one
           glance (and prints cleanly on the PDF). Only when there's
           something to explain. */}
@@ -477,7 +571,10 @@ export function PresentationCanvas({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerDown={handleBackgroundClick}
-        className="h-full w-full touch-none select-none"
+        className={
+          "h-full w-full touch-none select-none" +
+          (houseMode ? " cursor-crosshair" : "")
+        }
         style={{ minHeight: 360 }}
       >
         <NeonDefs />
@@ -507,6 +604,62 @@ export function PresentationCanvas({
             small trace fills the frame while the drafting border stays at
             full size. `geomTransform` is undefined (identity) otherwise. */}
         <g transform={geomTransform}>
+        {/* House footprint(s) — traced outlines of the home the fence
+            ties into. Editable via the Trace-house chip. */}
+        {(buildings ?? []).map((ring, i) => {
+          const cx = ring.reduce((a, p) => a + p.x, 0) / ring.length;
+          const cy = ring.reduce((a, p) => a + p.y, 0) / ring.length;
+          return (
+            <g key={`bldg-${i}`}>
+              <polygon
+                points={ring.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+                fill={planMode ? "rgba(20,58,74,0.10)" : "rgba(15,23,42,0.35)"}
+                stroke={planMode ? "rgba(20,58,74,0.5)" : "rgba(241,245,249,0.85)"}
+                strokeWidth={1.6 * vs}
+                strokeLinejoin="round"
+                pointerEvents="none"
+              />
+              {houseMode && onBuildingsChange && (
+                <g
+                  className="cursor-pointer"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    onBuildingsChange(
+                      (buildings ?? []).filter((_, j) => j !== i),
+                    );
+                  }}
+                >
+                  <circle cx={cx} cy={cy} r={10 * vs} fill="rgba(244,63,94,0.92)" stroke="#fff" strokeWidth={1.5 * vs} />
+                  <line x1={cx - 4 * vs} y1={cy - 4 * vs} x2={cx + 4 * vs} y2={cy + 4 * vs} stroke="#fff" strokeWidth={1.8 * vs} />
+                  <line x1={cx - 4 * vs} y1={cy + 4 * vs} x2={cx + 4 * vs} y2={cy - 4 * vs} stroke="#fff" strokeWidth={1.8 * vs} />
+                </g>
+              )}
+            </g>
+          );
+        })}
+        {houseDraft.length > 0 && (
+          <g pointerEvents="none">
+            <polyline
+              points={houseDraft.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="rgba(241,245,249,0.12)"
+              stroke={planMode ? "#143A4A" : "#F1F5F9"}
+              strokeWidth={2 * vs}
+              strokeDasharray={`${6 * vs} ${5 * vs}`}
+              strokeLinejoin="round"
+            />
+            {houseDraft.map((p, i) => (
+              <circle
+                key={i}
+                cx={p.x}
+                cy={p.y}
+                r={(i === 0 && houseDraft.length >= 3 ? 6.5 : 3.5) * vs}
+                fill={i === 0 && houseDraft.length >= 3 ? "#22C55E" : "#F1F5F9"}
+                stroke="#0F172A"
+                strokeWidth={1.2 * vs}
+              />
+            ))}
+          </g>
+        )}
         {/* GUTTER PERIMETER (owner doctrine): the client review diagram is a
             gutter takeoff, not a reconstructed roof. Draw ONLY the roof
             outline — no ridges, hips, valleys, tier lines, plane shading or

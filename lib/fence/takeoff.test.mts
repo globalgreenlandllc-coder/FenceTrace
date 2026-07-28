@@ -141,6 +141,23 @@ test("retaining wall: anchors replace concrete for wall-span posts", () => {
   assert.ok(priced.total > priceFence(CEDAR_100).total);
 });
 
+test("post upgrade: every post counted once, priced on both rails", () => {
+  const base = computeFenceTakeoff(CEDAR_100);
+  const steel = computeFenceTakeoff({ ...CEDAR_100, postUpgrade: "steel" });
+  const up = steel.bom.find((b) => b.key === "post-upgrade")!;
+  assert.equal(up.qty, base.posts.total);
+  assert.ok(!base.bom.some((b) => b.key === "post-upgrade"));
+  // money: the pricing rail mirrors the same post count
+  const priced = priceFence({ ...CEDAR_100, postUpgrade: "steel" });
+  const line = priced.lines.find((l) => l.key === "fence-post-upgrade")!;
+  assert.equal(line.amount, base.posts.total * 24);
+  const sixBySix = priceFence({ ...CEDAR_100, postUpgrade: "6x6" });
+  assert.equal(
+    sixBySix.lines.find((l) => l.key === "fence-post-upgrade")!.amount,
+    base.posts.total * 14,
+  );
+});
+
 test("PARITY: priceFence total === packageTotal for the same layout", () => {
   const layout = {
     ...CEDAR_100,
@@ -150,6 +167,7 @@ test("PARITY: priceFence total === packageTotal for the same layout", () => {
     gatesCustomWidthsFt: [7],
     steppedSections: 3,
     wallTopLf: 16,
+    postUpgrade: "steel" as const,
   };
   for (const markupPct of [30, 35, 38]) {
     const rail = priceFence(layout, { markupPct });

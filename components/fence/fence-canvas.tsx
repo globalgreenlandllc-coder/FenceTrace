@@ -67,6 +67,9 @@ function pointInPoly(p: Pt, ring: Pt[]): boolean {
 }
 
 const SNAP_PX = 12;
+/** Snap radius in SCREEN pixels — divided by the zoom so snapping feels
+ *  identical at 100% and 300%. */
+const SNAP_SCREEN_PX = 20;
 
 let idSeq = 0;
 const nextId = (p: string) => `${p}-${Date.now().toString(36)}-${idSeq++}`;
@@ -140,6 +143,10 @@ export function FenceCanvas({
   const [draft, setDraft] = useState<Pt[]>([]);
   const [houseDraft, setHouseDraft] = useState<Pt[]>([]);
   const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
+  // True while the draw cursor is magnetically locked onto a corner,
+  // an existing run or a house wall — rendered as a green lock ring.
+  const [snapLocked, setSnapLocked] = useState(false);
+  const didPanRef = useRef(false);
   const [hover, setHover] = useState<Pt | null>(null);
   // Ghost gate under the cursor in gate mode; transient helper notices.
   const [gateGhost, setGateGhost] = useState<Pt | null>(null);
@@ -227,13 +234,19 @@ export function FenceCanvas({
         pts.push(run.points[0], run.points[run.points.length - 1]);
       }
     }
+    // house corners — a wing that ends at the corner of the garage
+    for (const ring of buildings) pts.push(...ring);
     return pts;
-  }, [scan.parcelRings, layout.runs]);
+  }, [scan.parcelRings, layout.runs, buildings]);
 
   const snap = useCallback(
     (p: Pt): Pt => {
+      // Tolerance is a constant ~20 SCREEN px: generous at 100%, still
+      // precise when zoomed in (the canvas-px radius shrinks with zoom).
+      const tol = Math.max(8, SNAP_SCREEN_PX / camRef.current.k);
+      // Corners win (parcel corners, run endpoints, house corners)…
       let best: Pt | null = null;
-      let bestD = SNAP_PX;
+      let bestD = tol;
       for (const t of snapTargets) {
         const d = Math.hypot(t.x - p.x, t.y - p.y);
         if (d < bestD) {
@@ -241,9 +254,38 @@ export function FenceCanvas({
           best = t;
         }
       }
-      return best ?? p;
+      if (best) return best;
+      // …then anywhere ALONG an existing fence run or a house wall — a
+      // connector from the main line to the side of the house lands
+      // exactly on both, no gap, no overlap.
+      let bestEdge: Pt | null = null;
+      let bestED = tol;
+      const consider = (a: Pt, b: Pt) => {
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const len2 = abx * abx + aby * aby;
+        if (len2 < 1) return;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2));
+        const q = { x: a.x + t * abx, y: a.y + t * aby };
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d < bestED) {
+          bestED = d;
+          bestEdge = q;
+        }
+      };
+      for (const run of layout.runs) {
+        for (let i = 1; i < run.points.length; i++) {
+          consider(run.points[i - 1], run.points[i]);
+        }
+      }
+      for (const ring of buildings) {
+        for (let i = 0; i < ring.length; i++) {
+          consider(ring[i], ring[(i + 1) % ring.length]);
+        }
+      }
+      return bestEdge ?? p;
     },
-    [snapTargets],
+    [snapTargets, layout.runs, buildings],
   );
 
   /* ---- draw tool ---- */
@@ -352,6 +394,12 @@ export function FenceCanvas({
   }
 
   function onCanvasClick(e: React.MouseEvent) {
+    // A drag-pan releases as a click — swallow it so panning never
+    // deselects or places anything.
+    if (didPanRef.current) {
+      didPanRef.current = false;
+      return;
+    }
     const raw = toCanvas(e);
     if (tool === "draw") {
       if (e.detail > 1) return; // second click of a dbl-click — finish handles it
@@ -418,6 +466,11 @@ export function FenceCanvas({
     });
     setTool("select");
   };
+
+  // Counter-scale for zoom: strokes use vector-effect, but dot radii,
+  // label chips and text live in world units — multiply by `ui` so they
+  // stay the same SCREEN size at any zoom instead of blowing up.
+  const ui = 1 / cam.k;
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -569,7 +622,7 @@ export function FenceCanvas({
             "block h-auto w-full select-none",
             tool === "draw" || tool === "gate" || tool === "house"
               ? "cursor-crosshair"
-              : "cursor-default",
+              : "cursor-grab active:cursor-grabbing",
           )}
           onClick={onCanvasClick}
           onDoubleClick={(e) => {
@@ -579,16 +632,21 @@ export function FenceCanvas({
             else zoomAt(e.clientX, e.clientY, 1.6);
           }}
           onPointerDown={(e) => {
-            // middle-button drag pans in any tool
-            if (e.button === 1) {
-              e.preventDefault();
+            // middle-button drag pans in any tool; in Select, plain
+            // left-drag on the photo pans too (drag-the-map feel).
+            if (e.button === 1 || (e.button === 0 && tool === "select")) {
+              if (e.button === 1) e.preventDefault();
               e.currentTarget.setPointerCapture(e.pointerId);
               panRef.current = { sx: e.clientX, sy: e.clientY, cx: cam.cx, cy: cam.cy };
+              didPanRef.current = false;
             }
           }}
           onPointerMove={(e) => {
             const pan = panRef.current;
             if (!pan) return;
+            const moved = Math.hypot(e.clientX - pan.sx, e.clientY - pan.sy);
+            if (!didPanRef.current && moved < 5) return; // click, not a drag
+            didPanRef.current = true;
             const r = svgRef.current!.getBoundingClientRect();
             const s = CANVAS_W / camRef.current.k / r.width;
             setCam(
@@ -603,8 +661,12 @@ export function FenceCanvas({
             panRef.current = null;
           }}
           onMouseMove={(e) => {
-            if (tool === "draw") setHover(snap(toCanvas(e)));
-            else if (tool === "house") setHover(toCanvas(e));
+            if (tool === "draw") {
+              const raw = toCanvas(e);
+              const s = snap(raw);
+              setHover(s);
+              setSnapLocked(Math.hypot(s.x - raw.x, s.y - raw.y) > 0.75);
+            } else if (tool === "house") setHover(toCanvas(e));
             else if (tool === "gate") setGateGhost(nearestOnRuns(toCanvas(e)));
           }}
           onMouseLeave={() => {
@@ -646,6 +708,7 @@ export function FenceCanvas({
                     fill="none"
                     stroke="#FCD34D"
                     strokeWidth={1.3}
+                    vectorEffect="non-scaling-stroke"
                     strokeOpacity={0.85}
                     strokeLinejoin="round"
                     strokeLinecap="round"
@@ -669,36 +732,39 @@ export function FenceCanvas({
                   )
                     return null;
                   return (
-                    <text
+                    <g
                       key={`cl-${line.levelFt}-${i}`}
-                      x={mid.x}
-                      y={mid.y - 3}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fontWeight={700}
-                      fill="#FDE68A"
-                      stroke="#1C1917"
-                      strokeWidth={2.6}
-                      style={{ paintOrder: "stroke" }}
+                      transform={`translate(${mid.x}, ${mid.y}) scale(${ui})`}
                     >
-                      +{line.levelFt}′
-                    </text>
+                      <text
+                        y={-3}
+                        textAnchor="middle"
+                        fontSize={10}
+                        fontWeight={700}
+                        fill="#FDE68A"
+                        stroke="#1C1917"
+                        strokeWidth={2.6}
+                        style={{ paintOrder: "stroke" }}
+                      >
+                        +{line.levelFt}′
+                      </text>
+                    </g>
                   );
                 }),
               )}
-              <text
-                x={CANVAS_W - 10}
-                y={20}
-                textAnchor="end"
-                fontSize={10.5}
-                fontWeight={600}
-                fill="#FDE68A"
-                stroke="#1C1917"
-                strokeWidth={2.6}
-                style={{ paintOrder: "stroke" }}
-              >
-                Topo lines every {topo.intervalFt}′ — feet above the low point
-              </text>
+              <g transform={`translate(${CANVAS_W - 10}, 20) scale(${ui})`}>
+                <text
+                  textAnchor="end"
+                  fontSize={10.5}
+                  fontWeight={600}
+                  fill="#FDE68A"
+                  stroke="#1C1917"
+                  strokeWidth={2.6}
+                  style={{ paintOrder: "stroke" }}
+                >
+                  Topo lines every {topo.intervalFt}′ — feet above the low point
+                </text>
+              </g>
             </g>
           )}
 
@@ -715,6 +781,7 @@ export function FenceCanvas({
               }
               stroke={i === selectedHouse ? "#FDA4AF" : "rgba(244,244,245,0.9)"}
               strokeWidth={i === selectedHouse ? 2.2 : 1.4}
+              vectorEffect="non-scaling-stroke"
               strokeLinejoin="round"
             />
           ))}
@@ -729,6 +796,7 @@ export function FenceCanvas({
                 fill="rgba(244,244,245,0.12)"
                 stroke="#F4F4F5"
                 strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
                 strokeDasharray="6 5"
                 strokeLinejoin="round"
               />
@@ -737,10 +805,11 @@ export function FenceCanvas({
                   key={i}
                   cx={p.x}
                   cy={p.y}
-                  r={i === 0 && houseDraft.length >= 3 ? 6 : 3.5}
+                  r={(i === 0 && houseDraft.length >= 3 ? 6 : 3.5) * ui}
                   fill={i === 0 && houseDraft.length >= 3 ? "#22C55E" : "#F4F4F5"}
                   stroke="#18181B"
                   strokeWidth={1.2}
+                  vectorEffect="non-scaling-stroke"
                 />
               ))}
             </g>
@@ -754,6 +823,7 @@ export function FenceCanvas({
               fill="rgba(74,222,128,0.06)"
               stroke="#4ade80"
               strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
               strokeDasharray="6 4"
             />
           ))}
@@ -770,6 +840,7 @@ export function FenceCanvas({
                   fill="none"
                   stroke={selected ? "#fbbf24" : "#22d3ee"}
                   strokeWidth={selected ? 5 : 3.5}
+                  vectorEffect="non-scaling-stroke"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   style={{ cursor: "pointer", filter: "drop-shadow(0 0 4px rgba(34,211,238,0.6))" }}
@@ -782,10 +853,10 @@ export function FenceCanvas({
                   }}
                 />
                 {run.points.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={3} fill="#fff" stroke="#0891b2" />
+                  <circle key={i} cx={p.x} cy={p.y} r={3 * ui} fill="#fff" stroke="#0891b2" vectorEffect="non-scaling-stroke" />
                 ))}
                 {mid && ft > 4 && (
-                  <g transform={`translate(${mid.x}, ${mid.y - 12})`} pointerEvents="none">
+                  <g transform={`translate(${mid.x}, ${mid.y}) scale(${ui}) translate(0, -12)`} pointerEvents="none">
                     <rect x={-24} y={-11} width={48} height={18} rx={5} fill="rgba(9,20,12,0.85)" />
                     <text x={0} y={3} textAnchor="middle" fontSize={11} fontWeight={700} fill="#a7f3d0">
                       {ft} ft
@@ -806,11 +877,12 @@ export function FenceCanvas({
                 fill="none"
                 stroke="#fbbf24"
                 strokeWidth={3}
+                vectorEffect="non-scaling-stroke"
                 strokeDasharray="7 5"
                 strokeLinecap="round"
               />
               {draft.map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="#fbbf24" />
+                <circle key={i} cx={p.x} cy={p.y} r={3.5 * ui} fill="#fbbf24" />
               ))}
               {hover && (() => {
                 const last = draft[draft.length - 1];
@@ -824,7 +896,7 @@ export function FenceCanvas({
                   draft.length > 1 ? `+${segFt} ft · ${totalFt} ft total` : `${segFt} ft`;
                 const w = label.length * 6.6 + 16;
                 return (
-                  <g transform={`translate(${hover.x + 14}, ${hover.y - 16})`}>
+                  <g transform={`translate(${hover.x}, ${hover.y}) scale(${ui}) translate(14, -16)`}>
                     <rect x={0} y={-12} width={w} height={20} rx={6} fill="rgba(9,20,12,0.9)" />
                     <text x={w / 2} y={2} textAnchor="middle" fontSize={11} fontWeight={700} fill="#fde68a">
                       {label}
@@ -835,15 +907,25 @@ export function FenceCanvas({
             </g>
           )}
 
+          {/* Snap lock — the cursor is magnetically attached to a
+              corner, another run or the house wall */}
+          {tool === "draw" && hover && snapLocked && (
+            <g pointerEvents="none">
+              <circle cx={hover.x} cy={hover.y} r={8 * ui} fill="none" stroke="#22C55E" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />
+              <circle cx={hover.x} cy={hover.y} r={2.2 * ui} fill="#22C55E" />
+            </g>
+          )}
+
           {/* Ghost gate preview in gate mode */}
           {tool === "gate" && gateGhost && (
             <circle
               cx={gateGhost.x}
               cy={gateGhost.y}
-              r={9}
+              r={9 * ui}
               fill="rgba(244,114,182,0.35)"
               stroke="#f472b6"
               strokeWidth={2}
+              vectorEffect="non-scaling-stroke"
               strokeDasharray="4 3"
               pointerEvents="none"
             />
@@ -869,11 +951,11 @@ export function FenceCanvas({
                 }}
               >
                 {/* the opening: interrupt the run visually */}
-                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0b1210" strokeWidth={7} strokeLinecap="round" opacity={0.55} />
-                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f472b6" strokeWidth={4} strokeLinecap="round" strokeDasharray="6 4" />
-                <circle cx={a.x} cy={a.y} r={3.5} fill="#fff" stroke="#f472b6" strokeWidth={2} />
-                <circle cx={b.x} cy={b.y} r={3.5} fill="#fff" stroke="#f472b6" strokeWidth={2} />
-                <g transform={`translate(${g.x}, ${g.y - 14})`} pointerEvents="none">
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#0b1210" strokeWidth={7} vectorEffect="non-scaling-stroke" strokeLinecap="round" opacity={0.55} />
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#f472b6" strokeWidth={4} vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeDasharray="6 4" />
+                <circle cx={a.x} cy={a.y} r={3.5 * ui} fill="#fff" stroke="#f472b6" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                <circle cx={b.x} cy={b.y} r={3.5 * ui} fill="#fff" stroke="#f472b6" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+                <g transform={`translate(${g.x}, ${g.y}) scale(${ui}) translate(0, -14)`} pointerEvents="none">
                   <rect x={-17} y={-10} width={34} height={16} rx={8} fill="#f472b6" />
                   <text y={2.5} textAnchor="middle" fontSize={9.5} fontWeight={800} fill="#fff">
                     {widthFt}&apos;
@@ -936,7 +1018,7 @@ export function FenceCanvas({
               : "Trace the house: click its corners on the photo. The outline shows in the client's diagram and 3D."
             : tool === "gate"
               ? "Click anywhere on a fence line to place the gate. Click a gate to remove it."
-              : "Click a fence run to select it — Delete removes it. Click the house outline to select or delete it. The dashed green line is the recorded property boundary."}
+              : "Drag the photo to move around, scroll or pinch to zoom. Click a fence run or the house outline to select — Delete removes it."}
       </p>
     </div>
   );

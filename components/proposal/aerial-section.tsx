@@ -97,6 +97,11 @@ export function AerialSection({
     });
   };
 
+  const handleBuildingsChange = (next: { x: number; y: number }[][]) => {
+    if (!onChange || !takeoff) return;
+    onChange({ ...proposal, takeoff: { ...takeoff, buildings: next } });
+  };
+
   const handleDownspoutsChange = (next: Downspout[]) => {
     if (!onChange || !takeoff) return;
     onChange({
@@ -206,6 +211,7 @@ export function AerialSection({
                 topoGridFt={takeoff!.topoGridFt ?? null}
                 buildings={takeoff!.buildings ?? null}
                 retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
+                postUpgrade={fenceCfg!.postUpgrade}
                 initialView={takeoff!.view3d}
                 className="aspect-[16/10]"
               />
@@ -239,6 +245,8 @@ export function AerialSection({
                   roofStructure={takeoff!.roofStructure}
                   onEavesChange={editable ? handleEavesChange : undefined}
                   onDownspoutsChange={editable ? handleDownspoutsChange : undefined}
+                  buildings={takeoff!.buildings}
+                  onBuildingsChange={editable ? handleBuildingsChange : undefined}
                   pxPerFt={takeoff!.canvasPxPerFt}
                   aerialImageUrl={takeoff!.aerial?.imageDataUrl}
                   // Plan-based takeoffs have no satellite image. Switch

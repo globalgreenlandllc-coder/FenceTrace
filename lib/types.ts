@@ -185,6 +185,9 @@ export type FenceEstimateConfig = {
    *  core-drilled + anchored to the wall cap instead of dug and set in
    *  concrete (mount hardware + drilling labor priced per post). */
   wallTopLf?: number;
+  /** Post stock upgrade: galvanized-steel posts (rot-proof, wood fences)
+   *  or heavy 6×6 pressure-treated posts. Absent = standard posts. */
+  postUpgrade?: "steel" | "6x6";
 };
 
 export type EstimateConfig = {
