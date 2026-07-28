@@ -1,18 +1,18 @@
 import { NextResponse } from "next/server";
 import { consumeLimit, requestIp } from "@/lib/abuse/rate-limit";
 import { POLICIES } from "@/lib/abuse/policies";
+import { fenceScanCore } from "@/lib/fence/scan-core";
+import { teaserPayloadFromScan } from "@/lib/fence/teaser";
 
-// TODO(fence): the anonymous landing-page teaser used to run the real
-// satellite roof engine and return the trace geometry. The engine was removed
-// in the FenceTrace demolition phase — the route now always answers 503 with
-// a launch-teaser message. Rate limiting is kept so the endpoint stays cheap
-// to hammer; the fence engine will restore the real scan here.
+// The anonymous landing-page acquisition hook: runs the REAL fence
+// measuring engine (lib/fence/scan-core.ts — geocode → satellite tile →
+// Regrid parcel → suggested runs) and returns the redacted preview:
+// the visitor's actual photo + actual parcel-line runs, counts only —
+// footage stays behind the free signup. Both limits below are
+// fail-closed; every scan spends real Google + Regrid money.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const LAUNCHING_REASON =
-  "Fence scans are launching soon — create a free account to be first in line.";
 
 export async function POST(request: Request) {
   let address = "";
@@ -44,9 +44,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // Platform-wide backstop even while stubbed — the per-IP pass above
-  // already spent a durable-limit read, and when the engine lands this
-  // cap is what protects the API budget.
+  // Platform-wide daily ceiling — bounds the worst-case Google/Regrid
+  // spend of a distributed bot sweep. The per-IP pass above already
+  // spent a durable-limit read.
   const global = await consumeLimit({
     policy: POLICIES.teaserGlobal,
     key: "global",
@@ -59,11 +59,24 @@ export async function POST(request: Request) {
     );
   }
 
-  // TODO(fence): run the fence measuring engine here and return the redacted
-  // trace. Until then: honest 503 — signup:true so the widget renders the
-  // create-account link the copy promises.
-  return NextResponse.json(
-    { ok: false, reason: LAUNCHING_REASON, signup: true },
-    { status: 503 },
-  );
+  try {
+    const scan = await fenceScanCore(address);
+    if (!scan.ok) {
+      // Bad address / imagery gap — a user problem, not a signup wall.
+      return NextResponse.json(
+        { ok: false, reason: scan.reason },
+        { status: 422 },
+      );
+    }
+    return NextResponse.json(
+      { ok: true, teaser: teaserPayloadFromScan(scan) },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (e) {
+    console.error("[teaser] scan threw", e);
+    return NextResponse.json(
+      { ok: false, reason: "The scan hit a snag — try again in a minute." },
+      { status: 500 },
+    );
+  }
 }

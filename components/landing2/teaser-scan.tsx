@@ -2,17 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Loader2, MapPin, ScanLine, Sparkles } from "lucide-react";
-import { GutterDiagram } from "@/components/estimate/gutter-diagram";
 import { ExampleScanPanel } from "@/components/landing2/example-scan";
 import { EXAMPLE_SCAN } from "@/components/landing2/example-scan-data";
-import type { Downspout, EditableLine, RoofStructure } from "@/lib/types";
+import type { TeaserPayload } from "@/lib/fence/teaser";
 
 /**
  * The landing page's acquisition hook: scan a real address BEFORE
- * signing up. Runs the actual satellite engine via /api/teaser (2/day
- * per IP) and renders the real trace — with the measurements locked
- * behind the free signup. Time-to-wow ≈ one form submit.
+ * signing up. Runs the actual fence engine via /api/teaser (2/day per
+ * IP, fail-closed) and renders the visitor's own satellite photo with
+ * the actual parcel-line fence runs drawing in — measurements stay
+ * locked behind the free signup. Time-to-wow ≈ one form submit.
  *
  * The typed address is stashed in localStorage so the post-signup
  * dashboard can offer to finish exactly this scan.
@@ -20,22 +21,36 @@ import type { Downspout, EditableLine, RoofStructure } from "@/lib/types";
 
 export const PENDING_SCAN_KEY = "fencetrace.pendingAddress";
 
-type TeaserPayload = {
-  eaves: EditableLine[];
-  rakes: EditableLine[];
-  downspouts: Pick<Downspout, "id" | "x" | "y">[];
-  perimeter: { x: number; y: number }[];
-  runCount: number;
-  downspoutCount: number;
-};
-
 const SCAN_STEPS = [
   "Locating the property…",
   "Pulling the satellite view…",
-  "Tracing the fence line…",
-  "Marking gate openings…",
+  "Reading the property lines…",
+  "Tracing the fence runs…",
   "Squaring the corners…",
 ];
+
+function pathD(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return "";
+  return (
+    `M ${points[0].x} ${points[0].y} ` +
+    points
+      .slice(1)
+      .map((p) => `L ${p.x} ${p.y}`)
+      .join(" ")
+  );
+}
+
+/** Distinct corner posts of a run (closing duplicate skipped). */
+function cornerPoints(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length < 2) return [];
+  const closed =
+    points.length >= 3 &&
+    Math.hypot(
+      points[0].x - points[points.length - 1].x,
+      points[0].y - points[points.length - 1].y,
+    ) < 1;
+  return closed ? points.slice(0, -1) : points;
+}
 
 export function TeaserScan() {
   const [address, setAddress] = useState("");
@@ -51,6 +66,7 @@ export function TeaserScan() {
   const [showExample, setShowExample] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const stepTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     return () => {
@@ -100,18 +116,16 @@ export function TeaserScan() {
     }
   }
 
-  const roofStructure: RoofStructure | undefined = teaser
-    ? {
-        perimeter: teaser.perimeter,
-        ridges: [],
-        valleys: [],
-        confidence: 1,
-      }
-    : undefined;
-
   const signupHref = `/sign-up?utm_source=teaser${
     address.trim() ? `&address=${encodeURIComponent(address.trim())}` : ""
   }`;
+
+  const corners = teaser ? teaser.runs.flatMap((r) => cornerPoints(r.points)) : [];
+  // Draw-in choreography: dark casing + green line sweep the boundary,
+  // then the corner posts pop. Reduced motion renders everything settled.
+  const drawDur = reduceMotion ? 0 : 1.7;
+  const drawDelay = reduceMotion ? 0 : 0.35;
+  const dotsAt = reduceMotion ? 0 : drawDelay + drawDur * 0.92;
 
   return (
     <div className="mt-10 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
@@ -163,26 +177,95 @@ export function TeaserScan() {
 
       {status === "ready" && teaser && (
         <div className="anim-enter-fade mt-4">
-          <div className="aspect-[16/10] overflow-hidden rounded-2xl">
-            <GutterDiagram
-              eaves={teaser.eaves}
-              downspouts={teaser.downspouts.map((d) => ({ ...d, heightFt: 10 }))}
-              roofStructure={roofStructure}
-              presentation
-              redactNumbers
-            />
+          <div className="relative overflow-hidden rounded-2xl bg-zinc-900">
+            <svg viewBox="0 0 900 580" className="block w-full" role="img" aria-label={`Satellite view of ${teaser.address} with the property-line fence traced`}>
+              <image
+                href={teaser.image.dataUrl}
+                x={0}
+                y={0}
+                width={900}
+                height={580}
+                preserveAspectRatio="xMidYMid slice"
+              />
+              {teaser.runs.map((r, i) => {
+                const d = pathD(r.points);
+                return (
+                  <g key={r.id}>
+                    <motion.path
+                      d={d}
+                      fill="none"
+                      stroke="#0D1B12"
+                      strokeOpacity={0.55}
+                      strokeWidth={7}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      initial={{ pathLength: reduceMotion ? 1 : 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ duration: drawDur, delay: drawDelay + i * 0.25, ease: "easeInOut" }}
+                    />
+                    <motion.path
+                      d={d}
+                      fill="none"
+                      stroke="#4ADE80"
+                      strokeWidth={3}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      initial={{ pathLength: reduceMotion ? 1 : 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ duration: drawDur, delay: drawDelay + i * 0.25, ease: "easeInOut" }}
+                    />
+                  </g>
+                );
+              })}
+              {corners.map((p, i) => (
+                <motion.circle
+                  key={`${p.x}-${p.y}-${i}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={5}
+                  fill="#fff"
+                  stroke="#16A34A"
+                  strokeWidth={2.5}
+                  initial={{ opacity: reduceMotion ? 1 : 0, scale: reduceMotion ? 1 : 0.3 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3, delay: dotsAt + i * 0.05 }}
+                />
+              ))}
+            </svg>
+            <div className="pointer-events-none absolute left-3 top-3 max-w-[85%] truncate rounded-full bg-white/90 px-3 py-1.5 text-[12px] font-semibold text-zinc-900 shadow-sm backdrop-blur">
+              {teaser.address}
+            </div>
+            {teaser.parcelFound ? (
+              <div className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-zinc-950/75 px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm backdrop-blur">
+                {teaser.sides} fence lines · {teaser.corners} corners
+                {teaser.acres != null ? ` · ${teaser.acres} acres` : ""}
+              </div>
+            ) : (
+              <div className="absolute inset-x-3 bottom-3 rounded-xl bg-zinc-950/80 px-3.5 py-2.5 text-[12.5px] font-medium leading-snug text-white shadow-sm backdrop-blur">
+                Found the property — its boundary isn&apos;t published in the
+                parcel database. Draw the line yourself in about 30 seconds
+                with a free account.
+              </div>
+            )}
           </div>
           <div className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
             <p className="text-sm text-zinc-600">
-              <span className="font-semibold text-zinc-900">
-                {teaser.runCount} fence runs
-              </span>{" "}
-              and{" "}
-              <span className="font-semibold text-zinc-900">
-                {teaser.downspoutCount} gates
-              </span>{" "}
-              traced. Footage, materials and a send-ready proposal are one free
-              account away.
+              {teaser.parcelFound ? (
+                <>
+                  That&apos;s the actual property line —{" "}
+                  <span className="font-semibold text-zinc-900">
+                    {teaser.sides} runs
+                  </span>{" "}
+                  traced on your satellite photo. Footage, materials and a
+                  send-ready proposal are one free account away.
+                </>
+              ) : (
+                <>
+                  Your satellite photo is ready. Trace the fence on it, and
+                  footage, materials and a send-ready proposal price
+                  themselves.
+                </>
+              )}
             </p>
             <Link
               href={signupHref}
