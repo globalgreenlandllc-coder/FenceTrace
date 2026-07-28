@@ -246,6 +246,9 @@ export type ProposalTakeoff = {
     a: { x: number; y: number };
     b: { x: number; y: number };
     type: string;
+    /** Stretch footage (ft) — refreshed by the proposal canvas when the
+     *  stretch is edited; feeds config.fence.mixed aggregation. */
+    lfFt?: number;
   }[];
 };
 

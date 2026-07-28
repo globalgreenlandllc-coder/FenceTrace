@@ -21,6 +21,7 @@ import {
 } from "@/lib/diagram-labels";
 import type { Downspout, EditableLine, RoofStructure } from "@/lib/types";
 import { cornerFlags } from "@/lib/fence/geo";
+import { FENCE_TYPES, fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 
 /**
  * Proposal-quality canvas. Same data shape as AerialCanvas but stripped
@@ -72,6 +73,84 @@ function nearestSegIndex(
   return best;
 }
 
+/** Overlay color per catalog category — how a mixed stretch reads on
+ *  the photo (matches the estimator canvas palette). */
+const SECTION_COLORS: Record<string, string> = {
+  wood: "#D97706",
+  vinyl: "#F1F5F9",
+  "chain-link": "#A1A1AA",
+  aluminum: "#475569",
+  steel: "#334155",
+  "split-rail": "#B45309",
+};
+
+const FALLBACK_PX_PER_FT = 2.4;
+
+type SectionIn = { a: { x: number; y: number }; b: { x: number; y: number }; type: string; lfFt?: number };
+
+function cumArcs(points: { x: number; y: number }[]): number[] {
+  const out = [0];
+  for (let i = 1; i < points.length; i++) {
+    out.push(out[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));
+  }
+  return out;
+}
+
+/** Arc distance of the closest point on the polyline + how far off it is. */
+function projectArc(
+  points: { x: number; y: number }[],
+  p: { x: number; y: number },
+): { arc: number; dist: number } {
+  let bestArc = 0;
+  let bestDist = Infinity;
+  let acc = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    const len2 = len * len;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    const d = Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+    if (d < bestDist) {
+      bestDist = d;
+      bestArc = acc + len * t;
+    }
+    acc += len;
+  }
+  return { arc: bestArc, dist: bestDist };
+}
+
+/** Slice a polyline between two arc distances (vertices kept). */
+function slicePolyline(
+  points: { x: number; y: number }[],
+  d0: number,
+  d1: number,
+): { x: number; y: number }[] {
+  const lo = Math.min(d0, d1);
+  const hi = Math.max(d0, d1);
+  const out: { x: number; y: number }[] = [];
+  const at = (a: { x: number; y: number }, b: { x: number; y: number }, t: number) => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  });
+  let acc = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L > 0 && acc + L > lo && acc < hi) {
+      const t0 = Math.max(0, (lo - acc) / L);
+      const t1 = Math.min(1, (hi - acc) / L);
+      if (out.length === 0) out.push(at(a, b, t0));
+      out.push(at(a, b, t1));
+    }
+    acc += L;
+  }
+  return out;
+}
+
 export function PresentationCanvas({
   eaves,
   rakes = [],
@@ -84,6 +163,8 @@ export function PresentationCanvas({
   pxPerFt,
   buildings,
   onBuildingsChange,
+  fenceSections,
+  onFenceSectionsChange,
 }: {
   eaves: EditableLine[];
   rakes?: EditableLine[];
@@ -111,6 +192,12 @@ export function PresentationCanvas({
    *  it then shows in the client's diagram + 3D. */
   buildings?: { x: number; y: number }[][];
   onBuildingsChange?: (next: { x: number; y: number }[][]) => void;
+  /** FenceTrace: mixed-type stretches (a different fence from here to
+   *  here). Rendered as colored overlays; with onFenceSectionsChange,
+   *  selecting a span shows a type picker to build that stretch as
+   *  another fence — priced + drawn everywhere. */
+  fenceSections?: SectionIn[] | null;
+  onFenceSectionsChange?: (next: SectionIn[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -252,6 +339,104 @@ export function PresentationCanvas({
     }
     return { mode, uniform: counts.size === 1 && hs.length === downspouts.length };
   }, [downspouts]);
+
+  /* ----- Mixed-type stretches (a different fence from here to here) ----- */
+  const effPxPerFt = pxPerFt ?? FALLBACK_PX_PER_FT;
+  const sectionViews = useMemo(() => {
+    if (!fenceSections || fenceSections.length === 0) return [];
+    return fenceSections
+      .map((sec, i) => {
+        // match the stretch to the eave line its endpoints sit on
+        let best: { line: EditableLine; a: number; b: number; score: number } | null = null;
+        for (const l of eaves) {
+          if (l.points.length < 2) continue;
+          const pa = projectArc(l.points, sec.a);
+          const pb = projectArc(l.points, sec.b);
+          const score = pa.dist + pb.dist;
+          if (!best || score < best.score) best = { line: l, a: pa.arc, b: pb.arc, score };
+        }
+        if (!best || best.score > 90) return null;
+        const aArc = Math.min(best.a, best.b);
+        const bArc = Math.max(best.a, best.b);
+        const pts = slicePolyline(best.line.points, aArc, bArc);
+        if (pts.length < 2) return null;
+        const t = fenceType(sec.type as FenceTypeId);
+        const lfFt = Math.max(1, Math.round((bArc - aArc) / effPxPerFt));
+        return {
+          key: `sec-${i}`,
+          sec,
+          lineId: best.line.id,
+          aArc,
+          bArc,
+          pts,
+          lfFt,
+          color: SECTION_COLORS[t.category] ?? "#94A3B8",
+          label: `${t.label} · ${lfFt}′`,
+          mid: pts[Math.floor(pts.length / 2)],
+        };
+      })
+      .filter(Boolean) as {
+      key: string;
+      sec: SectionIn;
+      lineId: string;
+      aArc: number;
+      bArc: number;
+      pts: { x: number; y: number }[];
+      lfFt: number;
+      color: string;
+      label: string;
+      mid: { x: number; y: number };
+    }[];
+  }, [fenceSections, eaves, effPxPerFt]);
+
+  // The picker that appears over a selected span: what this stretch is
+  // built as. "Main fence" clears it; any other type marks the stretch.
+  const spanPicker = useMemo(() => {
+    if (!segSel || !onFenceSectionsChange || !editable) return null;
+    const line = eaves.find((l) => l.id === segSel.id);
+    if (!line || line.points.length < 2) return null;
+    const cums = cumArcs(line.points);
+    const aArc = cums[Math.min(segSel.a, cums.length - 1)];
+    const bArc = cums[Math.min(segSel.b, cums.length - 1)];
+    if (bArc - aArc < 6) return null;
+    const midSlice = slicePolyline(line.points, (aArc + bArc) / 2 - 1, (aArc + bArc) / 2 + 1);
+    const mid = midSlice[0] ?? line.points[segSel.a];
+    const cur = sectionViews.find(
+      (sv) => sv.lineId === line.id && sv.aArc < bArc - 2 && sv.bArc > aArc + 2,
+    );
+    return { line, aArc, bArc, mid, current: cur ? cur.sec.type : "" };
+  }, [segSel, eaves, sectionViews, editable, onFenceSectionsChange]);
+
+  const applySpanType = (typeId: string) => {
+    if (!spanPicker || !onFenceSectionsChange) return;
+    const { line, aArc, bArc } = spanPicker;
+    const overlapped = new Set(
+      sectionViews
+        .filter((sv) => sv.lineId === line.id && sv.aArc < bArc - 2 && sv.bArc > aArc + 2)
+        .map((sv) => sv.sec),
+    );
+    // keep everything that isn't being replaced, refreshing lfFt from
+    // the matched geometry so pricing always sums real footage
+    const next: SectionIn[] = (fenceSections ?? [])
+      .filter((sec) => !overlapped.has(sec))
+      .map((sec) => {
+        const sv = sectionViews.find((v) => v.sec === sec);
+        return sv ? { ...sec, lfFt: sv.lfFt } : sec;
+      });
+    if (typeId) {
+      const slice = slicePolyline(line.points, aArc, bArc);
+      if (slice.length >= 2) {
+        next.push({
+          a: slice[0],
+          b: slice[slice.length - 1],
+          type: typeId,
+          lfFt: Math.max(1, Math.round((bArc - aArc) / effPxPerFt)),
+        });
+      }
+    }
+    onFenceSectionsChange(next);
+  };
+
 
   // Miter markers — tiny drafting diamonds where two runs meet, tying the
   // "N gutter miters" stat to visible corners on the drawing. Interior
@@ -916,6 +1101,43 @@ export function PresentationCanvas({
           );
         })}
 
+        {/* Mixed-type stretches — a different fence from here to here,
+            drawn over the run in its material color with a label chip */}
+        {sectionViews.map((sv) => (
+          <g key={sv.key} pointerEvents="none">
+            <polyline
+              points={sv.pts.map((q) => `${q.x},${q.y}`).join(" ")}
+              fill="none"
+              stroke="#0b1210"
+              strokeOpacity={0.55}
+              strokeWidth={6.5 * vs}
+              strokeLinecap="round"
+            />
+            <polyline
+              points={sv.pts.map((q) => `${q.x},${q.y}`).join(" ")}
+              fill="none"
+              stroke={sv.color}
+              strokeWidth={4 * vs}
+              strokeLinecap="round"
+            />
+            <g transform={`translate(${sv.mid.x}, ${sv.mid.y}) scale(${vs}) translate(0, -14)`}>
+              <rect
+                x={-sv.label.length * 2.9 - 7}
+                y={-10}
+                width={sv.label.length * 5.8 + 14}
+                height={17}
+                rx={8.5}
+                fill="rgba(9,20,12,0.88)"
+                stroke={sv.color}
+                strokeWidth={1}
+              />
+              <text x={0} y={2.5} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff">
+                {sv.label}
+              </text>
+            </g>
+          </g>
+        ))}
+
         {/* Miter markers — small drafting diamonds at run-to-run corners,
             so the "N gutter miters" stat has a visible counterpart. */}
         {miterPts.map((p, i) => (
@@ -1043,6 +1265,38 @@ export function PresentationCanvas({
         })}
         </g>
       </svg>
+
+      {/* Span type picker — the selected stretch can be built as a
+          different fence (or back to the main one). Prices + 3D follow. */}
+      {spanPicker && (
+        <div
+          className="absolute z-20"
+          style={{
+            left: `${((frame ? spanPicker.mid.x * frame.k + frame.tx : spanPicker.mid.x) / VIEWBOX_W) * 100}%`,
+            top: `${((frame ? spanPicker.mid.y * frame.k + frame.ty : spanPicker.mid.y) / VIEWBOX_H) * 100}%`,
+            transform: "translate(-50%, calc(-100% - 14px))",
+          }}
+        >
+          <div className="flex items-center gap-1.5 rounded-full bg-slate-950/92 px-2.5 py-1.5 shadow-lg ring-1 ring-inset ring-white/15 backdrop-blur">
+            <span className="whitespace-nowrap text-[10px] font-semibold text-white/70">
+              This stretch:
+            </span>
+            <select
+              aria-label="Fence type for this stretch"
+              value={spanPicker.current}
+              onChange={(e) => applySpanType(e.target.value)}
+              className="ring-focus max-w-[150px] rounded-md border-0 bg-slate-800 px-1.5 py-0.5 text-[11px] font-semibold text-white outline-none"
+            >
+              <option value="">Main fence</option>
+              {FENCE_TYPES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

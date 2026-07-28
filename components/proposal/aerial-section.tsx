@@ -131,6 +131,39 @@ export function AerialSection({
     onChange({ ...proposal, takeoff: { ...takeoff, buildings: next } });
   };
 
+  // Mixed-type stretches picked on the canvas ("this stretch is chain
+  // link"): persist the geometry AND fold the footage into every fence
+  // tier's config.fence.mixed so the carve-out prices on all packages.
+  const handleSectionsChange = (
+    next: { a: { x: number; y: number }; b: { x: number; y: number }; type: string; lfFt?: number }[],
+  ) => {
+    if (!onChange || !takeoff) return;
+    const byType = new Map<string, number>();
+    for (const sec of next) {
+      const lf = Math.max(0, Math.round(sec.lfFt ?? 0));
+      if (lf > 0) byType.set(sec.type, (byType.get(sec.type) ?? 0) + lf);
+    }
+    const mixed = [...byType.entries()].map(([type, lf]) => ({ type, lf }));
+    onChange({
+      ...proposal,
+      takeoff: { ...takeoff, fenceSections: next },
+      packages: proposal.packages.map((p) =>
+        p.config.fence
+          ? {
+              ...p,
+              config: {
+                ...p.config,
+                fence: {
+                  ...p.config.fence,
+                  mixed: mixed.length > 0 ? mixed : undefined,
+                },
+              },
+            }
+          : p,
+      ),
+    });
+  };
+
   const handleDownspoutsChange = (next: Downspout[]) => {
     if (!onChange || !takeoff) return;
     onChange({
@@ -277,6 +310,10 @@ export function AerialSection({
                   onDownspoutsChange={editable ? handleDownspoutsChange : undefined}
                   buildings={takeoff!.buildings}
                   onBuildingsChange={editable ? handleBuildingsChange : undefined}
+                  fenceSections={fenceCfg ? takeoff!.fenceSections ?? [] : null}
+                  onFenceSectionsChange={
+                    editable && fenceCfg ? handleSectionsChange : undefined
+                  }
                   pxPerFt={takeoff!.canvasPxPerFt}
                   aerialImageUrl={takeoff!.aerial?.imageDataUrl}
                   // Plan-based takeoffs have no satellite image. Switch
