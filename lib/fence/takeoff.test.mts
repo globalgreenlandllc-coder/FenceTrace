@@ -249,3 +249,41 @@ test("zero-length layout prices to zero without NaN", () => {
   assert.equal(p.pricePerLf, 0);
   assert.ok(Number.isFinite(p.total));
 });
+
+test("bucket adjusters: labor +20% moves labor only; tax is untouched", async () => {
+  const { blankProposal, packageClientBreakdown } = await import("../proposal-mock.ts");
+  const blank = blankProposal();
+  const pkg = blank.packages[1]!;
+  const before = packageClientBreakdown(pkg, blank.measurements, 0);
+  const after = packageClientBreakdown(
+    { ...pkg, laborAdjPct: 20 },
+    blank.measurements,
+    0,
+  );
+  // labor bucket up ~20%, materials identical
+  assert.ok(after.labor > before.labor * 1.15, `${after.labor} vs ${before.labor}`);
+  assert.ok(Math.abs(after.materials - before.materials) < 1.5);
+  // labor is untaxed — the tax embedded in the total must not move
+  assert.ok(Math.abs(after.tax - before.tax) < 0.02, `${after.tax} vs ${before.tax}`);
+  assert.ok(after.total > before.total);
+  // materials +10% raises the materials bucket AND the tax with it
+  const mat = packageClientBreakdown(
+    { ...pkg, materialsAdjPct: 10 },
+    blank.measurements,
+    0,
+  );
+  assert.ok(mat.materials > before.materials * 1.05);
+  assert.ok(mat.tax > before.tax);
+  // clamped: ±50 max
+  const wild = packageClientBreakdown(
+    { ...pkg, laborAdjPct: 500 },
+    blank.measurements,
+    0,
+  );
+  const capped = packageClientBreakdown(
+    { ...pkg, laborAdjPct: 50 },
+    blank.measurements,
+    0,
+  );
+  assert.ok(Math.abs(wild.total - capped.total) < 0.02);
+});

@@ -79,6 +79,12 @@ export type Package = {
   /** Hand-added BOM lines beyond the auto-generated system (custom
    *  fabrication, a one-off charge, etc.). */
   customLineItems?: LineItem[];
+  /** Bucket adjusters (percent, clamped ±50): scale every MATERIALS
+   *  line (taxable) / every LABOR line (untaxed) before markup — the
+   *  knob for "premium supplier" or "hard-access labor" jobs. Markup
+   *  stays the profit knob on top. Absent = 0. */
+  materialsAdjPct?: number;
+  laborAdjPct?: number;
 };
 
 /**
@@ -88,20 +94,38 @@ export type Package = {
  * MaterialsBuilder BOM editor and `packageTotal` so the displayed lines
  * and the price can never disagree.
  */
+const clampAdj = (pct: number | undefined) =>
+  Math.max(-50, Math.min(50, Number.isFinite(pct) ? pct! : 0));
+
 export function packageLineItems(
   p: Package,
   measurements: Measurements,
 ): LineItem[] {
+  // Bucket adjusters scale unit prices by bucket (taxable ⇒ materials,
+  // untaxed ⇒ labor/tear-out) so every consumer — BOM editor, totals,
+  // tax share, client breakdown, job costing — moves together.
+  const mAdj = 1 + clampAdj(p.materialsAdjPct) / 100;
+  const lAdj = 1 + clampAdj(p.laborAdjPct) / 100;
+  const scale = (it: LineItem): LineItem =>
+    mAdj === 1 && lAdj === 1
+      ? it
+      : {
+          ...it,
+          unitPrice:
+            Math.round(it.unitPrice * (it.taxable ? mAdj : lAdj) * 100) / 100,
+        };
   const auto: LineItem[] = buildLineItems(measurements, p.config).map((it) => {
     const ov = p.lineItemOverrides?.[it.id];
-    if (!ov) return it;
-    return {
-      ...it,
-      quantity: ov.quantity ?? it.quantity,
-      unitPrice: ov.unitPrice ?? it.unitPrice,
-    };
+    const base = !ov
+      ? it
+      : {
+          ...it,
+          quantity: ov.quantity ?? it.quantity,
+          unitPrice: ov.unitPrice ?? it.unitPrice,
+        };
+    return scale(base);
   });
-  return [...auto, ...(p.customLineItems ?? [])];
+  return [...auto, ...(p.customLineItems ?? []).map(scale)];
 }
 
 export type Photo = {

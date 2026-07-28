@@ -199,6 +199,15 @@ export function PackagesSection({
                 </div>
               )}
 
+              {!readOnly && (
+                <BucketAdjusters
+                  pkg={p}
+                  measurements={proposal.measurements}
+                  discountPct={proposal.discountPct ?? 0}
+                  onPatch={(patch) => update(p.id, patch)}
+                />
+              )}
+
               <ul className="mt-5 space-y-2">
                 {p.highlights.map((h, i) => (
                   <li
@@ -414,5 +423,84 @@ function IncludedBreakdown({
         </div>
       )}
     </details>
+  );
+}
+
+
+/** Editor-only steppers that re-shape the Materials / Labor buckets
+ *  (±5% per tap, clamped ±50%). They scale the underlying lines, so the
+ *  BOM editor, tax share, client breakdown and job costing all move
+ *  together — markup stays the profit knob on top. */
+function BucketAdjusters({
+  pkg,
+  measurements,
+  discountPct,
+  onPatch,
+}: {
+  pkg: Package;
+  measurements: Measurements;
+  discountPct: number;
+  onPatch: (patch: Partial<Package>) => void;
+}) {
+  const b = packageClientBreakdown(pkg, measurements, discountPct);
+  const STEP = 5;
+  const rows = [
+    {
+      key: "materialsAdjPct" as const,
+      label: "Materials",
+      value: b.materials,
+      adj: pkg.materialsAdjPct ?? 0,
+    },
+    {
+      key: "laborAdjPct" as const,
+      label: "Labor",
+      value: b.labor,
+      adj: pkg.laborAdjPct ?? 0,
+    },
+  ];
+  return (
+    <div className="mt-3 space-y-1.5 rounded-xl border border-zinc-100 bg-zinc-50/60 p-2.5">
+      {rows.map((r) => (
+        <div key={r.key} className="flex items-center gap-2 text-xs">
+          <span className="w-16 shrink-0 text-zinc-500">{r.label}</span>
+          <span className="ml-auto tabular-nums font-medium text-zinc-800">
+            {formatCurrency(r.value)}
+          </span>
+          {r.adj !== 0 && (
+            <button
+              type="button"
+              title="Reset adjustment"
+              onClick={() => onPatch({ [r.key]: 0 })}
+              className="transition-smooth rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-200 hover:bg-accent-100"
+            >
+              {r.adj > 0 ? "+" : ""}
+              {r.adj}% ✕
+            </button>
+          )}
+          <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+            <button
+              type="button"
+              aria-label={`Lower ${r.label}`}
+              onClick={() => onPatch({ [r.key]: Math.max(-50, r.adj - STEP) })}
+              className="transition-smooth h-6 w-6 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              aria-label={`Raise ${r.label}`}
+              onClick={() => onPatch({ [r.key]: Math.min(50, r.adj + STEP) })}
+              className="transition-smooth h-6 w-6 border-l border-zinc-200 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
+            >
+              +
+            </button>
+          </div>
+        </div>
+      ))}
+      <p className="text-[10px] leading-relaxed text-zinc-400">
+        ±5% per tap — reshapes the job&apos;s cost; markup stays your profit
+        knob on top.
+      </p>
+    </div>
   );
 }
