@@ -87,6 +87,21 @@ export const POLICIES = {
     "Address search is busy — keep typing and try again in a moment.",
   ),
 
+  /** AI market-price quotes — one Sonnet call prices the whole tier
+   *  ladder, so legit use is a handful per proposal. Fail-closed: if
+   *  the limiter store is down we'd rather show "try later" than let
+   *  an attacker meter-run the LLM. */
+  aiPricing: make(
+    "ai.pricing",
+    "ABUSE_LIMIT_AI_PRICING",
+    [
+      { limit: 15, windowSec: HOUR },
+      { limit: 60, windowSec: DAY },
+    ],
+    "closed",
+    "Market pricing is taking a breather — try again in a little while.",
+  ),
+
   /** Blueprint analyze / re-analyze — the most expensive action in the app (3× Opus + ensemble). */
   blueprintAnalyze: make(
     "blueprint.analyze",

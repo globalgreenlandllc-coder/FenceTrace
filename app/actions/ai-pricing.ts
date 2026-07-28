@@ -1,7 +1,17 @@
 "use server";
 
 import { getMe } from "./me";
-import { suggestMarketPrices } from "@/lib/ai/price-suggestion";
+import {
+  PRICING_MODEL,
+  suggestMarketPrices,
+} from "@/lib/ai/price-suggestion";
+import { consumeLimit } from "@/lib/abuse/rate-limit";
+import { POLICIES } from "@/lib/abuse/policies";
+import {
+  checkAiSpendAllowed,
+  estimateModelCostCents,
+  recordSpend,
+} from "@/lib/abuse/spend-guard";
 import type { AiPriceQuote } from "@/lib/proposal-mock";
 import type { EstimateConfig, Measurements } from "@/lib/types";
 
@@ -51,6 +61,25 @@ export async function getAiPriceQuotes(input: {
     return { ok: false, reason: "No packages to price" };
   }
 
+  // Layered cost protection: a per-user request bucket (fail-closed),
+  // then the shared AI spend caps + circuit breaker BEFORE any tokens
+  // are bought. One quote call prices the whole ladder, so legitimate
+  // use is a handful per proposal — 15/hr is generous.
+  const rl = await consumeLimit({
+    policy: POLICIES.aiPricing,
+    key: `ai-pricing:${me.user.id}`,
+    context: { userId: me.user.id, route: "ai-pricing" },
+  });
+  if (!rl.ok) return { ok: false, reason: rl.reason };
+  const estCostCents = estimateModelCostCents(PRICING_MODEL, 4_000, 1_600);
+  const spend = await checkAiSpendAllowed({
+    userId: me.user.id,
+    kind: "AI_PRICE_QUOTE",
+    estCostCents,
+    isAdmin: me.user.role === "SUPER_ADMIN",
+  });
+  if (!spend.ok) return { ok: false, reason: spend.reason };
+
   const res = await suggestMarketPrices({
     address,
     measurements: input.measurements,
@@ -61,6 +90,22 @@ export async function getAiPriceQuotes(input: {
     })),
   });
   if (!res.ok) return res;
+
+  // Meter the real tokens into the spend ledger — this is what the
+  // hourly/daily caps, the circuit breaker and /admin/abuse read.
+  await recordSpend({
+    userId: me.user.id,
+    kind: "AI_PRICE_QUOTE",
+    provider: "anthropic",
+    costCents: estimateModelCostCents(
+      PRICING_MODEL,
+      res.usage.inputTokens,
+      res.usage.outputTokens,
+    ),
+    inputTokens: res.usage.inputTokens,
+    outputTokens: res.usage.outputTokens,
+    meta: { packages: input.packages.length },
+  });
 
   const fetchedAt = new Date().toISOString();
   const keyById = new Map(input.packages.map((p) => [p.id, p.inputKey]));

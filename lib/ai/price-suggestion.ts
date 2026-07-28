@@ -23,7 +23,8 @@ import type { EstimateConfig, Measurements } from "@/lib/types";
  * structured JSON, never prose.
  */
 
-const MODEL = "claude-sonnet-5";
+export const PRICING_MODEL = "claude-sonnet-5";
+const MODEL = PRICING_MODEL;
 
 export type PricePackageInput = {
   /** Package id ("good" | "better" | "best") — echoed back per tier. */
@@ -59,7 +60,12 @@ export type PriceSuggestion = {
 };
 
 export type PriceSuggestionResult =
-  | { ok: true; suggestion: PriceSuggestion }
+  | {
+      ok: true;
+      suggestion: PriceSuggestion;
+      /** Token usage of the underlying call — the caller meters spend. */
+      usage: { inputTokens: number | null; outputTokens: number | null };
+    }
   | { ok: false; reason: string };
 
 const PRICING_TOOL: Anthropic.Tool = {
@@ -466,6 +472,10 @@ export async function suggestMarketPrices(
           typeof raw.location_used === "string" && raw.location_used.trim()
             ? raw.location_used.trim()
             : address,
+      },
+      usage: {
+        inputTokens: response.usage?.input_tokens ?? null,
+        outputTokens: response.usage?.output_tokens ?? null,
       },
     };
   } catch (e) {

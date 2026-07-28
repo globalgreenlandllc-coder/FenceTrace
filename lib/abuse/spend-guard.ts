@@ -24,7 +24,7 @@ import { alertAdmins } from "./alerts";
 // Fail-safe direction: if the ledger/DB is unreadable, AI actions are
 // BLOCKED (fail-closed) — an outage should never mean unmetered spend.
 
-const AI_KINDS: SpendKind[] = ["SATELLITE_ESTIMATE", "BLUEPRINT_ANALYSIS", "LEAD_SYNC"];
+const AI_KINDS: SpendKind[] = ["SATELLITE_ESTIMATE", "BLUEPRINT_ANALYSIS", "LEAD_SYNC", "AI_PRICE_QUOTE"];
 const CIRCUIT_KEY = "abuse.ai_circuit";
 
 export type SpendDecision = { ok: true } | { ok: false; reason: string };

@@ -985,6 +985,7 @@ enum SpendKind {
   BLUEPRINT_ANALYSIS
   LEAD_SYNC
   EMAIL_SEND
+  AI_PRICE_QUOTE
 }
 
 // Deliberately no FK to users — the ledger must survive user deletion

@@ -523,3 +523,37 @@ A: Daily cron (piggybacked on payment reminders). Buckets kept one extra window 
 ✅ Cost-conscious: pre-flight estimates, token-derived actuals, hard spend ceiling
 
 **Operating this well = infrastructure is protected, customers' proposals aren't spammed, bill never surprises you.**
+
+---
+
+## FenceTrace Endpoint Coverage (audited 2026-07-28)
+
+The system above was inherited from the platform; this section maps every
+FenceTrace-specific surface added since the conversion to its guards.
+All three layers apply on top: edge per-IP limiting (middleware),
+durable per-user buckets (Postgres, `lib/abuse/policies.ts`), and the
+AI spend caps + circuit breaker (`lib/abuse/spend-guard.ts`).
+
+| Surface | Auth | Bucket (policy · limits) | Cost guard |
+| --- | --- | --- | --- |
+| `runFenceScan` (Google geocode + tile, Regrid) | user | `estimateRun` · 10/hr, 30/day · fail-closed | Google/Regrid $ bounded by bucket |
+| `sampleFenceElevations` (Google Elevation) | user | `fenceTopo` · 120/hr, 600/day · fail-open | ≤500 pts/call, batched |
+| `getScanBuildings` (OSM Overpass) | user | `fenceTopo` bucket (`osm-buildings:` key) | free API; 9 s timeout ×2 mirrors, capped 40 ways |
+| `suggestAddresses` (Places autocomplete) | user | `addressSuggest` · 240/hr, 1200/day · fail-open | client-debounced 280 ms; session tokens |
+| `getAiPriceQuotes` (Claude Sonnet) | user | `aiPricing` · 15/hr, 60/day · **fail-closed** | pre-flight `checkAiSpendAllowed` (`AI_PRICE_QUOTE` kind → user daily / global hourly+daily caps + circuit) + post-call `recordSpend` from real tokens |
+| `saveDraftFromEstimate` / proposal edits | user | tenant-scoped (`existingId` + `userId` where-clause) | — |
+| `sendProposal` | user | `checkUserEmailBudget` 20/hr, 100/day + free-plan monthly cap | Resend $ bounded |
+| Portal `/p/[token]` writes (accept, discount, listen) | token | `checkPortalWrite` per-token+IP | — |
+| `/api/p/[token]/audio` (TTS) | token | cached by script-hash; only cache misses limited (per-token + per-IP) | TTS $ only on miss |
+| `/api/teaser` | anon | fail-closed 503 (guest flow disabled pre-launch) | zero anon spend |
+| Admin surfaces (keys, prompts, pricing, materials, users) | SUPER_ADMIN | — | — |
+
+Tenancy verdict: every per-user table write/read in the fence paths is
+scoped by `userId` (spot-checked: proposal update-by-`existingId`,
+recents, CRM, payments, worker portal DTO redaction). Platform-global
+tables (MaterialDefault, PromptTemplate, PlatformSetting) are
+deliberately unscoped and admin-gated.
+
+Known accepted gaps: `/api/track` (anonymous beacon) relies on the edge
+layer + 180-day prune, no durable bucket; Clerk handles signup bot
+pressure; CAPTCHA still recommended if the teaser flow ever reopens.
