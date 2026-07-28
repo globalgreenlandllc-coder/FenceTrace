@@ -80,7 +80,6 @@ function BillingSection() {
     // sees the attempt even if checkout later fails. "portal" is an existing
     // subscriber managing their plan, not a purchase — skip it.
     if (key === "subscribe") trackEvent("subscribe_click");
-    else if (key !== "portal") trackEvent("credit_topup_click");
     setBusy(key);
     setError(null);
     try {

@@ -183,11 +183,8 @@ export function AnalyticsDashboard({
           <StatTile
             index={7}
             label="Takeoffs run"
-            value={compact(
-              overview.business.estimates.inRange +
-                overview.business.blueprints.inRange,
-            )}
-            footnote="Satellite + blueprint, in range"
+            value={compact(overview.business.estimates.inRange)}
+            footnote="Property scans, in range"
           />
         </div>
 

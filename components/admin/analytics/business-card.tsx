@@ -78,15 +78,10 @@ export function BusinessCard({ business }: { business: BusinessStats }) {
           <p className="microlabel">Product usage</p>
           <div className="mt-1.5 divide-y divide-zinc-100">
             <Row
-              label="Satellite takeoffs"
+              label="Property scans"
               value={`${compact(business.estimates.inRange)} in range · ${compact(business.estimates.total)} total`}
             />
-            <Row
-              label="Blueprint takeoffs"
-              value={`${compact(business.blueprints.inRange)} in range · ${compact(business.blueprints.total)} total`}
-            />
-            <Row label="Credits burned" value={compact(business.credits.used)} />
-            <Row label="Credits available" value={compact(Math.max(0, creditsAvailable))} />
+            <Row label="Crew members" value={compact(business.workers)} />
           </div>
           {proposals.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
