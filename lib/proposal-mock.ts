@@ -85,7 +85,61 @@ export type Package = {
    *  stays the profit knob on top. Absent = 0. */
   materialsAdjPct?: number;
   laborAdjPct?: number;
+  /** Which smart job-condition chips are applied (JOB_FACTORS ids) —
+   *  bookkeeping for the toggles; the money lives in the adjusters. */
+  jobFactors?: string[];
 };
+
+/** Smart job conditions — things the takeoff engine CANNOT see (terrain,
+ *  slope steps and wall mounts are already priced; suggesting those
+ *  here would double-charge). One tap applies the bump, tap again
+ *  removes it. Single-bucket by design so the reset buttons stay sane. */
+export const JOB_FACTORS: {
+  id: string;
+  label: string;
+  hint: string;
+  materials: number;
+  labor: number;
+  /** Only offer when relevant to this package's fence config. */
+  when?: (cfg: EstimateConfig) => boolean;
+}[] = [
+  {
+    id: "tight-access",
+    label: "Tight access",
+    hint: "No vehicle to the line — posts, concrete and panels move by hand",
+    materials: 0,
+    labor: 10,
+  },
+  {
+    id: "heavy-teardown",
+    label: "Concrete in tear-out",
+    hint: "Old posts set in concrete — demo runs heavier than a clean pull",
+    materials: 0,
+    labor: 15,
+    when: (cfg) => (cfg.fence?.removalLf ?? 0) > 0,
+  },
+  {
+    id: "rush",
+    label: "Rush schedule",
+    hint: "Client wants it now — weekend or reshuffled crew time",
+    materials: 0,
+    labor: 10,
+  },
+  {
+    id: "lumber-up",
+    label: "Material prices high",
+    hint: "Supplier running hot this month — protect the materials side",
+    materials: 5,
+    labor: 0,
+  },
+  {
+    id: "sharpen",
+    label: "Sharpen the bid",
+    hint: "Competitive job — trim labor 5% to win it",
+    materials: 0,
+    labor: -5,
+  },
+];
 
 /**
  * Effective bill of materials for a package: the auto lines derived from

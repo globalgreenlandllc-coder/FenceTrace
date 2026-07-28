@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { DUR, EASE } from "@/lib/motion";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
+  JOB_FACTORS,
   markupPctForTarget,
   packageClientBreakdown,
   packageTotal,
@@ -444,6 +445,20 @@ function BucketAdjusters({
 }) {
   const b = packageClientBreakdown(pkg, measurements, discountPct);
   const STEP = 5;
+  const clamp = (n: number) => Math.max(-50, Math.min(50, n));
+  const factors = JOB_FACTORS.filter((f) => !f.when || f.when(pkg.config));
+  const applied = pkg.jobFactors ?? [];
+  const toggleFactor = (id: string) => {
+    const f = JOB_FACTORS.find((x) => x.id === id);
+    if (!f) return;
+    const on = applied.includes(id);
+    const sign = on ? -1 : 1;
+    onPatch({
+      jobFactors: on ? applied.filter((x) => x !== id) : [...applied, id],
+      materialsAdjPct: clamp((pkg.materialsAdjPct ?? 0) + sign * f.materials),
+      laborAdjPct: clamp((pkg.laborAdjPct ?? 0) + sign * f.labor),
+    });
+  };
   const rows = [
     {
       key: "materialsAdjPct" as const,
@@ -460,6 +475,38 @@ function BucketAdjusters({
   ];
   return (
     <div className="mt-3 space-y-1.5 rounded-xl border border-zinc-100 bg-zinc-50/60 p-2.5">
+      {/* Smart job conditions — one tap prices what the takeoff can't
+          see; terrain, steps and walls are already in the math. */}
+      <div className="flex flex-wrap gap-1">
+        {factors.map((f) => {
+          const on = applied.includes(f.id);
+          const fx = [
+            f.labor !== 0 ? `${f.labor > 0 ? "+" : ""}${f.labor}% labor` : null,
+            f.materials !== 0
+              ? `${f.materials > 0 ? "+" : ""}${f.materials}% materials`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <button
+              key={f.id}
+              type="button"
+              title={`${f.hint} (${fx})`}
+              onClick={() => toggleFactor(f.id)}
+              className={cn(
+                "transition-smooth ring-focus rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                on
+                  ? "border-accent-500 bg-accent-50 text-accent-900"
+                  : "border-zinc-200 bg-white text-zinc-500 hover:text-zinc-800",
+              )}
+            >
+              {on ? "✓ " : ""}
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
       {rows.map((r) => (
         <div key={r.key} className="flex items-center gap-2 text-xs">
           <span className="w-16 shrink-0 text-zinc-500">{r.label}</span>
@@ -470,7 +517,18 @@ function BucketAdjusters({
             <button
               type="button"
               title="Reset adjustment"
-              onClick={() => onPatch({ [r.key]: 0 })}
+              onClick={() =>
+                onPatch({
+                  [r.key]: 0,
+                  jobFactors: applied.filter((id) => {
+                    const f = JOB_FACTORS.find((x) => x.id === id);
+                    if (!f) return false;
+                    return r.key === "materialsAdjPct"
+                      ? f.materials === 0
+                      : f.labor === 0;
+                  }),
+                })
+              }
               className="transition-smooth rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-200 hover:bg-accent-100"
             >
               {r.adj > 0 ? "+" : ""}
@@ -498,8 +556,8 @@ function BucketAdjusters({
         </div>
       ))}
       <p className="text-[10px] leading-relaxed text-zinc-400">
-        ±5% per tap — reshapes the job&apos;s cost; markup stays your profit
-        knob on top.
+        Tap what applies — or fine-tune ±5% per tap. Terrain, slope steps
+        and wall mounts are already priced.
       </p>
     </div>
   );
