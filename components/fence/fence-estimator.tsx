@@ -117,6 +117,10 @@ export function FenceEstimator() {
   // Topo overlay: a coarse elevation lattice over the visible yard →
   // contour lines with ft labels on the layout canvas. One batched
   // Elevation call per scan; toggleable, on by default.
+  // Building footprints (house/garage) — seeded from the scan's OSM
+  // lookup, hand-traceable via the canvas House tool. They render in
+  // the layout, the 3D and the client's proposal.
+  const [buildings, setBuildings] = useState<{ x: number; y: number }[][]>([]);
   const [topoGrid, setTopoGrid] = useState<number[][] | null>(null);
   const [showTopo, setShowTopo] = useState(true);
   const [topoError, setTopoError] = useState<string | null>(null);
@@ -143,6 +147,7 @@ export function FenceEstimator() {
     }
     setScan(res);
     setLayout({ runs: [], gates: [] });
+    setBuildings(res.buildings ?? []);
     setSlope(null);
     setSlopeError(null);
     setRunElevRaw(null);
@@ -426,6 +431,7 @@ export function FenceEstimator() {
       runElevationsFt: runElevRaw?.elevations,
       elevationSpacingPx: runElevRaw?.spacingPx,
       topoGridFt: topoGrid ?? undefined,
+      buildings: buildings.length > 0 ? buildings : undefined,
       view3d: cam3d,
       jobType,
       fence: {
@@ -598,6 +604,7 @@ export function FenceEstimator() {
                   runElevationsFt={runElevRaw?.elevations}
                   elevationSpacingPx={runElevRaw?.spacingPx}
                   topoGridFt={topoGrid}
+                  buildings={buildings}
                   retainingWall={effWallLf > 0}
                   initialView={cam3d}
                   onViewChange={setCam3d}
@@ -609,6 +616,8 @@ export function FenceEstimator() {
                   layout={layout}
                   onChange={setLayout}
                   topo={showTopo ? topoContours : null}
+                  buildings={buildings}
+                  onBuildingsChange={setBuildings}
                 />
               )}
               {scan.parcel && (

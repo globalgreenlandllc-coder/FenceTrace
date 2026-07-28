@@ -306,6 +306,8 @@ export async function saveDraftFromEstimate(args: {
   topoGridFt?: number[][];
   /** FenceTrace: the frozen 3D camera — the client's opening view. */
   view3d?: { yawDeg: number; squash: number };
+  /** FenceTrace: building footprints for the client diagram + 3D. */
+  buildings?: { x: number; y: number }[][];
 }): Promise<SaveDraftResult> {
   try {
     return await saveDraftFromEstimateImpl(args);
@@ -327,6 +329,7 @@ async function saveDraftFromEstimateImpl(args: {
   elevationSpacingPx?: number;
   topoGridFt?: number[][];
   view3d?: { yawDeg: number; squash: number };
+  buildings?: { x: number; y: number }[][];
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -403,6 +406,7 @@ async function saveDraftFromEstimateImpl(args: {
       elevationSpacingPx: args.elevationSpacingPx,
       topoGridFt: args.topoGridFt,
       view3d: args.view3d,
+      buildings: args.buildings,
     },
     contractor: {
       name: me.profile.contractorName || me.user.name,

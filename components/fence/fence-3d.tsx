@@ -55,7 +55,7 @@ const NEAR_PX = 4; // walk-mode near plane, plan px
 export type Fence3DView = { yawDeg: number; squash: number };
 
 type WFace = {
-  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree";
+  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree" | "bwall" | "roof";
   /** World corners (plan x/y in canvas px, z up in screen px). Trees
    *  store [base, top]. */
   pts: V3[];
@@ -147,6 +147,22 @@ function hash2(r: number, c: number): number {
   return n - Math.floor(n);
 }
 
+/** Ray-cast point-in-polygon (trees must stay out of buildings). */
+function pointInPoly(p: Pt, ring: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (
+      a.y > p.y !== b.y > p.y &&
+      p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 /** Lawn color for a ground cell from its slope (light from the NW) with
  *  a touch of natural tone variation. */
 function lawnFill(gxFt: number, gyFt: number, jitter: number): string {
@@ -169,6 +185,7 @@ export function Fence3D({
   runElevationsFt,
   elevationSpacingPx,
   topoGridFt = null,
+  buildings = null,
   retainingWall = false,
   initialView,
   onViewChange,
@@ -193,6 +210,9 @@ export function Fence3D({
    *  900×580 canvas). When present the yard renders as a shaded terrain
    *  surface and the fence grounds on it. */
   topoGridFt?: number[][] | null;
+  /** Building footprints (canvas coords) — extruded as simple houses so
+   *  the client sees the home the fence connects to. */
+  buildings?: Pt[][] | null;
   /** Contractor confirmed the fence mounts on a retaining wall: sheer
    *  drops render as a masonry wall face with the fence anchored on top
    *  (instead of an earth bank), and get a summary chip. */
@@ -394,10 +414,11 @@ export function Fence3D({
           if (h < 0.8) continue;
           const x = (c + (hash2(r, c + 99) - 0.5) * 0.8) * cellW;
           const y = (r + (hash2(r + 99, c) - 0.5) * 0.8) * cellH;
-          const clear = geo.every(
-            (rg) =>
-              rg.pts.length < 2 || nearestOnPolyline({ x, y }, rg.pts, rg.cum).perp > 60,
-          );
+          const clear =
+            geo.every(
+              (rg) =>
+                rg.pts.length < 2 || nearestOnPolyline({ x, y }, rg.pts, rg.cum).perp > 60,
+            ) && !(buildings ?? []).some((ring) => pointInPoly({ x, y }, ring));
           if (!clear) continue;
           const hFt = 14 + h * 16;
           const z0 = zAtPlan(x, y);
@@ -415,6 +436,56 @@ export function Fence3D({
           treeCount++;
         }
       }
+    }
+
+    // Buildings: simple extruded houses — walls, a fascia band and a
+    // flat roof slab. Base sits at the LOWEST ground under the
+    // footprint so the house never floats on a slope.
+    for (const ring of buildings ?? []) {
+      if (ring.length < 3) continue;
+      let base = Infinity;
+      for (const p of ring) base = Math.min(base, grid ? zAtPlan(p.x, p.y) : 0);
+      if (!Number.isFinite(base)) base = 0;
+      const wallTop = base + 10 * scale * HEIGHT_EXAGGERATION;
+      const roofTop = wallTop + 1.2 * scale * HEIGHT_EXAGGERATION;
+      for (let i = 0; i < ring.length; i++) {
+        const A = ring[i];
+        const B = ring[(i + 1) % ring.length];
+        const segLen = Math.hypot(B.x - A.x, B.y - A.y);
+        if (segLen < 1) continue;
+        const uy = (B.y - A.y) / segLen;
+        faces.push({
+          kind: "bwall",
+          bias: 0,
+          pts: [
+            { ...A, z: base },
+            { ...B, z: base },
+            { ...B, z: wallTop },
+            { ...A, z: wallTop },
+          ],
+          shaded: -uy < 0,
+          baseLenPx: segLen,
+        });
+        faces.push({
+          kind: "roof",
+          bias: 0.005,
+          pts: [
+            { ...A, z: wallTop },
+            { ...B, z: wallTop },
+            { ...B, z: roofTop },
+            { ...A, z: roofTop },
+          ],
+          shaded: -uy < 0,
+          baseLenPx: segLen,
+        });
+      }
+      faces.push({
+        kind: "roof",
+        bias: 0.01,
+        pts: ring.map((p) => ({ ...p, z: roofTop })),
+        shaded: false,
+        baseLenPx: 0,
+      });
     }
 
     // Posts merge by (run, rounded distance).
@@ -613,7 +684,7 @@ export function Fence3D({
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, retainingWall]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, retainingWall]);
 
   /* ===================== orbit (axonometric) ======================== */
   const orbitScene = useMemo(() => {
@@ -1008,6 +1079,30 @@ export function Fence3D({
           <circle cx={base.x + r * 0.3} cy={base.y - hPx * 0.58} r={r * 0.66} fill={tones[1]} />
           <circle cx={base.x} cy={base.y - hPx * 0.74} r={r} fill={tones[0]} />
         </g>
+      );
+    }
+    if (kind === "bwall") {
+      return (
+        <path
+          key={i}
+          d={polyPath(f.poly)}
+          fill={f.face.shaded ? "#D8D2C6" : "#EBE6DC"}
+          stroke="#A69E8F"
+          strokeWidth={0.9}
+          strokeLinejoin="round"
+        />
+      );
+    }
+    if (kind === "roof") {
+      return (
+        <path
+          key={i}
+          d={polyPath(f.poly)}
+          fill={f.face.shaded ? "#5D6470" : "#6E7480"}
+          stroke="#4C525C"
+          strokeWidth={0.9}
+          strokeLinejoin="round"
+        />
       );
     }
     if (kind === "skirt") {

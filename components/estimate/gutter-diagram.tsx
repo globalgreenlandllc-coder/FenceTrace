@@ -107,6 +107,7 @@ export function GutterDiagram({
   confidence,
   presentation,
   redactNumbers,
+  buildings,
   className,
 }: {
   eaves: EditableLine[];
@@ -128,6 +129,9 @@ export function GutterDiagram({
    *  "sign up to reveal" pill. The API already withholds the scale, so
    *  this is presentation-layer consistency, not the security boundary. */
   redactNumbers?: boolean;
+  /** FenceTrace: building footprints (canvas coords) drawn as hatched
+   *  drafting shapes — the home the fence ties into. */
+  buildings?: { x: number; y: number }[][];
   className?: string;
 }) {
   const rawScale = Number.isFinite(pxPerFt) && (pxPerFt ?? 0) > 0 ? pxPerFt! : PX_PER_FT;
@@ -150,6 +154,7 @@ export function GutterDiagram({
       // influence its fit either.
       ...(presentation ? [] : rakes.flatMap((e) => e.points)),
       ...downspouts.map((d) => ({ x: d.x, y: d.y })),
+      ...(buildings ?? []).flat(),
     ].filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     const bb = bboxOfPoints(pts);
     if (!bb) return { s: 1, tx: 0, ty: 0 };
@@ -166,7 +171,7 @@ export function GutterDiagram({
     const cx = (bb.minX + bb.maxX) / 2;
     const cy = (bb.minY + bb.maxY) / 2;
     return { s, tx: VIEWBOX_W / 2 - cx * s, ty: VIEWBOX_H / 2 - cy * s };
-  }, [rawPerimeter, eaves, rakes, downspouts, presentation]);
+  }, [rawPerimeter, eaves, rakes, downspouts, presentation, buildings]);
 
   const tp = useMemo(() => {
     const { s, tx, ty } = fit;
@@ -188,6 +193,11 @@ export function GutterDiagram({
   );
   const perimeter = useMemo(() => rawPerimeter.map(tp), [rawPerimeter, tp]);
   const hasPerimeter = perimeter.length >= 3;
+  // Buildings share the sheet fit so they stay registered with the runs.
+  const nBuildings = useMemo(
+    () => (buildings ?? []).map((ring) => ring.map(tp)),
+    [buildings, tp],
+  );
 
   const bbox: DBBox | null = useMemo(() => {
     if (hasPerimeter) return bboxOfPoints(perimeter);
@@ -351,6 +361,33 @@ export function GutterDiagram({
         aria-label="Fence measurement diagram"
       >
         <BlueprintBackground />
+
+        {/* House footprint(s) — drafting-style building shapes so the
+            client sees where the fence ties into the home. */}
+        {nBuildings.map((ring, i) => (
+          <g key={`bldg-${i}`}>
+            <polygon
+              points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="rgba(20,58,74,0.10)"
+              stroke="rgba(20,58,74,0.45)"
+              strokeWidth={1.6}
+              strokeLinejoin="round"
+            />
+            <polygon
+              points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
+              fill="url(#hatch-house)"
+              stroke="none"
+              opacity={0.5}
+            />
+          </g>
+        ))}
+        {nBuildings.length > 0 && (
+          <defs>
+            <pattern id="hatch-house" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(20,58,74,0.22)" strokeWidth="1" />
+            </pattern>
+          </defs>
+        )}
 
         {/* Filled roof mass so the building reads as a solid shape. In
             presentation mode the perimeter is the only outline left, so

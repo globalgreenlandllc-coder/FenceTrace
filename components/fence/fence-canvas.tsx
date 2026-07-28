@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DoorOpen, MousePointer2, PenLine, Trash2, Wand2 } from "lucide-react";
+import { DoorOpen, Home, MousePointer2, PenLine, Trash2, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_H,
@@ -48,7 +48,23 @@ export type FenceGate = {
 
 export type FenceLayout = { runs: FenceRun[]; gates: FenceGate[] };
 
-type Tool = "select" | "draw" | "gate";
+type Tool = "select" | "draw" | "gate" | "house";
+
+/** Ray-cast point-in-polygon (house selection). */
+function pointInPoly(p: Pt, ring: Pt[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (
+      a.y > p.y !== b.y > p.y &&
+      p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 
 const SNAP_PX = 12;
 
@@ -98,6 +114,8 @@ export function FenceCanvas({
   layout,
   onChange,
   topo = null,
+  buildings = [],
+  onBuildingsChange,
   className,
 }: {
   scan: FenceScanResult;
@@ -106,6 +124,10 @@ export function FenceCanvas({
   /** Measured elevation contours to overlay (levels are ft above the
    *  lot's low point). Null hides the layer. */
   topo?: { lines: ContourLine[]; intervalFt: number } | null;
+  /** Building footprints (house/garage) — rendered as traced outlines
+   *  and editable via the House tool when onBuildingsChange is given. */
+  buildings?: Pt[][];
+  onBuildingsChange?: (next: Pt[][]) => void;
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -116,6 +138,8 @@ export function FenceCanvas({
   const [customGateFt, setCustomGateFt] = useState(6);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
   const [draft, setDraft] = useState<Pt[]>([]);
+  const [houseDraft, setHouseDraft] = useState<Pt[]>([]);
+  const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
   const [hover, setHover] = useState<Pt | null>(null);
   // Ghost gate under the cursor in gate mode; transient helper notices.
   const [gateGhost, setGateGhost] = useState<Pt | null>(null);
@@ -242,6 +266,18 @@ export function FenceCanvas({
     });
   }, [layout, onChange]);
 
+  const finishHouse = useCallback(() => {
+    setHouseDraft((d) => {
+      const pts = d.filter(
+        (p, i) => i === 0 || Math.hypot(p.x - d[i - 1].x, p.y - d[i - 1].y) > 1,
+      );
+      if (pts.length >= 3 && onBuildingsChange) {
+        onBuildingsChange([...buildings, pts]);
+      }
+      return [];
+    });
+  }, [buildings, onBuildingsChange]);
+
   // Deleting a run takes its gates with it — an orphan gate would keep
   // billing a gate AND keep shrinking the net fence footage.
   const removeRun = useCallback(
@@ -262,22 +298,34 @@ export function FenceCanvas({
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (e.key === "Escape") setDraft([]);
-      if (e.key === "Enter" && draft.length >= 2) finishDraft();
+      if (e.key === "Escape") {
+        setDraft([]);
+        setHouseDraft([]);
+      }
+      if (e.key === "Enter") {
+        if (draft.length >= 2) finishDraft();
+        else if (houseDraft.length >= 3) finishHouse();
+      }
       if (e.key === "Delete" || e.key === "Backspace") {
         // While drawing, Backspace steps back one post; only with no
-        // draft does it delete the selected run.
+        // draft does it delete the selected run/house.
         if (draft.length > 0) {
           e.preventDefault();
           setDraft((d) => d.slice(0, -1));
+        } else if (houseDraft.length > 0) {
+          e.preventDefault();
+          setHouseDraft((d) => d.slice(0, -1));
         } else if (selectedRun) {
           removeRun(selectedRun);
+        } else if (selectedHouse !== null && onBuildingsChange) {
+          onBuildingsChange(buildings.filter((_, i) => i !== selectedHouse));
+          setSelectedHouse(null);
         }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [draft.length, finishDraft, selectedRun, removeRun]);
+  }, [draft.length, houseDraft.length, finishDraft, finishHouse, selectedRun, removeRun, selectedHouse, buildings, onBuildingsChange]);
 
   /* ---- gate tool: nearest point on any run segment ---- */
 
@@ -311,6 +359,19 @@ export function FenceCanvas({
       setDraft((d) => [...d, p]);
       return;
     }
+    if (tool === "house") {
+      if (e.detail > 1) return;
+      // clicking back on the first corner closes the outline
+      if (
+        houseDraft.length >= 3 &&
+        Math.hypot(raw.x - houseDraft[0].x, raw.y - houseDraft[0].y) < 12
+      ) {
+        finishHouse();
+        return;
+      }
+      setHouseDraft((d) => [...d, raw]);
+      return;
+    }
     if (tool === "gate") {
       if (layout.runs.length === 0) {
         say("Draw a fence line first — gates hang on the fence.");
@@ -329,6 +390,11 @@ export function FenceCanvas({
       }
       return;
     }
+    // select tool: houses are selectable at the svg level (their layer
+    // never intercepts clicks); runs handle their own clicks and stop
+    // propagation before we get here.
+    const hitHouse = buildings.findIndex((ring) => pointInPoly(raw, ring));
+    setSelectedHouse(hitHouse >= 0 ? hitHouse : null);
     setSelectedRun(null);
   }
 
@@ -363,6 +429,9 @@ export function FenceCanvas({
               { id: "select", label: "Select", Icon: MousePointer2 },
               { id: "draw", label: "Draw fence", Icon: PenLine },
               { id: "gate", label: "Add gate", Icon: DoorOpen },
+              ...(onBuildingsChange
+                ? [{ id: "house" as Tool, label: "House", Icon: Home }]
+                : []),
             ] as { id: Tool; label: string; Icon: typeof PenLine }[]
           ).map((t) => (
             <button
@@ -433,6 +502,25 @@ export function FenceCanvas({
             </button>
           </>
         )}
+        {houseDraft.length > 0 && (
+          <>
+            <button
+              type="button"
+              onClick={finishHouse}
+              disabled={houseDraft.length < 3}
+              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-accent-700 disabled:opacity-50"
+            >
+              ✓ Close outline
+            </button>
+            <button
+              type="button"
+              onClick={() => setHouseDraft([])}
+              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
+            >
+              ✕ Cancel
+            </button>
+          </>
+        )}
         {scan.suggestedRuns.length > 0 && draft.length === 0 && (
           <button
             type="button"
@@ -453,6 +541,19 @@ export function FenceCanvas({
             Delete run
           </button>
         )}
+        {selectedHouse !== null && onBuildingsChange && (
+          <button
+            type="button"
+            onClick={() => {
+              onBuildingsChange(buildings.filter((_, i) => i !== selectedHouse));
+              setSelectedHouse(null);
+            }}
+            className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete house
+          </button>
+        )}
         <span className="ml-auto rounded-full bg-accent-600 px-3 py-1 text-xs font-bold text-white">
           {totalLf} LF · {layout.gates.length}{" "}
           {layout.gates.length === 1 ? "gate" : "gates"}
@@ -466,12 +567,15 @@ export function FenceCanvas({
           viewBox={`${cam.cx - CANVAS_W / 2 / cam.k} ${cam.cy - CANVAS_H / 2 / cam.k} ${CANVAS_W / cam.k} ${CANVAS_H / cam.k}`}
           className={cn(
             "block h-auto w-full select-none",
-            tool === "draw" || tool === "gate" ? "cursor-crosshair" : "cursor-default",
+            tool === "draw" || tool === "gate" || tool === "house"
+              ? "cursor-crosshair"
+              : "cursor-default",
           )}
           onClick={onCanvasClick}
           onDoubleClick={(e) => {
             e.preventDefault();
             if (tool === "draw") finishDraft();
+            else if (tool === "house") finishHouse();
             else zoomAt(e.clientX, e.clientY, 1.6);
           }}
           onPointerDown={(e) => {
@@ -500,6 +604,7 @@ export function FenceCanvas({
           }}
           onMouseMove={(e) => {
             if (tool === "draw") setHover(snap(toCanvas(e)));
+            else if (tool === "house") setHover(toCanvas(e));
             else if (tool === "gate") setGateGhost(nearestOnRuns(toCanvas(e)));
           }}
           onMouseLeave={() => {
@@ -513,6 +618,10 @@ export function FenceCanvas({
               e.preventDefault();
               if (draft.length >= 2) finishDraft();
               else setDraft([]);
+            } else if (tool === "house") {
+              e.preventDefault();
+              if (houseDraft.length >= 3) finishHouse();
+              else setHouseDraft([]);
             }
           }}
         >
@@ -590,6 +699,50 @@ export function FenceCanvas({
               >
                 Topo lines every {topo.intervalFt}′ — feet above the low point
               </text>
+            </g>
+          )}
+
+          {/* Building footprints — the house the fence ties into */}
+          {buildings.map((ring, i) => (
+            <polygon
+              key={`bldg-${i}`}
+              pointerEvents="none"
+              points={ring.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+              fill={
+                i === selectedHouse
+                  ? "rgba(228,228,231,0.35)"
+                  : "rgba(24,24,27,0.26)"
+              }
+              stroke={i === selectedHouse ? "#FDA4AF" : "rgba(244,244,245,0.9)"}
+              strokeWidth={i === selectedHouse ? 2.2 : 1.4}
+              strokeLinejoin="round"
+            />
+          ))}
+
+          {/* House outline being traced */}
+          {houseDraft.length > 0 && (
+            <g pointerEvents="none">
+              <polyline
+                points={[...houseDraft, ...(hover && tool === "house" ? [hover] : [])]
+                  .map((p) => `${p.x},${p.y}`)
+                  .join(" ")}
+                fill="rgba(244,244,245,0.12)"
+                stroke="#F4F4F5"
+                strokeWidth={2}
+                strokeDasharray="6 5"
+                strokeLinejoin="round"
+              />
+              {houseDraft.map((p, i) => (
+                <circle
+                  key={i}
+                  cx={p.x}
+                  cy={p.y}
+                  r={i === 0 && houseDraft.length >= 3 ? 6 : 3.5}
+                  fill={i === 0 && houseDraft.length >= 3 ? "#22C55E" : "#F4F4F5"}
+                  stroke="#18181B"
+                  strokeWidth={1.2}
+                />
+              ))}
             </g>
           )}
 
@@ -777,9 +930,13 @@ export function FenceCanvas({
           ? draft.length > 0
             ? "Click to keep adding posts — ✓ Finish (or double-click / right-click / Enter) ends the run · Backspace steps back · Esc cancels."
             : "Click to start a fence line. Points snap to the property corners and to your other runs."
-          : tool === "gate"
-            ? "Click anywhere on a fence line to place the gate. Click a gate to remove it."
-            : "Click a fence run to select it — Delete removes it. The dashed green line is the recorded property boundary."}
+          : tool === "house"
+            ? houseDraft.length > 0
+              ? "Click corner to corner around the house — click the green first dot (or Enter / double-click) to close the outline."
+              : "Trace the house: click its corners on the photo. The outline shows in the client's diagram and 3D."
+            : tool === "gate"
+              ? "Click anywhere on a fence line to place the gate. Click a gate to remove it."
+              : "Click a fence run to select it — Delete removes it. Click the house outline to select or delete it. The dashed green line is the recorded property boundary."}
       </p>
     </div>
   );

@@ -158,6 +158,9 @@ export type ProposalTakeoff = {
    *  proposal — the client's portal opens on this exact angle (and they
    *  can spin it from there). */
   view3d?: { yawDeg: number; squash: number };
+  /** FenceTrace: building footprints (canvas coords) — the house renders
+   *  in the client's diagram + 3D so wall-connected fence reads right. */
+  buildings?: { x: number; y: number }[][];
 };
 
 export type Proposal = {

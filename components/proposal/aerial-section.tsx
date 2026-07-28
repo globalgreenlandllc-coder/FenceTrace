@@ -204,6 +204,7 @@ export function AerialSection({
                 runElevationsFt={takeoff!.runElevationsFt}
                 elevationSpacingPx={takeoff!.elevationSpacingPx}
                 topoGridFt={takeoff!.topoGridFt ?? null}
+                buildings={takeoff!.buildings ?? null}
                 retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
                 initialView={takeoff!.view3d}
                 className="aspect-[16/10]"
@@ -217,6 +218,7 @@ export function AerialSection({
                   roofStructure={takeoff!.roofStructure}
                   address={proposal.address}
                   confidence={takeoff!.roofStructure?.confidence}
+                  buildings={takeoff!.buildings}
                   // The proposal is the deliverable: perimeter, priced
                   // gutter runs and downspouts only. Working layers
                   // (suggestions, rakes, roof seams) live on /estimate.
