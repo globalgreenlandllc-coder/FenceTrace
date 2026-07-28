@@ -69,7 +69,11 @@ type WFace = {
   /** Trees: canopy tone index. */
   tone?: number;
   /** Panels inside a mixed-type section render as THAT fence. */
-  alt?: { cat: string; rails: number; cap: boolean };
+  alt?: { cat: string; rails: number; cap: boolean; id?: string };
+  /** Posts: true for the second (perpendicular) quad of the cross. */
+  sub?: boolean;
+  /** Panels: nominal height in feet (drives horizontal-board counts). */
+  hFt?: number;
 };
 
 type WLabel = { anchor: V3; text: string };
@@ -92,6 +96,16 @@ const STYLES: Record<
   aluminum: { face: "#33373D", shade: "#26292E", post: "#1E2126", stroke: "#101215", lines: "bars" },
   steel: { face: "#2E3237", shade: "#222528", post: "#1A1D21", stroke: "#0E1013", lines: "bars" },
   "split-rail": { face: "#B98F5C", shade: "#9A7344", post: "#7E5730", stroke: "#5F421F", lines: "rails" },
+};
+
+/** Wood/vinyl subtypes that build differently get their own detail
+ *  pass — so a shadowbox reads as a shadowbox, not generic "wood". */
+const TYPE_DETAIL: Record<string, "hboards" | "spaced" | "shadowbox" | "bob"> = {
+  "horizontal-modern": "hboards",
+  "wood-picket": "spaced",
+  "vinyl-picket": "spaced",
+  shadowbox: "shadowbox",
+  "board-on-board": "bob",
 };
 
 const TREE_TONES = [
@@ -743,6 +757,7 @@ export function Fence3D({
                 cat: altT.category,
                 rails: altT.railsPerSection(altT.defaultHeightFt),
                 cap: altT.category === "wood" || altT.category === "vinyl",
+                id: altT.id,
               }
             : undefined;
           if (wallish) {
@@ -786,13 +801,19 @@ export function Fence3D({
             shaded,
             baseLenPx: segLen,
             alt,
+            hFt: zTopLocal / (scale * HEIGHT_EXAGGERATION),
           });
           notePost(ri, d0, bzA + zTopLocal + 0.4 * scale, false, wallish ? bzA : undefined);
           notePost(ri, d1, bzB + zTopLocal + 0.4 * scale, false, wallish ? bzB : undefined);
           {
             const shCat = alt ? alt.cat : t.category;
-            const solid = shCat === "wood" || shCat === "vinyl";
-            const shLen = (zTopLocal / HEIGHT_EXAGGERATION) * 1.2;
+            const shId = alt?.id ?? t.id;
+            const spacedType = TYPE_DETAIL[shId] === "spaced";
+            const solid = (shCat === "wood" || shCat === "vinyl") && !spacedType;
+            // A picket fence is mostly air — its shadow is a whisper, and
+            // anything stronger bleeds through the gaps as gray mush.
+            const shLen =
+              (zTopLocal / HEIGHT_EXAGGERATION) * (spacedType ? 0.6 : 1.2);
             const backZ = (x: number, y: number, fz: number) =>
               grid ? zAtPlan(x, y) + 0.3 : fz + 0.3;
             castShadow(
@@ -801,8 +822,8 @@ export function Fence3D({
               { x: A.x + SH.x * shLen, y: A.y + SH.y * shLen, z: backZ(A.x + SH.x * shLen, A.y + SH.y * shLen, zA) },
               { x: B.x + SH.x * shLen, y: B.y + SH.y * shLen, z: backZ(B.x + SH.x * shLen, B.y + SH.y * shLen, zB) },
               segLen,
-              solid ? "rgba(22,40,24,0.30)" : "rgba(22,40,24,0.12)",
-              solid ? "rgba(22,40,24,0.13)" : "rgba(22,40,24,0.05)",
+              solid ? "rgba(22,40,24,0.30)" : spacedType ? "rgba(22,40,24,0.055)" : "rgba(22,40,24,0.12)",
+              solid ? "rgba(22,40,24,0.13)" : spacedType ? "rgba(22,40,24,0.03)" : "rgba(22,40,24,0.05)",
             );
           }
         }
@@ -812,6 +833,20 @@ export function Fence3D({
     const postW = Math.max(3, 0.55 * scale) * (postUpgrade === "6x6" ? 1.4 : 1);
     for (const p of posts.values()) {
       const w = p.heavy ? postW * 1.6 : postW;
+      faces.push({
+        kind: "post",
+        bias: 0.008,
+        pts: [
+          { x: p.plan.x, y: p.plan.y - w / 2, z: p.zGround },
+          { x: p.plan.x, y: p.plan.y + w / 2, z: p.zGround },
+          { x: p.plan.x, y: p.plan.y + w / 2, z: p.zPostTop },
+          { x: p.plan.x, y: p.plan.y - w / 2, z: p.zPostTop },
+        ],
+        shaded: false,
+        baseLenPx: w,
+        heavy: p.heavy,
+        sub: true,
+      });
       faces.push({
         kind: "post",
         bias: 0.01,
@@ -1374,14 +1409,31 @@ export function Fence3D({
       );
     }
     if (kind === "post") {
+      const baseFill = postUpgrade === "steel" ? "#8B9298" : style.post;
+      const subFill = postUpgrade === "steel" ? "#767D83" : style.shade;
+      const q = f.poly;
+      // Concrete footing collar — visible once the post is big enough on
+      // screen (zoomed orbit or walk mode): the "how it's built" cue.
+      const wPx = f.isQuad ? Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) : 0;
+      const footing =
+        !f.face.sub && f.isQuad && wPx >= 3.4 ? (
+          <path
+            d={`M${q[0].x - wPx * 0.26} ${q[0].y} L${q[1].x + wPx * 0.26} ${q[1].y} L${q[1].x + wPx * 0.16} ${q[1].y + wPx * 0.55} L${q[0].x - wPx * 0.16} ${q[0].y + wPx * 0.55} Z`}
+            fill="#BDBAB0"
+            stroke="#9C998F"
+            strokeWidth={0.6}
+          />
+        ) : null;
       return (
-        <path
-          key={i}
-          d={polyPath(f.poly)}
-          fill={postUpgrade === "steel" ? "#8B9298" : style.post}
-          stroke={postUpgrade === "steel" ? "#666D74" : style.stroke}
-          strokeWidth={f.face.heavy ? 1.2 : 0.8}
-        />
+        <g key={i}>
+          {footing}
+          <path
+            d={polyPath(q)}
+            fill={f.face.sub ? subFill : baseFill}
+            stroke={postUpgrade === "steel" ? "#666D74" : style.stroke}
+            strokeWidth={f.face.heavy ? 1.2 : 0.8}
+          />
+        </g>
       );
     }
     if (kind === "gate") {
@@ -1464,8 +1516,167 @@ export function Fence3D({
     };
     const seed = f.face.pts[0].x * 1.7 + f.face.pts[0].y * 0.9;
     const details: React.ReactNode[] = [];
+    const detailKind = TYPE_DETAIL[f.face.alt?.id ?? (typeId as string)];
+    const hFt = f.face.hFt ?? 6;
 
-    if (st.lines === "rails") {
+    if (detailKind === "hboards") {
+      // Horizontal-modern: stacked boards with visible gaps between them.
+      const m = Math.max(3, Math.min(9, Math.round(hFt * 1.4)));
+      const els: React.ReactNode[] = [];
+      for (let j = 0; j < m; j++) {
+        const t0 = j / m;
+        const t1 = (j + 1) / m - 0.05;
+        const h = hash2(Math.round(seed + j * 31.7), Math.round(seed - j * 17.3));
+        const bl0 = { x: a.x + (ta.x - a.x) * t0, y: a.y + (ta.y - a.y) * t0 };
+        const br0 = { x: b.x + (tb.x - b.x) * t0, y: b.y + (tb.y - b.y) * t0 };
+        const br1 = { x: b.x + (tb.x - b.x) * t1, y: b.y + (tb.y - b.y) * t1 };
+        const bl1 = { x: a.x + (ta.x - a.x) * t1, y: a.y + (ta.y - a.y) * t1 };
+        const tone =
+          h < 0.33 ? "rgba(60,36,14,0.14)" : h > 0.7 ? "rgba(255,235,205,0.16)" : "rgba(0,0,0,0.02)";
+        els.push(
+          <path
+            key={`hb-${j}`}
+            d={`M${bl0.x.toFixed(1)} ${bl0.y.toFixed(1)} L${br0.x.toFixed(1)} ${br0.y.toFixed(1)} L${br1.x.toFixed(1)} ${br1.y.toFixed(1)} L${bl1.x.toFixed(1)} ${bl1.y.toFixed(1)} Z`}
+            fill={tone}
+            stroke="rgba(0,0,0,0.20)"
+            strokeWidth={0.7}
+          />,
+        );
+      }
+      return (
+        <g key={i}>
+          <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeWidth={0.9} strokeLinejoin="round" />
+          {els}
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.14)" strokeWidth={2.2} />
+        </g>
+      );
+    }
+
+    if (detailKind === "spaced") {
+      // Picket fence: individual pickets with REAL gaps — the backer
+      // rails and the yard show through, exactly how it's built.
+      const np = Math.max(3, Math.round(ftLen * 1.6));
+      const pw = projW / np;
+      const isWoodPk = (f.face.alt?.cat ?? styleKey) === "wood";
+      const pkFill = isWoodPk && f.face.shaded ? "#AC7B47" : st.face;
+      const lift = 0.05; // pickets stop just above grade
+      const els: React.ReactNode[] = [];
+      for (const s2 of [0.28, 0.78]) {
+        els.push(
+          <line
+            key={`rl-${s2}`}
+            x1={a.x + (ta.x - a.x) * s2}
+            y1={a.y + (ta.y - a.y) * s2}
+            x2={b.x + (tb.x - b.x) * s2}
+            y2={b.y + (tb.y - b.y) * s2}
+            stroke={st.post}
+            strokeWidth={3}
+            strokeLinecap="round"
+          />,
+        );
+      }
+      if (pw >= 1.5) {
+        const duty = 0.6;
+        for (let k = 0; k < np; k++) {
+          const c0 = k / np + (1 - duty) / 2 / np;
+          const c1 = c0 + duty / np;
+          const h = hash2(Math.round(seed + k * 23.1), Math.round(seed * 0.7 + k * 11.9));
+          const b0 = atB(c0);
+          const b1 = atB(c1);
+          const q1 = atT(c1);
+          const q0 = atT(c0);
+          const p0 = { x: b0.x + (q0.x - b0.x) * lift, y: b0.y + (q0.y - b0.y) * lift };
+          const p1 = { x: b1.x + (q1.x - b1.x) * lift, y: b1.y + (q1.y - b1.y) * lift };
+          if (isWoodPk) {
+            const sh = 0.12;
+            const s0 = { x: q0.x + (p0.x - q0.x) * sh, y: q0.y + (p0.y - q0.y) * sh };
+            const s1 = { x: q1.x + (p1.x - q1.x) * sh, y: q1.y + (p1.y - q1.y) * sh };
+            const apex = { x: (q0.x + q1.x) / 2, y: (q0.y + q1.y) / 2 };
+            els.push(
+              <path
+                key={`pk-${k}`}
+                d={`M${p0.x.toFixed(1)} ${p0.y.toFixed(1)} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L${s1.x.toFixed(1)} ${s1.y.toFixed(1)} L${apex.x.toFixed(1)} ${apex.y.toFixed(1)} L${s0.x.toFixed(1)} ${s0.y.toFixed(1)} Z`}
+                fill={h > 0.72 ? "#C79459" : pkFill}
+                stroke={st.stroke}
+                strokeWidth={0.6}
+                strokeLinejoin="round"
+              />,
+            );
+          } else {
+            els.push(
+              <path
+                key={`pk-${k}`}
+                d={`M${p0.x.toFixed(1)} ${p0.y.toFixed(1)} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L${q1.x.toFixed(1)} ${q1.y.toFixed(1)} L${q0.x.toFixed(1)} ${q0.y.toFixed(1)} Z`}
+                fill={pkFill}
+                stroke={st.stroke}
+                strokeWidth={0.6}
+                strokeLinejoin="round"
+              />,
+            );
+          }
+        }
+      } else {
+        els.push(<path key="wash" d={polyPath(f.poly)} fill={pkFill} opacity={0.55} />);
+      }
+      return (
+        <g key={i}>
+          {els}
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.12)" strokeWidth={1.6} />
+        </g>
+      );
+    }
+
+    if (detailKind === "shadowbox") {
+      // Good-neighbor stagger: shaded back boards behind, proud front
+      // boards with gaps that let the back layer read through.
+      const boards = Math.max(3, Math.round(ftLen * 1.4));
+      const bw = projW / boards;
+      const els: React.ReactNode[] = [
+        <path key="back" d={polyPath(f.poly)} fill={st.shade} stroke={st.stroke} strokeWidth={0.9} strokeLinejoin="round" />,
+      ];
+      if (bw >= 2.6) {
+        for (let k = 0; k < boards; k++) {
+          const c0 = k / boards;
+          const c1 = Math.min(1, c0 + 0.62 / boards);
+          const h = hash2(Math.round(seed + k * 19.3), Math.round(seed - k * 9.1));
+          els.push(
+            <path key={`fb-${k}`} d={sliceD(c0, c1)} fill={h > 0.6 ? "#C79459" : st.face} stroke="rgba(95,66,31,0.55)" strokeWidth={0.55} />,
+          );
+        }
+      }
+      els.push(<line key="ao" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.14)" strokeWidth={2.2} />);
+      if (cap) {
+        els.push(<line key="cap" x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={2.6} strokeLinecap="round" />);
+      }
+      return <g key={i}>{els}</g>;
+    }
+
+    if (detailKind === "bob") {
+      // Board-on-board: a dark under-course with over-boards lapped at
+      // the half pitch — the double layer reads at any zoom.
+      const boards = Math.max(3, Math.round(ftLen * 1.5));
+      const bw = projW / boards;
+      if (bw >= 2.4) {
+        for (let k = 0; k < boards; k++) {
+          details.push(<path key={`ub-${k}`} d={sliceD(k / boards, Math.min(1, (k + 0.55) / boards))} fill="rgba(60,36,14,0.18)" />);
+        }
+        for (let k = 0; k < boards; k++) {
+          const c = (k + 0.5) / boards;
+          if (c >= 1) continue;
+          const h = hash2(Math.round(seed + k * 27.7), Math.round(seed + k * 5.3));
+          details.push(
+            <path key={`ob-${k}`} d={sliceD(Math.max(0, c - 0.06 / boards), Math.min(1, c + 0.61 / boards))} fill={h > 0.55 ? "#C79459" : "#B9854D"} stroke="rgba(95,66,31,0.5)" strokeWidth={0.5} />,
+          );
+        }
+      } else {
+        const n = Math.max(2, Math.min(boards, Math.floor(projW / 2.6)));
+        for (let k = 1; k < n; k++) {
+          const sp = atB(k / n);
+          const sq = atT(k / n);
+          details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(0,0,0,0.12)" strokeWidth={0.8} />);
+        }
+      }
+    } else if (st.lines === "rails") {
       // split-rail / ranch — chunky rounded rails with a sun highlight
       const rails: React.ReactNode[] = [];
       for (let r = 1; r <= rc; r++) {
@@ -1480,7 +1691,7 @@ export function Fence3D({
       return <g key={i}>{rails}</g>;
     }
 
-    if (st.lines === "pickets") {
+    if (st.lines === "pickets" && !detailKind) {
       // Wood reads as WOOD: ~6-inch boards with per-board tone variation
       // and occasional grain streaks — board counts derive from real feet.
       const boards = Math.max(2, Math.round(ftLen * 2));
@@ -1495,7 +1706,7 @@ export function Fence3D({
           if (k > 0) {
             const sp = atB(s0);
             const sq = atT(s0);
-            details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(0,0,0,0.13)" strokeWidth={0.7} />);
+            details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(0,0,0,0.20)" strokeWidth={0.75} />);
           }
           if (bw >= 5 && h > 0.42 && h < 0.55) {
             const sm = (s0 + s1) / 2;
@@ -1514,9 +1725,19 @@ export function Fence3D({
           details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(0,0,0,0.10)" strokeWidth={0.8} />);
         }
       }
-      for (const s2 of [0.22, 0.78]) {
+      // Back side shows the REAL backer rails; the street side only a
+      // faint ghost of them.
+      for (const s2 of f.face.shaded ? [0.14, 0.5, 0.86] : [0.22, 0.78]) {
         details.push(
-          <line key={`rail-${s2}`} x1={a.x + (ta.x - a.x) * s2} y1={a.y + (ta.y - a.y) * s2} x2={b.x + (tb.x - b.x) * s2} y2={b.y + (tb.y - b.y) * s2} stroke="rgba(0,0,0,0.07)" strokeWidth={2} />,
+          <line
+            key={`rail-${s2}`}
+            x1={a.x + (ta.x - a.x) * s2}
+            y1={a.y + (ta.y - a.y) * s2}
+            x2={b.x + (tb.x - b.x) * s2}
+            y2={b.y + (tb.y - b.y) * s2}
+            stroke={f.face.shaded ? "rgba(66,44,18,0.35)" : "rgba(0,0,0,0.07)"}
+            strokeWidth={f.face.shaded ? 3 : 2}
+          />,
         );
       }
     } else if (st.lines === "bars") {
@@ -1576,10 +1797,10 @@ export function Fence3D({
     );
   };
 
-  const labelChip = (l: { text: string; at: Pt }, i: number) => {
+  const labelChip = (l: { text: string; at: Pt }, i: number, unscale = 1) => {
     const w = l.text.length * 6.4 + 16;
     return (
-      <g key={i}>
+      <g key={i} transform={unscale !== 1 ? `translate(${l.at.x} ${l.at.y}) scale(${unscale}) translate(${-l.at.x} ${-l.at.y})` : undefined}>
         <line x1={l.at.x} y1={l.at.y} x2={l.at.x} y2={l.at.y + 9} stroke="#DB2777" strokeWidth={1.2} />
         <rect x={l.at.x - w / 2} y={l.at.y - 20} width={w} height={20} rx={10} fill="rgba(255,255,255,0.95)" stroke="#DB2777" strokeWidth={1.2} />
         <text x={l.at.x} y={l.at.y - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#9D174D">
@@ -1639,7 +1860,7 @@ export function Fence3D({
             <g>{walkScene!.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
             <g>{walkScene!.faces.filter((f) => f.face.kind === "shadow").map(renderFace)}</g>
             <g>{walkScene!.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow").map(renderFace)}</g>
-            {walkScene!.labels.map(labelChip)}
+            {walkScene!.labels.map((l, i) => labelChip(l, i))}
           </>
         ) : (
           <>
@@ -1660,7 +1881,7 @@ export function Fence3D({
                   opacity={0.85}
                 />
               ))}
-              {orbitScene.labels.map(labelChip)}
+              {orbitScene.labels.map((l, i) => labelChip(l, i, 1 / zoomCam.k))}
               {orbitScene.marker && (
                 <g stroke="#52525B" strokeWidth={1.2} fill="none">
                   <line x1={orbitScene.marker.base.x - 14} y1={orbitScene.marker.base.y} x2={orbitScene.marker.base.x - 14} y2={orbitScene.marker.top.y} />
