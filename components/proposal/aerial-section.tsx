@@ -22,6 +22,7 @@ import { GutterSystemBreakdown } from "./gutter-system-breakdown";
 import { ManualMeasurementsCard } from "./manual-measurements-card";
 import { sampleEaves, sampleDownspouts } from "@/lib/mock-estimate";
 import type { Downspout, EditableLine } from "@/lib/types";
+import { countCornersAndEnds } from "@/lib/fence/geo";
 import type { Proposal } from "@/lib/proposal-mock";
 import { SectionHeader } from "./packages-section";
 
@@ -98,13 +99,30 @@ export function AerialSection({
     const updatedLF = Math.round(
       next.reduce((acc, l) => acc + safeLineLengthFt(l), 0),
     );
+    // Corners recount from the edited geometry (angle-aware — only real
+    // turns), so the stat card AND every fence package's corner-post
+    // pricing follow the drag, not the stale scan numbers.
+    const { corners, ends } = countCornersAndEnds(next);
     onChange({
       ...proposal,
       takeoff: { ...takeoff, eaves: next },
       measurements: {
         ...proposal.measurements,
         eaveLF: updatedLF,
+        outsideCorners: corners,
+        endCaps: ends,
       },
+      packages: proposal.packages.map((p) =>
+        p.config.fence
+          ? {
+              ...p,
+              config: {
+                ...p.config,
+                fence: { ...p.config.fence, corners, ends },
+              },
+            }
+          : p,
+      ),
     });
   };
 

@@ -41,7 +41,7 @@ import {
 } from "@/lib/fence/catalog";
 import { computeFenceTakeoff } from "@/lib/fence/takeoff";
 import { fenceTiers, priceFence } from "@/lib/fence/pricing";
-import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, walkPostPositions } from "@/lib/fence/geo";
+import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, countCornersAndEnds, walkPostPositions } from "@/lib/fence/geo";
 import { buildContours, pickContourInterval } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getScanBuildings } from "@/app/actions/fence-buildings";
@@ -62,24 +62,12 @@ const TOPO_ROWS = 12;
 const fmt = (n: number) =>
   `$${Math.round(n).toLocaleString("en-US")}`;
 
-/** Corner/end counts from the drawn runs: interior bends are corners; a
- *  closed ring (property loop) contributes its closing vertex and no
- *  ends; an open run contributes two ends. */
+/** Corner/end counts from the drawn runs — angle-aware: a vertex is a
+ *  corner only when the fence actually turns there (≥ CORNER_MIN_DEG,
+ *  any direction), so near-collinear parcel vertices stop inflating the
+ *  corner-post count. Closed rings contribute no ends. */
 function cornersAndEnds(layout: FenceLayout): { corners: number; ends: number } {
-  let corners = 0;
-  let ends = 0;
-  for (const run of layout.runs) {
-    const pts = run.points;
-    if (pts.length < 2) continue;
-    const closed =
-      Math.hypot(
-        pts[0].x - pts[pts.length - 1].x,
-        pts[0].y - pts[pts.length - 1].y,
-      ) < 1.5;
-    corners += Math.max(0, pts.length - 2) + (closed ? 1 : 0);
-    ends += closed ? 0 : 2;
-  }
-  return { corners, ends };
+  return countCornersAndEnds(layout.runs);
 }
 
 export function FenceEstimator() {

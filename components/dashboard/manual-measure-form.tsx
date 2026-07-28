@@ -130,6 +130,11 @@ export function ManualMeasureForm() {
   // token never changes across renders — save + send both key the DB
   // row off it.
   const [base] = useState<Proposal>(() => blankProposal());
+  // What the client sees on the portal: one total vs materials+labor
+  // split — set from the BOM drawer, saved on the proposal blob.
+  const [priceDisplay, setPriceDisplay] = useState<
+    "totals" | "split" | "itemized"
+  >(base.priceDisplay ?? "totals");
   // The three tiers, fully owned by this flow as live state so the
   // PackagesSection + MaterialsBuilder editors can rebuild each one
   // (name, price/markup, config, highlights, add-ons, BOM overrides).
@@ -229,6 +234,7 @@ export function ManualMeasureForm() {
       squarePaymentUrl: profile.payments.squareUrl ?? null,
     },
     measurements,
+    priceDisplay,
     packages: pkgsWithFence,
     source: "manual",
     jobType,
@@ -883,6 +889,8 @@ export function ManualMeasureForm() {
             )
           }
           onChangeAll={(next) => setPkgs(next)}
+          priceDisplay={priceDisplay}
+          onPriceDisplayChange={setPriceDisplay}
           onClose={() => setMaterialsEditId(null)}
         />
       )}

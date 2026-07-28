@@ -100,3 +100,33 @@ test("runDistanceModel: L-shaped run keeps the vertex sample; mismatch → null"
   assert.equal(runDistanceModel(pts, 40, [1, 2, 3]), null);
   assert.equal(runDistanceModel(pts, 40, []), null);
 });
+
+test("cornerFlags: right angle counts, shallow dogleg does not", async () => {
+  const { cornerFlags, countCornersAndEnds } = await import("./geo.ts");
+  // L-shape: true 90° corner at index 1
+  const L = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }];
+  assert.deepEqual(cornerFlags(L), [false, true, false]);
+  // near-straight dogleg (~8°) — a line post, not a corner
+  const dog = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 14 }];
+  assert.deepEqual(cornerFlags(dog), [false, false, false]);
+  // oblique 45° turn IS a corner (direction of turn irrelevant)
+  const oblique = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 170, y: 70 }];
+  assert.deepEqual(cornerFlags(oblique), [false, true, false]);
+  const { corners, ends } = countCornersAndEnds([
+    { points: L },
+    { points: dog },
+    { points: oblique },
+  ]);
+  assert.equal(corners, 2);
+  assert.equal(ends, 6);
+});
+
+test("cornerFlags: closed rectangle has 4 corners, no ends", async () => {
+  const { countCornersAndEnds } = await import("./geo.ts");
+  const ring = [
+    { x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 120 }, { x: 0, y: 120 }, { x: 0, y: 0 },
+  ];
+  const r = countCornersAndEnds([{ points: ring }]);
+  assert.equal(r.corners, 4);
+  assert.equal(r.ends, 0);
+});

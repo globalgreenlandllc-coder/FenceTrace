@@ -20,6 +20,7 @@ import {
   type PlacedLabel,
 } from "@/lib/diagram-labels";
 import type { Downspout, EditableLine, RoofStructure } from "@/lib/types";
+import { cornerFlags } from "@/lib/fence/geo";
 
 /**
  * Proposal-quality canvas. Same data shape as AerialCanvas but stripped
@@ -37,6 +38,40 @@ import type { Downspout, EditableLine, RoofStructure } from "@/lib/types";
  *     — so the drawing reads clean by default, but the contractor can
  *     still drag a corner to nudge it onto the real roof edge.
  */
+/** Indices that bound corner-to-corner spans of a run: both endpoints
+ *  plus every angle-aware corner vertex. Near-collinear vertices are
+ *  NOT boundaries — a "segment" runs turn to turn, exactly as a crew
+ *  would think of it. */
+function spanBounds(points: { x: number; y: number }[]): number[] {
+  const flags = cornerFlags(points);
+  const out = [0];
+  for (let i = 1; i < points.length - 1; i++) if (flags[i]) out.push(i);
+  out.push(points.length - 1);
+  return out;
+}
+
+function nearestSegIndex(
+  points: { x: number; y: number }[],
+  p: { x: number; y: number },
+): number {
+  let best = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+    const d = Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 export function PresentationCanvas({
   eaves,
   rakes = [],
@@ -80,6 +115,12 @@ export function PresentationCanvas({
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Segment-level selection: clicking a run activates only the span
+  // between two turns; clicking a corner activates BOTH adjacent spans
+  // and makes that corner draggable. a/b are raw vertex indices.
+  const [segSel, setSegSel] = useState<
+    { id: string; a: number; b: number; corner?: number } | null
+  >(null);
   const [houseMode, setHouseMode] = useState(false);
   const [houseDraft, setHouseDraft] = useState<{ x: number; y: number }[]>([]);
   const editable = !!(onEavesChange || onDownspoutsChange);
@@ -406,6 +447,7 @@ export function PresentationCanvas({
       return;
     }
     setSelectedId(null);
+    setSegSel(null);
   }
 
   // Keyboard while tracing: Enter closes, Esc cancels, Backspace steps.
@@ -716,12 +758,34 @@ export function PresentationCanvas({
             so the client reads two gutter systems at a glance — same
             palette as the satellite diagram's low-roof color. */}
         {eaves.map((line) => {
-          const isSelected = selectedId === line.id;
+          const isSelected = segSel?.id === line.id;
           const isHover = hoverId === line.id;
           const active = isSelected || isHover;
           const lower = line.tier === "lower";
+          const bIdxs = spanBounds(line.points);
+          // Handles: corner vertices + span ends — never the noise
+          // vertices in between. With a selection, only the selected
+          // span's corners show (its two turns, plus the clicked corner).
+          const handleIdxs = isSelected
+            ? [...new Set([segSel!.a, segSel!.corner ?? -1, segSel!.b])].filter(
+                (i) => i >= 0,
+              )
+            : bIdxs;
+          const spanPts = isSelected
+            ? line.points.slice(segSel!.a, segSel!.b + 1)
+            : null;
           return (
-            <g key={line.id}>
+            // Hover lives on the GROUP: moving from the line onto one of
+            // its corner handles must not count as leaving (it unmounted
+            // the handle mid-press and corner clicks fell through to the
+            // line underneath).
+            <g
+              key={line.id}
+              onPointerEnter={() => setHoverId(line.id)}
+              onPointerLeave={() =>
+                setHoverId((h) => (h === line.id ? null : h))
+              }
+            >
               {/* Wider invisible hit area so hover/select is forgiving */}
               <path
                 d={pathFor(line)}
@@ -729,14 +793,22 @@ export function PresentationCanvas({
                 strokeWidth={18 * vs}
                 fill="none"
                 style={{ cursor: editable ? "pointer" : "default" }}
-                onPointerEnter={() => setHoverId(line.id)}
-                onPointerLeave={() =>
-                  setHoverId((h) => (h === line.id ? null : h))
-                }
                 onPointerDown={(e) => {
                   if (!editable) return;
                   e.stopPropagation();
-                  setSelectedId(line.id);
+                  // Activate ONLY the clicked turn-to-turn span.
+                  const raw = svgPoint(e);
+                  const p = frame
+                    ? { x: (raw.x - frame.tx) / frame.k, y: (raw.y - frame.ty) / frame.k }
+                    : raw;
+                  const seg = nearestSegIndex(line.points, p);
+                  let a = 0;
+                  let b = line.points.length - 1;
+                  for (const bi of bIdxs) if (bi <= seg) a = bi;
+                  for (let j = bIdxs.length - 1; j >= 0; j--)
+                    if (bIdxs[j] >= seg + 1) b = bIdxs[j];
+                  setSegSel({ id: line.id, a, b });
+                  setSelectedId(null);
                 }}
               />
               <motion.path
@@ -747,17 +819,17 @@ export function PresentationCanvas({
                       // blue still reads as "gutter" but no glow —
                       // glows clip on print and look fake on paper.
                       lower
-                      ? active
+                      ? active && !spanPts
                         ? "#7c5320"
                         : "#a8712c"
-                      : active
+                      : active && !spanPts
                         ? "#14688C"
                         : "#115673"
-                    : active
+                    : active && !spanPts
                       ? "#93C6DC"
                       : "#1479B8"
                 }
-                strokeWidth={(active ? 3.5 : 2.5) * vs}
+                strokeWidth={((active && !spanPts ? 3.5 : 2.5)) * vs}
                 strokeLinecap="round"
                 fill="none"
                 pointerEvents="none"
@@ -773,28 +845,61 @@ export function PresentationCanvas({
                 }}
               />
 
-              {/* Vertex handles — only when hovered/selected */}
+              {/* Selected turn-to-turn span — the only emphasized part */}
+              {spanPts && spanPts.length >= 2 && (
+                <path
+                  d={`M ${spanPts.map((q) => `${q.x} ${q.y}`).join(" L ")}`}
+                  stroke={planMode ? (lower ? "#7c5320" : "#14688C") : "#FBBF24"}
+                  strokeWidth={4 * vs}
+                  strokeLinecap="round"
+                  fill="none"
+                  pointerEvents="none"
+                  style={{
+                    filter: planMode
+                      ? undefined
+                      : "drop-shadow(0 0 6px rgba(251,191,36,0.7))",
+                  }}
+                />
+              )}
+
+              {/* Corner handles — the turns only. Clicking one activates
+                  BOTH adjacent spans and drags that corner. */}
               {editable &&
                 active &&
-                line.points.map((pt, idx) => (
-                  <motion.circle
-                    key={idx}
-                    cx={pt.x}
-                    cy={pt.y}
-                    r={5 * vs}
-                    fill="#0b1220"
-                    stroke="#93C6DC"
-                    strokeWidth={2 * vs}
-                    initial={{ opacity: 0, scale: 0.5 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.15 }}
-                    style={{ cursor: "grab" }}
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      setDrag({ kind: "vertex", lineId: line.id, index: idx });
-                    }}
-                  />
-                ))}
+                handleIdxs.map((idx) => {
+                  const pt = line.points[idx];
+                  if (!pt) return null;
+                  return (
+                    <motion.circle
+                      key={idx}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={5 * vs}
+                      fill="#0b1220"
+                      stroke={segSel?.corner === idx ? "#FBBF24" : "#93C6DC"}
+                      strokeWidth={2 * vs}
+                      initial={{ opacity: 0, scale: 0.5 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.15 }}
+                      style={{ cursor: "grab" }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        // Corner click: activate the spans on BOTH sides
+                        // of this turn, then drag moves the corner.
+                        let a = 0;
+                        let b = line.points.length - 1;
+                        for (const bi of bIdxs) if (bi < idx) a = bi;
+                        for (let j = bIdxs.length - 1; j >= 0; j--)
+                          if (bIdxs[j] > idx) b = bIdxs[j];
+                        if (idx === 0) a = 0;
+                        if (idx === line.points.length - 1) b = idx;
+                        setSegSel({ id: line.id, a, b, corner: idx });
+                        setSelectedId(null);
+                        setDrag({ kind: "vertex", lineId: line.id, index: idx });
+                      }}
+                    />
+                  );
+                })}
 
               <SegmentLabel
                 line={line}

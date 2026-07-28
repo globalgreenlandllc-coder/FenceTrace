@@ -180,3 +180,59 @@ export function canvasPolylineFt(points: Pt[], pxPerFt: number): number {
   }
   return px / pxPerFt;
 }
+
+/** A vertex is a CORNER when the fence actually changes direction there
+ *  — deflection ≥ this many degrees. Anything shallower is a dogleg the
+ *  crew absorbs with a line post (no bracing, no corner hardware), and
+ *  parcel rings are full of such near-collinear vertices. Direction of
+ *  the turn (left/right/oblique) is irrelevant — only the angle. */
+export const CORNER_MIN_DEG = 25;
+
+function deflectionDeg(prev: Pt, cur: Pt, next: Pt): number {
+  const ax = cur.x - prev.x;
+  const ay = cur.y - prev.y;
+  const bx = next.x - cur.x;
+  const by = next.y - cur.y;
+  const la = Math.hypot(ax, ay);
+  const lb = Math.hypot(bx, by);
+  if (la < 1e-6 || lb < 1e-6) return 0;
+  const cos = Math.max(-1, Math.min(1, (ax * bx + ay * by) / (la * lb)));
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
+/** Per-vertex corner flags for a run. Closed rings (first ≈ last point)
+ *  evaluate the shared closing vertex too (flag lands on index 0; the
+ *  duplicate last index stays false). Endpoints of open runs are never
+ *  corners — they're ends. */
+export function cornerFlags(points: Pt[], minDeg = CORNER_MIN_DEG): boolean[] {
+  const n = points.length;
+  const flags = new Array<boolean>(n).fill(false);
+  if (n < 3) return flags;
+  const closed =
+    Math.hypot(points[0].x - points[n - 1].x, points[0].y - points[n - 1].y) < 1.5;
+  for (let i = 1; i < n - 1; i++) {
+    flags[i] = deflectionDeg(points[i - 1], points[i], points[i + 1]) >= minDeg;
+  }
+  if (closed && n >= 4) {
+    flags[0] = deflectionDeg(points[n - 2], points[0], points[1]) >= minDeg;
+  }
+  return flags;
+}
+
+/** Corner + end counts across a set of runs (angle-aware). */
+export function countCornersAndEnds(
+  runs: { points: Pt[] }[],
+  minDeg = CORNER_MIN_DEG,
+): { corners: number; ends: number } {
+  let corners = 0;
+  let ends = 0;
+  for (const run of runs) {
+    const pts = run.points;
+    if (pts.length < 2) continue;
+    const closed =
+      Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < 1.5;
+    corners += cornerFlags(pts, minDeg).filter(Boolean).length;
+    ends += closed ? 0 : 2;
+  }
+  return { corners, ends };
+}

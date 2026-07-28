@@ -368,6 +368,10 @@ function Inner() {
           onChangeAll={(next) =>
             setProposal((prev) => ({ ...prev, packages: next }))
           }
+          priceDisplay={proposal.priceDisplay ?? "totals"}
+          onPriceDisplayChange={(mode) =>
+            setProposal((prev) => ({ ...prev, priceDisplay: mode }))
+          }
           onClose={() => setMaterialsEditId(null)}
         />
       )}

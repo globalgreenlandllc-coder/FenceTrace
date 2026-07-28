@@ -113,6 +113,8 @@ export function MaterialsBuilder({
   address,
   onChange,
   onChangeAll,
+  priceDisplay,
+  onPriceDisplayChange,
   onClose,
 }: {
   pkg: Package;
@@ -126,6 +128,10 @@ export function MaterialsBuilder({
   onChange: (next: Package) => void;
   /** Replace the whole package list (AI pricing applies/restores all tiers). */
   onChangeAll: (next: Package[]) => void;
+  /** What the CLIENT sees on the portal: one total, or materials +
+   *  labor totals side by side. Proposal-wide (all tiers). */
+  priceDisplay: "totals" | "split" | "itemized";
+  onPriceDisplayChange: (mode: "totals" | "split" | "itemized") => void;
   onClose: () => void;
 }) {
   const reduce = useReducedMotion();
@@ -341,6 +347,46 @@ export function MaterialsBuilder({
               onChange={(config) => set({ config })}
               measurements={measurements}
             />
+            {pkg.config.fence && (
+              <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-zinc-800">
+                    Tear out &amp; haul away the existing fence
+                  </span>
+                  <span className="block text-[11px] leading-snug text-zinc-500">
+                    {(pkg.config.fence.removalLf ?? 0) > 0
+                      ? `${Math.round(pkg.config.fence.removalLf)} LF of removal is priced on every tier.`
+                      : "No tear-out — removal is excluded from every tier's price."}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={(pkg.config.fence.removalLf ?? 0) > 0}
+                  onChange={(e) => {
+                    // Tear-out is a JOB fact, not a tier upgrade — flip it
+                    // on every fence package so no tier quietly keeps the
+                    // removal charge.
+                    const lf = e.target.checked
+                      ? Math.max(1, Math.round(measurements.eaveLF))
+                      : 0;
+                    onChangeAll(
+                      allPackages.map((px) =>
+                        px.config.fence
+                          ? {
+                              ...px,
+                              config: {
+                                ...px.config,
+                                fence: { ...px.config.fence, removalLf: lf },
+                              },
+                            }
+                          : px,
+                      ),
+                    );
+                  }}
+                  className="h-4 w-4 shrink-0 rounded border-zinc-300 accent-accent-600"
+                />
+              </label>
+            )}
           </Section>
 
           <Section
@@ -502,7 +548,43 @@ export function MaterialsBuilder({
                 </span>
                 <span className="w-6 shrink-0" />
               </div>
-              {autoBase.map((it) => {
+              {/* Grouped: MATERIALS then LABOR — each with its own
+                  client-price subtotal, so the split the client can see
+                  is the split the contractor builds. */}
+              {([
+                { key: "materials", label: "Materials", items: autoBase.filter((x) => x.taxable !== false) },
+                { key: "labor", label: "Labor & services", items: autoBase.filter((x) => x.taxable === false) },
+              ] as const).map((grp) => {
+                const grpCustom = custom.filter(
+                  (c) => (c.taxable !== false) === (grp.key === "materials"),
+                );
+                if (grp.items.length === 0 && grpCustom.length === 0) return null;
+                const grpSell =
+                  grp.items.reduce(
+                    (a, x) =>
+                      a +
+                      lineSell(
+                        x.id,
+                        overrides[x.id]?.quantity ?? x.quantity,
+                        overrides[x.id]?.unitPrice ?? x.unitPrice,
+                      ),
+                    0,
+                  ) +
+                  grpCustom.reduce(
+                    (a, x) => a + lineSell(x.id, x.quantity, x.unitPrice),
+                    0,
+                  );
+                return (
+                  <div key={grp.key}>
+                    <div className="flex items-center justify-between border-b border-zinc-100 bg-accent-50/50 px-3 py-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-accent-800">
+                        {grp.label}
+                      </span>
+                      <span className="text-[11px] font-semibold tabular-nums text-accent-800">
+                        {formatCurrency(grpSell)}
+                      </span>
+                    </div>
+                    {grp.items.map((it) => {
                 const ov = overrides[it.id];
                 const qty = ov?.quantity ?? it.quantity;
                 const price = ov?.unitPrice ?? it.unitPrice;
@@ -599,113 +681,123 @@ export function MaterialsBuilder({
                     </button>
                   </div>
                 );
+                    })}
+                    {grpCustom.map((it) => (
+                      <div
+                        key={it.id}
+                        className="flex items-center gap-1.5 border-b border-zinc-100 bg-amber-50/30 px-3 py-2 text-xs last:border-0"
+                      >
+                        <button
+                          type="button"
+                          title={
+                            it.taxable !== false
+                              ? "Counted as materials — tap to move it to labor"
+                              : "Counted as labor — tap to move it to materials"
+                          }
+                          onClick={() =>
+                            setCustom(
+                              custom.map((x) =>
+                                x.id === it.id
+                                  ? { ...x, taxable: x.taxable === false }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className="ring-focus inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-amber-200 bg-white text-[10px] font-bold text-amber-700 transition-smooth hover:bg-amber-100"
+                        >
+                          {it.taxable !== false ? "M" : "L"}
+                        </button>
+                        <input
+                          aria-label="Custom line name"
+                          value={it.name}
+                          onChange={(e) =>
+                            setCustom(
+                              custom.map((x) =>
+                                x.id === it.id ? { ...x, name: e.target.value } : x,
+                              ),
+                            )
+                          }
+                          className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none transition-smooth focus:border-accent-500"
+                        />
+                        <input
+                          type="number"
+                          aria-label="Custom line quantity"
+                          value={it.quantity}
+                          onChange={(e) =>
+                            setCustom(
+                              custom.map((x) =>
+                                x.id === it.id
+                                  ? { ...x, quantity: Math.max(0, parseFloat(e.target.value) || 0) }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className={NUM_INPUT}
+                        />
+                        <input
+                          aria-label="Custom line unit"
+                          value={it.unit}
+                          onChange={(e) =>
+                            setCustom(
+                              custom.map((x) =>
+                                x.id === it.id ? { ...x, unit: e.target.value } : x,
+                              ),
+                            )
+                          }
+                          className="w-8 shrink-0 rounded-md border border-zinc-200 bg-white px-1 py-1 text-center text-[11px] outline-none transition-smooth focus:border-accent-500"
+                        />
+                        <span className="text-zinc-400">$</span>
+                        <input
+                          type="number"
+                          step={0.25}
+                          aria-label="Custom line unit price"
+                          value={lineUnit(it.id, it.quantity, it.unitPrice)}
+                          readOnly={isAiPricedLine(it.id)}
+                          title={
+                            isAiPricedLine(it.id)
+                              ? "Market unit price — switch to Your price to edit"
+                              : undefined
+                          }
+                          onChange={(e) =>
+                            setCustom(
+                              custom.map((x) =>
+                                x.id === it.id
+                                  ? { ...x, unitPrice: Math.max(0, parseFloat(e.target.value) || 0) }
+                                  : x,
+                              ),
+                            )
+                          }
+                          className={cn(
+                            NUM_INPUT,
+                            isAiPricedLine(it.id) &&
+                              "cursor-default bg-accent-50/60 text-accent-700",
+                          )}
+                        />
+                        <motion.span
+                          key={Math.round(lineSell(it.id, it.quantity, it.unitPrice))}
+                          initial={reduce ? false : { opacity: 0.4 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: DUR.base, ease: EASE }}
+                          className={cn(
+                            "w-16 shrink-0 text-right font-semibold tabular-nums",
+                            pricingMode === "ai" ? "text-accent-700" : "text-zinc-900",
+                          )}
+                        >
+                          {formatCurrency(lineSell(it.id, it.quantity, it.unitPrice))}
+                        </motion.span>
+                        <button
+                          type="button"
+                          aria-label="Remove custom line"
+                          onClick={() => setCustom(custom.filter((x) => x.id !== it.id))}
+                          className="ring-focus inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-smooth hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
               })}
-
-              {custom.map((it, i) => (
-                <div
-                  key={it.id}
-                  className="flex items-center gap-1.5 border-b border-zinc-100 bg-amber-50/30 px-3 py-2 text-xs last:border-0"
-                >
-                  <input
-                    aria-label="Custom line name"
-                    value={it.name}
-                    onChange={(e) =>
-                      setCustom(
-                        custom.map((x, j) =>
-                          j === i ? { ...x, name: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-800 outline-none transition-smooth focus:border-accent-500"
-                  />
-                  <input
-                    type="number"
-                    aria-label="Custom line quantity"
-                    value={it.quantity}
-                    onChange={(e) =>
-                      setCustom(
-                        custom.map((x, j) =>
-                          j === i
-                            ? {
-                                ...x,
-                                quantity: Math.max(
-                                  0,
-                                  parseFloat(e.target.value) || 0,
-                                ),
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                    className={NUM_INPUT}
-                  />
-                  <input
-                    aria-label="Custom line unit"
-                    value={it.unit}
-                    onChange={(e) =>
-                      setCustom(
-                        custom.map((x, j) =>
-                          j === i ? { ...x, unit: e.target.value } : x,
-                        ),
-                      )
-                    }
-                    className="w-8 shrink-0 rounded-md border border-zinc-200 bg-white px-1 py-1 text-center text-[11px] outline-none transition-smooth focus:border-accent-500"
-                  />
-                  <span className="text-zinc-400">$</span>
-                  <input
-                    type="number"
-                    step={0.25}
-                    aria-label="Custom line unit price"
-                    value={lineUnit(it.id, it.quantity, it.unitPrice)}
-                    readOnly={isAiPricedLine(it.id)}
-                    title={
-                      isAiPricedLine(it.id)
-                        ? "Market unit price — switch to Your price to edit"
-                        : undefined
-                    }
-                    onChange={(e) =>
-                      setCustom(
-                        custom.map((x, j) =>
-                          j === i
-                            ? {
-                                ...x,
-                                unitPrice: Math.max(
-                                  0,
-                                  parseFloat(e.target.value) || 0,
-                                ),
-                              }
-                            : x,
-                        ),
-                      )
-                    }
-                    className={cn(
-                      NUM_INPUT,
-                      isAiPricedLine(it.id) &&
-                        "cursor-default bg-accent-50/60 text-accent-700",
-                    )}
-                  />
-                  <motion.span
-                    key={Math.round(lineSell(it.id, it.quantity, it.unitPrice))}
-                    initial={reduce ? false : { opacity: 0.4 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: DUR.base, ease: EASE }}
-                    className={cn(
-                      "w-16 shrink-0 text-right font-semibold tabular-nums",
-                      pricingMode === "ai" ? "text-accent-700" : "text-zinc-900",
-                    )}
-                  >
-                    {formatCurrency(lineSell(it.id, it.quantity, it.unitPrice))}
-                  </motion.span>
-                  <button
-                    type="button"
-                    aria-label="Remove custom line"
-                    onClick={() => setCustom(custom.filter((_, j) => j !== i))}
-                    className="ring-focus inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-smooth hover:bg-rose-50 hover:text-rose-600"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
 
               <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/60 px-3 py-2 text-xs">
                 <span className="text-zinc-500">
@@ -757,6 +849,50 @@ export function MaterialsBuilder({
               <Plus className="h-3.5 w-3.5" />
               Add custom line
             </button>
+
+            {/* What the CLIENT sees on the portal — proposal-wide. The
+                internal boxes above always show the split; this decides
+                how much of it the client gets. */}
+            <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-zinc-800">
+                    What the client sees
+                  </div>
+                  <div className="text-[11px] leading-snug text-zinc-500">
+                    {priceDisplay === "totals"
+                      ? "One package price — your materials/labor split stays internal."
+                      : priceDisplay === "split"
+                        ? "Materials total and labor total, shown side by side."
+                        : "The full line-by-line breakdown."}{" "}
+                    Applies to every tier.
+                  </div>
+                </div>
+                <div className="inline-flex shrink-0 rounded-full border border-zinc-200 bg-zinc-50 p-0.5 text-[11px] font-semibold">
+                  {(
+                    [
+                      { id: "totals", label: "One total" },
+                      { id: "split", label: "Materials + labor" },
+                      { id: "itemized", label: "Every line" },
+                    ] as const
+                  ).map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => onPriceDisplayChange(m.id)}
+                      className={cn(
+                        "ring-focus rounded-full px-2.5 py-1 transition-colors",
+                        priceDisplay === m.id
+                          ? "bg-accent-600 text-white shadow-sm"
+                          : "text-zinc-500 hover:text-zinc-800",
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </Section>
 
           <Section
