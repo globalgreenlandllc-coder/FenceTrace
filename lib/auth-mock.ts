@@ -66,7 +66,7 @@ const DEFAULT_PROFILE: ContractorProfile = {
   phone: "",
   license: "",
   tagline: "",
-  logo: { initials: "GU", tone: "emerald", url: null },
+  logo: { initials: "FT", tone: "emerald", url: null },
   payments: { stripeUrl: null, squareUrl: null },
 };
 

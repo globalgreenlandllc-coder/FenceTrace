@@ -226,7 +226,7 @@ function BillingSection() {
             </div>
             <ul className="mt-3 space-y-1.5 text-xs text-zinc-600">
               {[
-                `${billing.includedCredits} plan takeoffs / month`,
+                `Unlimited property scans & takeoffs`,
                 ...billing.features.slice(0, 6),
               ].map((f) => (
                 <li key={f} className="flex items-start gap-1.5">

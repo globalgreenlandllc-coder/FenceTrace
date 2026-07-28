@@ -3,63 +3,64 @@ import type { EditableLine, Downspout, Measurements } from "./types";
 export const SAMPLE_ADDRESS = "1247 Maple Ridge Drive, Austin, TX 78704";
 
 export const sampleMeasurements: Measurements = {
-  eaveLF: 148,
-  rakeLF: 96,
-  outsideCorners: 6,
-  insideCorners: 2,
-  endCaps: 4,
-  downspoutCount: 5,
-  stories: 2,
-  wasteFactorPct: 8,
+  eaveLF: 262,
+  rakeLF: 0,
+  outsideCorners: 4,
+  insideCorners: 0,
+  endCaps: 2,
+  downspoutCount: 2,
+  stories: 1,
+  wasteFactorPct: 10,
 };
 
 export const sampleEaves: EditableLine[] = [
+  // Fence perimeter around the sample yard — the house masses render
+  // inside it, so the demo reads as a FENCE layout, not gutter runs.
   {
-    id: "eave-front",
+    id: "fence-back",
     kind: "eave",
     points: [
-      { x: 220, y: 240 },
-      { x: 580, y: 240 },
+      { x: 150, y: 150 },
+      { x: 760, y: 150 },
     ],
   },
   {
-    id: "eave-back",
+    id: "fence-left",
     kind: "eave",
     points: [
-      { x: 220, y: 380 },
-      { x: 580, y: 380 },
+      { x: 150, y: 150 },
+      { x: 150, y: 470 },
     ],
   },
   {
-    id: "eave-garage-front",
+    id: "fence-right",
     kind: "eave",
     points: [
-      { x: 580, y: 280 },
-      { x: 720, y: 280 },
+      { x: 760, y: 150 },
+      { x: 760, y: 470 },
     ],
   },
   {
-    id: "eave-garage-back",
+    id: "fence-front-left",
     kind: "eave",
     points: [
-      { x: 580, y: 360 },
-      { x: 720, y: 360 },
+      { x: 150, y: 470 },
+      { x: 420, y: 470 },
     ],
   },
   {
-    id: "eave-porch",
+    id: "fence-front-right",
     kind: "eave",
     points: [
-      { x: 320, y: 200 },
-      { x: 480, y: 200 },
+      { x: 452, y: 470 },
+      { x: 760, y: 470 },
     ],
   },
 ];
 
+// Gates ride the downspout channel (semantics mapping): the front
+// drive gate sits in the fence gap, plus a side walk gate.
 export const sampleDownspouts: Downspout[] = [
-  { id: "ds-1", x: 220, y: 240, heightFt: 20 },
-  { id: "ds-2", x: 580, y: 240, heightFt: 20 },
-  { id: "ds-3", x: 220, y: 380, heightFt: 20 },
-  { id: "ds-4", x: 580, y: 380, heightFt: 20 },
-  { id: "ds-5", x: 720, y: 360, heightFt: 12 },
+  { id: "gate-front", x: 436, y: 470, heightFt: 6, gateKind: "double", gateWidthFt: 10 },
+  { id: "gate-side", x: 150, y: 300, heightFt: 6, gateKind: "single", gateWidthFt: 4 },
 ];

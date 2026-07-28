@@ -97,23 +97,25 @@ export default async function AdminAbusePage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             AI spend by kind — last 24h (7d total {usd(o.spend.weekCents)})
           </h2>
-          <table className="mt-3 w-full text-sm">
-            <tbody>
-              {o.spend.byKindDay.length === 0 ? (
-                <tr>
-                  <td className="py-2 text-zinc-400">No spend recorded yet.</td>
-                </tr>
-              ) : (
-                o.spend.byKindDay.map((k) => (
-                  <tr key={k.kind} className="transition-smooth border-t border-zinc-100 hover:bg-zinc-50/60">
-                    <td className="py-2 font-medium text-zinc-900">{k.kind}</td>
-                    <td className="py-2 text-right text-zinc-500">{k.count}×</td>
-                    <td className="py-2 text-right font-semibold text-zinc-900">{usd(k.cents)}</td>
+          <div className="overflow-x-auto">
+            <table className="mt-3 w-full text-sm">
+              <tbody>
+                {o.spend.byKindDay.length === 0 ? (
+                  <tr>
+                    <td className="py-2 text-zinc-400">No spend recorded yet.</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  o.spend.byKindDay.map((k) => (
+                    <tr key={k.kind} className="transition-smooth border-t border-zinc-100 hover:bg-zinc-50/60">
+                      <td className="py-2 font-medium text-zinc-900">{k.kind}</td>
+                      <td className="py-2 text-right text-zinc-500">{k.count}×</td>
+                      <td className="py-2 text-right font-semibold text-zinc-900">{usd(k.cents)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Top users */}
@@ -121,23 +123,25 @@ export default async function AdminAbusePage() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Top spenders — last 24h (per-user cap {usd(o.caps.userDailyCents)})
           </h2>
-          <table className="mt-3 w-full text-sm">
-            <tbody>
-              {o.spend.topUsersDay.length === 0 ? (
-                <tr>
-                  <td className="py-2 text-zinc-400">No user spend in the last 24h.</td>
-                </tr>
-              ) : (
-                o.spend.topUsersDay.map((u) => (
-                  <tr key={u.userId} className="transition-smooth border-t border-zinc-100 hover:bg-zinc-50/60">
-                    <td className="py-2 font-medium text-zinc-900">{u.email ?? u.userId}</td>
-                    <td className="py-2 text-right text-zinc-500">{u.count}×</td>
-                    <td className="py-2 text-right font-semibold text-zinc-900">{usd(u.cents)}</td>
+          <div className="overflow-x-auto">
+            <table className="mt-3 w-full text-sm">
+              <tbody>
+                {o.spend.topUsersDay.length === 0 ? (
+                  <tr>
+                    <td className="py-2 text-zinc-400">No user spend in the last 24h.</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  o.spend.topUsersDay.map((u) => (
+                    <tr key={u.userId} className="transition-smooth border-t border-zinc-100 hover:bg-zinc-50/60">
+                      <td className="py-2 font-medium text-zinc-900">{u.email ?? u.userId}</td>
+                      <td className="py-2 text-right text-zinc-500">{u.count}×</td>
+                      <td className="py-2 text-right font-semibold text-zinc-900">{usd(u.cents)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

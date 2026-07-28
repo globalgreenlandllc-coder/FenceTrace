@@ -27,7 +27,7 @@ const GROUPS: { category: PromptRow["category"]; title: string; blurb: string }[
     },
     {
       category: "blueprint",
-      title: "Scan from blueprints",
+      title: "Scan from uploaded plans",
       blurb:
         "Drives the PDF-plan estimate (upload construction plans → AI measures the fence).",
     },

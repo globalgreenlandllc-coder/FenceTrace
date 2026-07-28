@@ -305,7 +305,7 @@ export function GutterPreview({ config }: { config: EstimateConfig }) {
         <div className="font-label text-[10px] text-zinc-500">
           Live preview
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ring-focus flex items-center gap-2">
           <div className="inline-flex items-center gap-0.5 rounded-full border border-zinc-200 bg-white p-0.5 shadow-sm">
             <button
               type="button"
@@ -314,7 +314,7 @@ export function GutterPreview({ config }: { config: EstimateConfig }) {
               aria-label="Turn left"
               className="inline-flex h-6 w-6 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="ring-focus h-3.5 w-3.5" />
             </button>
             <button
               type="button"
@@ -339,7 +339,7 @@ export function GutterPreview({ config }: { config: EstimateConfig }) {
               onClick={turnRight}
               title="Turn right"
               aria-label="Turn right"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
+              className="ring-focus inline-flex h-6 w-6 items-center justify-center rounded-full text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-900"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>

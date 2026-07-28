@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 export const AERIAL_STEPS = [
   { id: "geocode", label: "Geocoding property" },
   { id: "aerial", label: "Fetching aerial imagery" },
-  { id: "segment", label: "Analyzing roof edges" },
+  { id: "segment", label: "Analyzing property lines" },
   { id: "measure", label: "Calculating linear feet" },
-  { id: "downspouts", label: "Placing downspouts" },
+  { id: "downspouts", label: "Placing gates" },
   { id: "price", label: "Building takeoff" },
 ];
 
@@ -19,9 +19,9 @@ export const AERIAL_STEPS = [
 export const PLAN_STEPS = [
   { id: "read", label: "Reading plan PDF" },
   { id: "classify", label: "Cataloging sheets" },
-  { id: "elevations", label: "Counting eaves on elevations" },
-  { id: "roof", label: "Tracing the roof plan" },
-  { id: "downspouts", label: "Placing downspouts" },
+  { id: "elevations", label: "Reading site elevations" },
+  { id: "roof", label: "Tracing the site plan" },
+  { id: "downspouts", label: "Placing gates" },
   { id: "price", label: "Building takeoff" },
 ];
 

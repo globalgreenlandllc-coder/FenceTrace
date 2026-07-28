@@ -529,7 +529,7 @@ function BucketAdjusters({
                   }),
                 })
               }
-              className="transition-smooth rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-200 hover:bg-accent-100"
+              className="transition-smooth ring-focus rounded-full bg-accent-50 px-1.5 py-0.5 text-[10px] font-bold text-accent-700 ring-1 ring-inset ring-accent-200 hover:bg-accent-100"
             >
               {r.adj > 0 ? "+" : ""}
               {r.adj}% ✕
@@ -540,7 +540,7 @@ function BucketAdjusters({
               type="button"
               aria-label={`Lower ${r.label}`}
               onClick={() => onPatch({ [r.key]: Math.max(-50, r.adj - STEP) })}
-              className="transition-smooth h-6 w-6 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
+              className="transition-smooth ring-focus h-6 w-6 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
             >
               −
             </button>
@@ -548,7 +548,7 @@ function BucketAdjusters({
               type="button"
               aria-label={`Raise ${r.label}`}
               onClick={() => onPatch({ [r.key]: Math.min(50, r.adj + STEP) })}
-              className="transition-smooth h-6 w-6 border-l border-zinc-200 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
+              className="transition-smooth ring-focus h-6 w-6 border-l border-zinc-200 text-sm font-bold text-zinc-600 hover:bg-zinc-50"
             >
               +
             </button>

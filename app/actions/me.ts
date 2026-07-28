@@ -70,7 +70,7 @@ function deriveInitials(name: string): string {
     .filter(Boolean)
     .map((p) => p[0]?.toUpperCase() ?? "")
     .filter(Boolean);
-  if (parts.length === 0) return "GU";
+  if (parts.length === 0) return "FT";
   return parts.slice(0, 2).join("");
 }
 
@@ -289,7 +289,7 @@ function shape(
       license: cp?.license ?? "",
       tagline: cp?.tagline ?? "",
       logo: {
-        initials: cp?.logoInitials ?? "GU",
+        initials: cp?.logoInitials ?? deriveInitials(cp?.company || ""),
         tone: (cp?.logoTone as LogoTone) ?? "emerald",
         url: cp?.logoUrl ?? null,
       },

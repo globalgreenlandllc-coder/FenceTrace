@@ -167,7 +167,7 @@ export function AerialSection({
               type="button"
               onClick={() => setView("diagram")}
               className={
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
+                "ring-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
                 (view === "diagram"
                   ? "bg-accent-600 text-white"
                   : "text-ink/55 hover:text-ink")
@@ -180,7 +180,7 @@ export function AerialSection({
               type="button"
               onClick={() => setView("photo")}
               className={
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
+                "ring-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
                 (view === "photo"
                   ? "bg-accent-600 text-white"
                   : "text-ink/55 hover:text-ink")
@@ -194,7 +194,7 @@ export function AerialSection({
                 type="button"
                 onClick={() => setView("3d")}
                 className={
-                  "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
+                  "ring-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors " +
                   (view === "3d"
                     ? "bg-accent-600 text-white"
                     : "text-ink/55 hover:text-ink")

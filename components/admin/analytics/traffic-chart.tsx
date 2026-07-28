@@ -302,26 +302,28 @@ export function TrafficChart({
             View data
           </summary>
           <div className="mt-2 max-h-56 overflow-y-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-zinc-400">
-                  <th className="py-1 pr-2 font-medium">{hourly ? "Hour" : "Date"}</th>
-                  <th className="py-1 pr-2 text-right font-medium">Sessions</th>
-                  <th className="py-1 pr-2 text-right font-medium">Pageviews</th>
-                  <th className="py-1 text-right font-medium">Sign-ups</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((d) => (
-                  <tr key={d.date} className="border-t border-zinc-100 text-zinc-600">
-                    <td className="py-1 pr-2">{bucketLabel(d.date, hourly)}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums">{d.sessions}</td>
-                    <td className="py-1 pr-2 text-right tabular-nums">{d.pageviews}</td>
-                    <td className="py-1 text-right tabular-nums">{d.signups}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-zinc-400">
+                    <th className="py-1 pr-2 font-medium">{hourly ? "Hour" : "Date"}</th>
+                    <th className="py-1 pr-2 text-right font-medium">Sessions</th>
+                    <th className="py-1 pr-2 text-right font-medium">Pageviews</th>
+                    <th className="py-1 text-right font-medium">Sign-ups</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.map((d) => (
+                    <tr key={d.date} className="border-t border-zinc-100 text-zinc-600">
+                      <td className="py-1 pr-2">{bucketLabel(d.date, hourly)}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{d.sessions}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums">{d.pageviews}</td>
+                      <td className="py-1 text-right tabular-nums">{d.signups}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </details>
       )}

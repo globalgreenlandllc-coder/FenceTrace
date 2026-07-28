@@ -11,7 +11,7 @@ export default async function AdminPromptsPage() {
           AI prompts
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Edit the instructions that drive the address scan and the blueprint
+          Edit the instructions that drive the address scan and the uploaded-plan
           scan. Changes take effect on the next estimate — no redeploy. Each
           prompt can be reverted to the version that ships with the app.
         </p>

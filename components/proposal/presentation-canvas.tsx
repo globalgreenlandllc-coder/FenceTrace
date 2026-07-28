@@ -502,7 +502,7 @@ export function PresentationCanvas({
                 type="button"
                 onClick={finishHouse}
                 disabled={houseDraft.length < 3}
-                className="transition-smooth rounded-full bg-accent-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm ring-1 ring-inset ring-white/20 hover:bg-accent-700 disabled:opacity-50"
+                className="transition-smooth ring-focus rounded-full bg-accent-600 px-2.5 py-1 text-[10px] font-semibold text-white shadow-sm ring-1 ring-inset ring-white/20 hover:bg-accent-700 disabled:opacity-50"
               >
                 ✓ Finish house
               </button>
@@ -512,7 +512,7 @@ export function PresentationCanvas({
                   setHouseDraft([]);
                   setHouseMode(false);
                 }}
-                className="transition-smooth rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
+                className="transition-smooth ring-focus rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
               >
                 ✕ Cancel
               </button>
@@ -524,7 +524,7 @@ export function PresentationCanvas({
             <button
               type="button"
               onClick={() => setHouseMode(true)}
-              className="transition-smooth rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
+              className="transition-smooth ring-focus rounded-full bg-slate-950/80 px-2.5 py-1 text-[10px] font-semibold text-white/90 ring-1 ring-inset ring-white/15 hover:bg-slate-950"
             >
               🏠 {(buildings ?? []).length > 0 ? "Edit house outline" : "Trace the house"}
             </button>

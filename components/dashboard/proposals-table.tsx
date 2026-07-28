@@ -347,12 +347,13 @@ export function ProposalsTable({
                           e.stopPropagation();
                           setPayFor(p.id);
                         }}
+                        className="ring-focus rounded-full"
                         title="Open payments — schedule, receipts, reminders"
                       >
                         <Badge tone="accent">In progress</Badge>
                       </button>
                     ) : (
-                      <Link href={`/proposal?id=${p.id}`}>
+                      <Link href={`/proposal?id=${p.id}`} className="ring-focus rounded-full">
                         <Badge tone={tone.tone}>{tone.label}</Badge>
                       </Link>
                     )}
@@ -364,7 +365,7 @@ export function ProposalsTable({
                           e.stopPropagation();
                           setPayFor(p.id);
                         }}
-                        className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-inset ring-rose-200"
+                        className="ring-focus inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-inset ring-rose-200"
                         title={`${p.overdueInstallments} overdue payment${(p.overdueInstallments ?? 0) === 1 ? "" : "s"} — open payments`}
                       >
                         <AlertTriangle className="h-3 w-3" />
@@ -379,7 +380,7 @@ export function ProposalsTable({
                           e.stopPropagation();
                           setPayFor(p.id);
                         }}
-                        className="inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 ring-1 ring-inset ring-sky-200"
+                        className="ring-focus inline-flex items-center gap-0.5 rounded-full bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-600 ring-1 ring-inset ring-sky-200"
                         title="Change order awaiting the client — open payments"
                       >
                         <FileDiff className="h-3 w-3" />
@@ -422,7 +423,7 @@ export function ProposalsTable({
                         e.stopPropagation();
                         setPayFor(p.id);
                       }}
-                      className="text-left lg:text-right"
+                      className="ring-focus text-left lg:text-right"
                       title={`${formatCurrency(paid)} of ${formatCurrency(p.total)} collected — open payments`}
                     >
                       <div className="text-sm font-medium tabular-nums text-zinc-900">

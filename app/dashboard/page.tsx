@@ -143,7 +143,7 @@ function Inner() {
             index={3}
             label="Smart takeoffs · 30d"
             value={String(overview?.takeoffs30d ?? 0)}
-            footnote="satellite + blueprint"
+            footnote="satellite + manual"
             loading={loading}
           />
         </section>

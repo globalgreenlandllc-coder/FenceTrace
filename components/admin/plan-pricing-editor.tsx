@@ -158,7 +158,7 @@ export function PlanPricingEditor({ initial }: { initial: PlanPricingAdmin }) {
                   onCents={(priceCents) => patchPro({ priceCents })}
                 />
               </Field>
-              <Field label="Included blueprint takeoffs / month">
+              <Field label="Included takeoffs / month">
                 <input
                   type="number"
                   min={1}
@@ -187,7 +187,7 @@ export function PlanPricingEditor({ initial }: { initial: PlanPricingAdmin }) {
               on their next visit.
             </p>
             <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field label="Free blueprint takeoffs (one-time, 0–100)">
+              <Field label="Free takeoffs (one-time, 0–100)">
                 <input
                   type="number"
                   min={0}
@@ -212,9 +212,6 @@ export function PlanPricingEditor({ initial }: { initial: PlanPricingAdmin }) {
             </h2>
             <p className="mt-0.5 text-sm text-zinc-500">
               Shown on the landing pricing card and the in-app billing page.
-              The first bullet — &ldquo;{draft.pro.includedCredits} blueprint
-              takeoffs every month&rdquo; — is generated from the takeoff
-              count and can&rsquo;t drift.
             </p>
             <ul className="mt-4 space-y-2">
               {draft.pro.features.map((f, i) => (
@@ -377,7 +374,7 @@ export function PlanPricingEditor({ initial }: { initial: PlanPricingAdmin }) {
               </div>
               <ul className="mt-4 space-y-1.5">
                 {[
-                  `${draft.pro.includedCredits} blueprint takeoffs every month`,
+                  `${draft.pro.includedCredits} takeoffs every month`,
                   ...draft.pro.features.filter((f) => f.trim()),
                 ].map((f, i) => (
                   <li key={i} className="flex items-start gap-2 text-[12.5px] text-zinc-700">
@@ -407,7 +404,7 @@ export function PlanPricingEditor({ initial }: { initial: PlanPricingAdmin }) {
               <p className="mt-3 border-t border-zinc-200/70 pt-3 text-[11px] text-zinc-500">
                 Free plan: unlimited address estimates
                 {draft.free.blueprintCredits > 0
-                  ? ` + ${draft.free.blueprintCredits} blueprint takeoff${draft.free.blueprintCredits === 1 ? "" : "s"} to try`
+                  ? ` + ${draft.free.blueprintCredits} takeoff${draft.free.blueprintCredits === 1 ? "" : "s"} to try`
                   : ""}
                 .
               </p>

@@ -215,7 +215,7 @@ export function BrandProfileSection() {
             </label>
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/40 p-3">
               <BrandMark
-                initials={draft.logo.initials || "GU"}
+                initials={draft.logo.initials || "FT"}
                 tone={draft.logo.tone}
                 logoUrl={draft.logo.url}
                 size="lg"
@@ -334,7 +334,7 @@ function ProposalPreview({ draft }: { draft: ContractorProfile }) {
       <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
         <div className="flex items-start gap-3">
           <BrandMark
-            initials={draft.logo.initials || "GU"}
+            initials={draft.logo.initials || "FT"}
             tone={draft.logo.tone}
             logoUrl={draft.logo.url}
             size="lg"

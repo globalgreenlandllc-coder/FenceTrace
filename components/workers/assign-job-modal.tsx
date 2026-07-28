@@ -385,7 +385,7 @@ export function AssignJobModal({
                     setInvoiceTotalCents(null);
                     setExtractNote(null);
                   }}
-                  className="transition-smooth rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
+                  className="ring-focus transition-smooth rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
                   title="Remove file"
                 >
                   <X className="h-3.5 w-3.5" />

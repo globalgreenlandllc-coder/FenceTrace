@@ -51,7 +51,7 @@ export function CoverSection({
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-zinc-50/40 p-4 text-sm">
           <BrandMark
-            initials={profile.logo.initials || "GU"}
+            initials={profile.logo.initials || "FT"}
             tone={profile.logo.tone}
             logoUrl={profile.logo.url}
             size="lg"

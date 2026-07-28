@@ -58,7 +58,7 @@ const PROVIDER_META: Record<
   },
   GOOGLE_SOLAR: {
     label: "Google Solar / Aerial",
-    sub: "High-res aerial imagery + roof pitch",
+    sub: "High-res aerial imagery + property detail",
     tone: "sky",
   },
   MAPBOX: {
@@ -68,12 +68,12 @@ const PROVIDER_META: Record<
   },
   OPENAI: {
     label: "OpenAI",
-    sub: "GPT-4o vision for roof segmentation",
+    sub: "GPT-4o vision for fence-line detection",
     tone: "violet",
   },
   FAL: {
     label: "fal.ai",
-    sub: "SAM 2 roof polygon segmentation",
+    sub: "SAM 2 property segmentation",
     tone: "violet",
   },
   NEARMAP: {
@@ -83,7 +83,7 @@ const PROVIDER_META: Record<
   },
   EAGLEVIEW: {
     label: "EagleView",
-    sub: "Premium roof reports",
+    sub: "Premium property reports",
     tone: "amber",
   },
   RESEND: {
@@ -113,7 +113,7 @@ const PROVIDER_META: Record<
   },
   GEMINI: {
     label: "Google Gemini",
-    sub: "Second vision model for the blueprint roof read (cross-checks Claude)",
+    sub: "Second vision model for the uploaded-plan read (cross-checks Claude)",
     tone: "violet",
   },
 };
