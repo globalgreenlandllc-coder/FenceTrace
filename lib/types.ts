@@ -188,6 +188,12 @@ export type FenceEstimateConfig = {
   /** Post stock upgrade: galvanized-steel posts (rot-proof, wood fences)
    *  or heavy 6×6 pressure-treated posts. Absent = standard posts. */
   postUpgrade?: "steel" | "6x6";
+  /** Mixed-type sections: stretches of the SAME layout built as a
+   *  different fence (e.g. chain link across the back of a cedar job),
+   *  grouped by type with the total LF per type. Their footage is
+   *  carved OUT of the primary type's lines and priced at their own
+   *  catalog rates. */
+  mixed?: { type: string; lf: number }[];
 };
 
 export type EstimateConfig = {

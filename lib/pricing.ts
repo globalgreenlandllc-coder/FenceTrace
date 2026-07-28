@@ -103,7 +103,17 @@ function buildFenceLineItems(
   const t = fenceType(fence.type as FenceTypeId);
   const hf = heightFactor(t, fence.heightFt);
   const waste = 1 + Math.max(0, measurements.wasteFactorPct) / 100;
-  const lf = Math.max(0, measurements.eaveLF);
+  const totalLfAll = Math.max(0, measurements.eaveLF);
+  // Mixed-type sections price at their OWN catalog rates; their footage
+  // comes out of the primary type's lines so nothing double-bills.
+  const mixed = (fence.mixed ?? []).filter(
+    (m) => Number.isFinite(m.lf) && m.lf > 0,
+  );
+  const mixedLf = Math.min(
+    totalLfAll,
+    mixed.reduce((a, m) => a + m.lf, 0),
+  );
+  const lf = Math.max(0, totalLfAll - mixedLf);
   // Gates re-price from the LIVE drawn count (measurements.downspoutCount
   // carries gates) — the config split only decides how many of them are
   // doubles. Editing gate markers on the proposal canvas must move money.
@@ -148,6 +158,27 @@ function buildFenceLineItems(
       taxable: false,
     },
   ];
+  for (const m of mixed) {
+    const mt = fenceType(m.type as FenceTypeId);
+    const mLf = Math.round(m.lf);
+    lines.push({
+      id: `fence-mixed-${mt.id}`,
+      name: `${mt.label} section — ${mt.defaultHeightFt}' (${mLf} LF)`,
+      description: "Built at its own rate along the marked stretch",
+      quantity: mLf,
+      unit: "LF",
+      unitPrice: round2(mt.materialPerLf * waste),
+      taxable: true,
+    });
+    lines.push({
+      id: `fence-mixed-${mt.id}-labor`,
+      name: `${mt.label} section — installation`,
+      quantity: mLf,
+      unit: "LF",
+      unitPrice: round2(mt.laborPerLf * TERRAIN_FACTOR[fence.terrain as Terrain]),
+      taxable: false,
+    });
+  }
   if (gatesSingle > 0)
     lines.push({
       id: "gate-single",

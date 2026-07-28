@@ -45,6 +45,10 @@ export type FenceLayoutInput = {
   wallTopLf?: number;
   /** Post stock upgrade — steel or 6×6 pressure-treated. */
   postUpgrade?: "steel" | "6x6";
+  /** Mixed-type sections (e.g. chain link across the back of a cedar
+   *  job): total LF per secondary type. Carved out of the primary
+   *  fabric and materialized as their own BOM block. */
+  mixed?: { type: FenceTypeId; lf: number }[];
 };
 
 export type BomLine = {
@@ -89,7 +93,15 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     input.gatesSingle * GATE_SINGLE_OPENING_FT +
     input.gatesDouble * GATE_DOUBLE_OPENING_FT +
     customGates.reduce((a, w) => a + w, 0);
-  const netFenceLf = Math.max(0, input.totalLf - gateOpenings);
+  // Mixed-type sections take their footage OUT of the primary fabric.
+  const mixed = (input.mixed ?? []).filter(
+    (m) => Number.isFinite(m.lf) && m.lf > 0,
+  );
+  const mixedLf = Math.min(
+    Math.max(0, input.totalLf - gateOpenings),
+    mixed.reduce((a, m) => a + m.lf, 0),
+  );
+  const netFenceLf = Math.max(0, input.totalLf - gateOpenings - mixedLf);
 
   // Sections are counted PER RUN when the layout provides run lengths —
   // three 40' runs need ceil(40/8)=5 sections each (15 total), not
@@ -227,6 +239,33 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     add("removal", "Existing fence tear-out & haul-away", input.removalLf!, "lf");
   }
 
+  // Mixed sections: run the same engine on each secondary stretch (its
+  // own type, its own default height, 2 terminal posts at the splices)
+  // and fold the BOM in with prefixed keys + labels.
+  let mixedLaborHours = 0;
+  for (const m of mixed) {
+    const sub = computeFenceTakeoff({
+      type: m.type,
+      heightFt: fenceType(m.type).defaultHeightFt,
+      totalLf: Math.min(m.lf, mixedLf),
+      corners: 0,
+      ends: 2,
+      gatesSingle: 0,
+      gatesDouble: 0,
+      terrain: input.terrain,
+      wastePct: input.wastePct,
+    });
+    const label = fenceType(m.type).label;
+    for (const line of sub.bom) {
+      bom.push({
+        ...line,
+        key: `mix-${m.type}-${line.key}`,
+        label: `${label}: ${line.label}`,
+      });
+    }
+    mixedLaborHours += sub.laborHours;
+  }
+
   // Crew-hours: base rate ≈ 2.5 LF/hour/person for stick builds on flat
   // ground, faster for mesh/panels; terrain multiplies dig time.
   const lfPerHour =
@@ -236,10 +275,11 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     (input.gatesSingle + input.gatesDouble + customGates.length) * 1.5 +
     (input.steppedSections ?? 0) * 0.4 +
     wallPosts * 0.6 + // core-drill + epoxy set beats digging, but not by much
+    mixedLaborHours +
     (input.removalLf ?? 0) / 12;
 
   return {
-    netFenceLf: Math.round(netFenceLf),
+    netFenceLf: Math.round(netFenceLf + mixedLf),
     sections,
     posts: {
       line: linePosts,

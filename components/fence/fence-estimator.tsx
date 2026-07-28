@@ -323,6 +323,19 @@ export function FenceEstimator() {
         .map((g) => g.widthFt ?? 6),
     [layout.gates],
   );
+  // Mixed-type sections grouped by type — each stretch prices at its
+  // own catalog rate and its LF comes out of the primary fence.
+  const mixedByType = useMemo(() => {
+    const byType = new Map<string, number>();
+    for (const s of layout.sections ?? []) {
+      if (!layout.runs.some((r) => r.id === s.runId)) continue;
+      if (s.lfFt > 0) byType.set(s.type, (byType.get(s.type) ?? 0) + s.lfFt);
+    }
+    return [...byType].map(([type, lf]) => ({
+      type: type as FenceTypeId,
+      lf: Math.round(lf),
+    }));
+  }, [layout.sections, layout.runs]);
   const effRemoval = removalLf < 0 ? totalLf : removalLf; // -1 = "same as drawn"
 
   // Wall-top LF: manual entry wins; else the topo's sheer-drop estimate;
@@ -372,8 +385,9 @@ export function FenceEstimator() {
       steppedSections: effSteppedSections,
       wallTopLf: effWallLf,
       postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
+      mixed: mixedByType.length > 0 ? mixedByType : undefined,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType],
   );
 
   const takeoff = useMemo(
@@ -451,7 +465,9 @@ export function FenceEstimator() {
         steppedSections: effSteppedSections,
         wallTopLf: effWallLf,
         postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
+        mixed: mixedByType.length > 0 ? mixedByType : undefined,
       },
+      fenceSections: layout.sections,
     });
     setSaving(false);
     if (!res.ok) {
@@ -609,6 +625,7 @@ export function FenceEstimator() {
                   elevationSpacingPx={runElevRaw?.spacingPx}
                   topoGridFt={topoGrid}
                   buildings={buildings}
+                  sections={layout.sections}
                   retainingWall={effWallLf > 0}
                   postUpgrade={postUpgrade === "none" ? undefined : postUpgrade}
                   initialView={cam3d}

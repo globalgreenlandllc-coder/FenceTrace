@@ -20,6 +20,7 @@ export type FenceDraftInput = {
   steppedSections?: number;
   wallTopLf?: number;
   postUpgrade?: "steel" | "6x6";
+  mixed?: { type: FenceTypeId; lf: number }[];
 };
 
 export type FenceTierPatch = {
@@ -58,6 +59,12 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         : input.postUpgrade === "6x6"
           ? ["Heavy 6×6 pressure-treated posts throughout"]
           : []),
+      ...(input.mixed ?? [])
+        .filter((m) => m.lf > 0)
+        .map(
+          (m) =>
+            `${Math.round(m.lf)} LF of ${fenceType(m.type).label.toLowerCase()} along the marked stretch`,
+        ),
       ...((input.wallTopLf ?? 0) > 0
         ? [
             `Core-drilled & epoxy-anchored on the retaining wall — ${Math.round(input.wallTopLf!)} LF`,
@@ -86,6 +93,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         steppedSections: input.steppedSections ?? 0,
         wallTopLf: input.wallTopLf ?? 0,
         postUpgrade: input.postUpgrade,
+        mixed: input.mixed,
       },
       highlights,
       markupPct: tier.markupPct,

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DoorOpen, Home, MousePointer2, PenLine, Trash2, Wand2 } from "lucide-react";
+import { DoorOpen, Home, Layers, MousePointer2, PenLine, Trash2, Wand2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FENCE_TYPES, fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import {
   CANVAS_H,
   CANVAS_W,
@@ -46,9 +47,65 @@ export type FenceGate = {
   widthFt: number;
 };
 
-export type FenceLayout = { runs: FenceRun[]; gates: FenceGate[] };
+/** A "from here to here" stretch of one run built as a DIFFERENT fence
+ *  type (chain link across the back of a cedar job). Endpoints sit ON
+ *  the run; lfFt is measured at creation so pricing never re-projects. */
+export type FenceSection = {
+  id: string;
+  runId: string;
+  a: Pt;
+  b: Pt;
+  /** Arc distances of a/b along the run (canvas px) — lets render +
+   *  overlap checks slice the polyline without re-projecting. */
+  aArc: number;
+  bArc: number;
+  type: FenceTypeId;
+  lfFt: number;
+};
 
-type Tool = "select" | "draw" | "gate" | "house";
+export type FenceLayout = {
+  runs: FenceRun[];
+  gates: FenceGate[];
+  sections?: FenceSection[];
+};
+
+/** Overlay color per catalog category — how a marked section reads on
+ *  the photo (wire gray, vinyl white, ornamental dark…). */
+export const SECTION_COLORS: Record<string, string> = {
+  wood: "#D97706",
+  vinyl: "#F1F5F9",
+  "chain-link": "#A1A1AA",
+  aluminum: "#475569",
+  steel: "#334155",
+  "split-rail": "#B45309",
+};
+
+type Tool = "select" | "draw" | "gate" | "house" | "section";
+
+/** Slice a polyline between two arc distances (vertices kept). */
+function slicePolyline(points: Pt[], d0: number, d1: number): Pt[] {
+  const lo = Math.min(d0, d1);
+  const hi = Math.max(d0, d1);
+  const out: Pt[] = [];
+  const at = (a: Pt, b: Pt, t: number): Pt => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  });
+  let acc = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    if (L > 0 && acc + L > lo && acc < hi) {
+      const t0 = Math.max(0, (lo - acc) / L);
+      const t1 = Math.min(1, (hi - acc) / L);
+      if (out.length === 0) out.push(at(a, b, t0));
+      out.push(at(a, b, t1));
+    }
+    acc += L;
+  }
+  return out;
+}
 
 /** Ray-cast point-in-polygon (house selection). */
 function pointInPoly(p: Pt, ring: Pt[]): boolean {
@@ -147,6 +204,10 @@ export function FenceCanvas({
   // an existing run or a house wall — rendered as a green lock ring.
   const [snapLocked, setSnapLocked] = useState(false);
   const didPanRef = useRef(false);
+  // Section tool: mark a from-here-to-here stretch as a different type.
+  const [secType, setSecType] = useState<FenceTypeId>("chain-link-galv");
+  const [sectionStart, setSectionStart] = useState<{ runId: string; q: Pt; arc: number } | null>(null);
+  const [secGhost, setSecGhost] = useState<{ runId: string; q: Pt; arc: number } | null>(null);
   const [hover, setHover] = useState<Pt | null>(null);
   // Ghost gate under the cursor in gate mode; transient helper notices.
   const [gateGhost, setGateGhost] = useState<Pt | null>(null);
@@ -330,6 +391,7 @@ export function FenceCanvas({
         gates: run
           ? layout.gates.filter((g) => distToRun(g, run) > 14)
           : layout.gates,
+        sections: (layout.sections ?? []).filter((s) => s.runId !== runId),
       });
       setSelectedRun(null);
     },
@@ -343,6 +405,7 @@ export function FenceCanvas({
       if (e.key === "Escape") {
         setDraft([]);
         setHouseDraft([]);
+        setSectionStart(null);
       }
       if (e.key === "Enter") {
         if (draft.length >= 2) finishDraft();
@@ -370,6 +433,36 @@ export function FenceCanvas({
   }, [draft.length, houseDraft.length, finishDraft, finishHouse, selectedRun, removeRun, selectedHouse, buildings, onBuildingsChange]);
 
   /* ---- gate tool: nearest point on any run segment ---- */
+
+  /** Like nearestOnRuns, but keeps WHICH run and the arc distance —
+   *  the section tool needs both ends pinned to the same line. */
+  function nearestOnRunsInfo(
+    p: Pt,
+    tolerance = 34,
+  ): { runId: string; q: Pt; arc: number } | null {
+    let best: { runId: string; q: Pt; arc: number } | null = null;
+    let bestD = tolerance;
+    for (const run of layout.runs) {
+      let acc = 0;
+      for (let i = 1; i < run.points.length; i++) {
+        const a = run.points[i - 1];
+        const b = run.points[i];
+        const abx = b.x - a.x;
+        const aby = b.y - a.y;
+        const segLen = Math.hypot(abx, aby);
+        const len2 = abx * abx + aby * aby || 1;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2));
+        const q = { x: a.x + t * abx, y: a.y + t * aby };
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { runId: run.id, q, arc: acc + segLen * t };
+        }
+        acc += segLen;
+      }
+    }
+    return best;
+  }
 
   function nearestOnRuns(p: Pt, tolerance = 34): Pt | null {
     let best: Pt | null = null;
@@ -418,6 +511,60 @@ export function FenceCanvas({
         return;
       }
       setHouseDraft((d) => [...d, raw]);
+      return;
+    }
+    if (tool === "section") {
+      if (layout.runs.length === 0) {
+        say("Draw a fence line first — sections live on the fence.");
+        return;
+      }
+      const hit = nearestOnRunsInfo(raw);
+      if (!hit) {
+        say("Tap on (or near) a fence line to mark the section.");
+        return;
+      }
+      if (!sectionStart) {
+        setSectionStart(hit);
+        return;
+      }
+      if (hit.runId !== sectionStart.runId) {
+        say("Both ends must sit on the same fence line — tap the other end of the stretch.");
+        return;
+      }
+      const lo = Math.min(hit.arc, sectionStart.arc);
+      const hi = Math.max(hit.arc, sectionStart.arc);
+      const lfFt = (hi - lo) / pxPerFt;
+      if (lfFt < 2) {
+        say("Too short — tap further along the line for the other end.");
+        return;
+      }
+      const overlaps = (layout.sections ?? []).some(
+        (s) =>
+          s.runId === hit.runId &&
+          Math.min(s.aArc, s.bArc) < hi &&
+          Math.max(s.aArc, s.bArc) > lo,
+      );
+      if (overlaps) {
+        say("That stretch already has a marked section — remove it first (click it).");
+        return;
+      }
+      onChange({
+        ...layout,
+        sections: [
+          ...(layout.sections ?? []),
+          {
+            id: nextId("sec"),
+            runId: hit.runId,
+            a: sectionStart.q,
+            b: hit.q,
+            aArc: sectionStart.arc,
+            bArc: hit.arc,
+            type: secType,
+            lfFt: Math.round(lfFt),
+          },
+        ],
+      });
+      setSectionStart(null);
       return;
     }
     if (tool === "gate") {
@@ -482,6 +629,7 @@ export function FenceCanvas({
               { id: "select", label: "Select", Icon: MousePointer2 },
               { id: "draw", label: "Draw fence", Icon: PenLine },
               { id: "gate", label: "Add gate", Icon: DoorOpen },
+              { id: "section" as Tool, label: "Section", Icon: Layers },
               ...(onBuildingsChange
                 ? [{ id: "house" as Tool, label: "House", Icon: Home }]
                 : []),
@@ -503,6 +651,24 @@ export function FenceCanvas({
             </button>
           ))}
         </div>
+        {tool === "section" && (
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-3 pr-1">
+            <span className="text-[11px] font-semibold text-zinc-500">
+              Build this stretch as
+            </span>
+            <select
+              value={secType}
+              onChange={(e) => setSecType(e.target.value as FenceTypeId)}
+              className="h-6 rounded-full border-0 bg-white px-2 text-[11px] font-semibold text-zinc-800 shadow-sm outline-none"
+            >
+              {FENCE_TYPES.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {tool === "gate" && (
           <div className="inline-flex items-center gap-1 rounded-full bg-zinc-100 p-0.5">
             {(["single", "double", "custom"] as const).map((k) => (
@@ -620,7 +786,7 @@ export function FenceCanvas({
           viewBox={`${cam.cx - CANVAS_W / 2 / cam.k} ${cam.cy - CANVAS_H / 2 / cam.k} ${CANVAS_W / cam.k} ${CANVAS_H / cam.k}`}
           className={cn(
             "block h-auto w-full select-none",
-            tool === "draw" || tool === "gate" || tool === "house"
+            tool === "draw" || tool === "gate" || tool === "house" || tool === "section"
               ? "cursor-crosshair"
               : "cursor-grab active:cursor-grabbing",
           )}
@@ -668,6 +834,7 @@ export function FenceCanvas({
               setSnapLocked(Math.hypot(s.x - raw.x, s.y - raw.y) > 0.75);
             } else if (tool === "house") setHover(toCanvas(e));
             else if (tool === "gate") setGateGhost(nearestOnRuns(toCanvas(e)));
+            else if (tool === "section") setSecGhost(nearestOnRunsInfo(toCanvas(e)));
           }}
           onMouseLeave={() => {
             setHover(null);
@@ -845,7 +1012,9 @@ export function FenceCanvas({
                   strokeLinejoin="round"
                   style={{ cursor: "pointer", filter: "drop-shadow(0 0 4px rgba(34,211,238,0.6))" }}
                   onClick={(e) => {
-                    if (tool !== "gate") {
+                    // Gate + section tools CLICK ON the run to place
+                    // things — the run must not steal those clicks.
+                    if (tool !== "gate" && tool !== "section") {
                       e.stopPropagation();
                       setSelectedRun(run.id);
                       setTool("select");
@@ -866,6 +1035,94 @@ export function FenceCanvas({
               </g>
             );
           })}
+
+          {/* Mixed-type sections — a stretch of the run built as a
+              different fence, drawn over the run in its own color */}
+          {(layout.sections ?? []).map((s) => {
+            const run = layout.runs.find((r) => r.id === s.runId);
+            if (!run) return null;
+            const pts = slicePolyline(run.points, s.aArc, s.bArc);
+            if (pts.length < 2) return null;
+            const t = fenceType(s.type);
+            const color = SECTION_COLORS[t.category] ?? "#94A3B8";
+            const mid = pts[Math.floor(pts.length / 2)];
+            const label = `${t.label} · ${s.lfFt}′`;
+            const w = label.length * 5.6 + 14;
+            return (
+              <g
+                key={s.id}
+                style={{ cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange({
+                    ...layout,
+                    sections: (layout.sections ?? []).filter((x) => x.id !== s.id),
+                  });
+                  say("Section removed — that stretch is back to the main fence type.");
+                }}
+              >
+                <polyline
+                  points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke="#0b1210"
+                  strokeWidth={7}
+                  vectorEffect="non-scaling-stroke"
+                  strokeLinecap="round"
+                  opacity={0.45}
+                />
+                <polyline
+                  points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={4.5}
+                  vectorEffect="non-scaling-stroke"
+                  strokeLinecap="round"
+                  strokeDasharray="10 4"
+                />
+                <g transform={`translate(${mid.x}, ${mid.y}) scale(${ui}) translate(0, -14)`} pointerEvents="none">
+                  <rect x={-w / 2} y={-10} width={w} height={17} rx={8} fill="rgba(9,20,12,0.9)" />
+                  <text y={2.5} textAnchor="middle" fontSize={9.5} fontWeight={700} fill={color}>
+                    {label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+
+          {/* Section tool: first-end marker + live preview to the ghost */}
+          {tool === "section" && sectionStart && secGhost && secGhost.runId === sectionStart.runId && (() => {
+            const run = layout.runs.find((r) => r.id === sectionStart.runId);
+            if (!run) return null;
+            const pts = slicePolyline(run.points, sectionStart.arc, secGhost.arc);
+            const lf = Math.round(Math.abs(secGhost.arc - sectionStart.arc) / pxPerFt);
+            const color = SECTION_COLORS[fenceType(secType).category] ?? "#94A3B8";
+            return (
+              <g pointerEvents="none">
+                <polyline
+                  points={pts.map((p) => `${p.x},${p.y}`).join(" ")}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={4.5}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="6 5"
+                  strokeLinecap="round"
+                  opacity={0.9}
+                />
+                <g transform={`translate(${secGhost.q.x}, ${secGhost.q.y}) scale(${ui}) translate(14, -14)`}>
+                  <rect x={0} y={-11} width={52} height={18} rx={6} fill="rgba(9,20,12,0.9)" />
+                  <text x={26} y={2} textAnchor="middle" fontSize={10.5} fontWeight={700} fill={color}>
+                    {lf} ft
+                  </text>
+                </g>
+              </g>
+            );
+          })()}
+          {tool === "section" && sectionStart && (
+            <circle cx={sectionStart.q.x} cy={sectionStart.q.y} r={5.5 * ui} fill={SECTION_COLORS[fenceType(secType).category] ?? "#94A3B8"} stroke="#0b1210" strokeWidth={1.5} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+          )}
+          {tool === "section" && secGhost && !sectionStart && (
+            <circle cx={secGhost.q.x} cy={secGhost.q.y} r={7 * ui} fill="none" stroke={SECTION_COLORS[fenceType(secType).category] ?? "#94A3B8"} strokeWidth={2.2} vectorEffect="non-scaling-stroke" strokeDasharray="4 3" pointerEvents="none" />
+          )}
 
           {/* Draft run being drawn — live numbers at the cursor */}
           {draft.length > 0 && (
@@ -1012,7 +1269,11 @@ export function FenceCanvas({
           ? draft.length > 0
             ? "Click to keep adding posts — ✓ Finish (or double-click / right-click / Enter) ends the run · Backspace steps back · Esc cancels."
             : "Click to start a fence line. Points snap to the property corners and to your other runs."
-          : tool === "house"
+          : tool === "section"
+            ? sectionStart
+              ? "Now click the OTHER end of the stretch on the same line — it becomes the picked type. Esc cancels."
+              : "Pick the type above, then click where the different fence STARTS on a line. Click a marked section to remove it."
+            : tool === "house"
             ? houseDraft.length > 0
               ? "Click corner to corner around the house — click the green first dot (or Enter / double-click) to close the outline."
               : "Trace the house: click its corners on the photo. The outline shows in the client's diagram and 3D."

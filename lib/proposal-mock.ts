@@ -161,6 +161,14 @@ export type ProposalTakeoff = {
   /** FenceTrace: building footprints (canvas coords) — the house renders
    *  in the client's diagram + 3D so wall-connected fence reads right. */
   buildings?: { x: number; y: number }[][];
+  /** FenceTrace: mixed-type stretches of the drawn fence (from-here-to-
+   *  here spans built as a different type) — the 3D renders each with
+   *  its own material. */
+  fenceSections?: {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    type: string;
+  }[];
 };
 
 export type Proposal = {

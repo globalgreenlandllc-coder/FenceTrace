@@ -210,6 +210,7 @@ export function AerialSection({
                 elevationSpacingPx={takeoff!.elevationSpacingPx}
                 topoGridFt={takeoff!.topoGridFt ?? null}
                 buildings={takeoff!.buildings ?? null}
+                sections={takeoff!.fenceSections ?? null}
                 retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
                 postUpgrade={fenceCfg!.postUpgrade}
                 initialView={takeoff!.view3d}

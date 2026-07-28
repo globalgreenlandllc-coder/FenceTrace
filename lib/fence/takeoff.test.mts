@@ -158,6 +158,29 @@ test("post upgrade: every post counted once, priced on both rails", () => {
   );
 });
 
+test("mixed-type sections: footage carved out, priced at own rates", () => {
+  const base = computeFenceTakeoff(CEDAR_100);
+  const mix = computeFenceTakeoff({
+    ...CEDAR_100,
+    mixed: [{ type: "chain-link-galv", lf: 24 }],
+  });
+  // total fabric unchanged; the chain-link block appears in the BOM
+  assert.equal(mix.netFenceLf, base.netFenceLf);
+  assert.ok(mix.bom.some((b) => b.key === "mix-chain-link-galv-mesh"));
+  // primary pickets shrink (24 LF of the run is no longer cedar)
+  const pk = (t: ReturnType<typeof computeFenceTakeoff>) =>
+    t.bom.find((b) => b.key === "picket")!.qty;
+  assert.ok(pk(mix) < pk(base));
+  // pricing rail: chain-link lines present, cedar footage reduced
+  const priced = priceFence({
+    ...CEDAR_100,
+    mixed: [{ type: "chain-link-galv", lf: 24 }],
+  });
+  assert.ok(priced.lines.some((l) => l.key === "fence-mixed-chain-link-galv"));
+  const cedarLf = priced.lines.find((l) => l.key === "fence-materials")!;
+  assert.equal(cedarLf.amount > 0, true);
+});
+
 test("PARITY: priceFence total === packageTotal for the same layout", () => {
   const layout = {
     ...CEDAR_100,
@@ -168,6 +191,7 @@ test("PARITY: priceFence total === packageTotal for the same layout", () => {
     steppedSections: 3,
     wallTopLf: 16,
     postUpgrade: "steel" as const,
+    mixed: [{ type: "chain-link-galv" as const, lf: 20 }],
   };
   for (const markupPct of [30, 35, 38]) {
     const rail = priceFence(layout, { markupPct });

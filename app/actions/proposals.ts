@@ -308,6 +308,8 @@ export async function saveDraftFromEstimate(args: {
   view3d?: { yawDeg: number; squash: number };
   /** FenceTrace: building footprints for the client diagram + 3D. */
   buildings?: { x: number; y: number }[][];
+  /** FenceTrace: mixed-type stretches for the client 3D. */
+  fenceSections?: { a: { x: number; y: number }; b: { x: number; y: number }; type: string }[];
 }): Promise<SaveDraftResult> {
   try {
     return await saveDraftFromEstimateImpl(args);
@@ -330,6 +332,7 @@ async function saveDraftFromEstimateImpl(args: {
   topoGridFt?: number[][];
   view3d?: { yawDeg: number; squash: number };
   buildings?: { x: number; y: number }[][];
+  fenceSections?: { a: { x: number; y: number }; b: { x: number; y: number }; type: string }[];
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -407,6 +410,7 @@ async function saveDraftFromEstimateImpl(args: {
       topoGridFt: args.topoGridFt,
       view3d: args.view3d,
       buildings: args.buildings,
+      fenceSections: args.fenceSections,
     },
     contractor: {
       name: me.profile.contractorName || me.user.name,

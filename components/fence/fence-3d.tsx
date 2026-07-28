@@ -68,6 +68,8 @@ type WFace = {
   fill?: string;
   /** Trees: canopy tone index. */
   tone?: number;
+  /** Panels inside a mixed-type section render as THAT fence. */
+  alt?: { cat: string; rails: number; cap: boolean };
 };
 
 type WLabel = { anchor: V3; text: string };
@@ -205,6 +207,7 @@ export function Fence3D({
   elevationSpacingPx,
   topoGridFt = null,
   buildings = null,
+  sections = null,
   retainingWall = false,
   postUpgrade,
   initialView,
@@ -233,6 +236,9 @@ export function Fence3D({
   /** Building footprints (canvas coords) — extruded as simple houses so
    *  the client sees the home the fence connects to. */
   buildings?: Pt[][] | null;
+  /** Mixed-type stretches: from-here-to-here spans of a run built as a
+   *  different fence — rendered with that type's material + height. */
+  sections?: { a: Pt; b: Pt; type: string }[] | null;
   /** Contractor confirmed the fence mounts on a retaining wall: sheer
    *  drops render as a masonry wall face with the fence anchored on top
    *  (instead of an earth bank), and get a summary chip. */
@@ -396,6 +402,33 @@ export function Fence3D({
     const labels: WLabel[] = [];
     let steppedCount = 0;
     let wallCount = 0;
+
+    // Mixed-type spans, pinned to their run by arc distance.
+    const typedByRun: { s: number; e: number; type: FenceTypeId }[][] =
+      runs.map(() => []);
+    for (const sec of sections ?? []) {
+      let bestRun = -1;
+      let bestPerp = Infinity;
+      let sA = 0;
+      let sB = 0;
+      geo.forEach((rg, ri) => {
+        if (rg.pts.length < 2) return;
+        const na = nearestOnPolyline(sec.a, rg.pts, rg.cum);
+        const nb = nearestOnPolyline(sec.b, rg.pts, rg.cum);
+        if (na.perp + nb.perp < bestPerp) {
+          bestPerp = na.perp + nb.perp;
+          bestRun = ri;
+          sA = na.dist;
+          sB = nb.dist;
+        }
+      });
+      if (bestRun < 0 || bestPerp > 60) continue;
+      typedByRun[bestRun].push({
+        s: Math.min(sA, sB),
+        e: Math.max(sA, sB),
+        type: sec.type as FenceTypeId,
+      });
+    }
 
     // Terrain surface at 2× lattice density (smooth rolling lawn).
     if (grid) {
@@ -598,6 +631,20 @@ export function Fence3D({
           if (stepped) steppedCount++;
           if (wallish) wallCount++;
           const segLen = Math.hypot(B.x - A.x, B.y - A.y);
+          // Mixed-type span at this chunk? Its material + height win.
+          const dMid = (d0 + d1) / 2;
+          const span = typedByRun[ri].find((sp) => dMid >= sp.s && dMid <= sp.e);
+          const altT = span ? fenceType(span.type) : null;
+          const zTopLocal = altT
+            ? altT.defaultHeightFt * scale * HEIGHT_EXAGGERATION
+            : zTop;
+          const alt = altT
+            ? {
+                cat: altT.category,
+                rails: altT.railsPerSection(altT.defaultHeightFt),
+                cap: altT.category === "wood" || altT.category === "vinyl",
+              }
+            : undefined;
           if (wallish) {
             const zLo = Math.min(zA, zB);
             faces.push({
@@ -633,14 +680,15 @@ export function Fence3D({
             pts: [
               { ...A, z: bzA },
               { ...B, z: bzB },
-              { ...B, z: bzB + zTop },
-              { ...A, z: bzA + zTop },
+              { ...B, z: bzB + zTopLocal },
+              { ...A, z: bzA + zTopLocal },
             ],
             shaded,
             baseLenPx: segLen,
+            alt,
           });
-          notePost(ri, d0, bzA + zTop + 0.4 * scale, false, wallish ? bzA : undefined);
-          notePost(ri, d1, bzB + zTop + 0.4 * scale, false, wallish ? bzB : undefined);
+          notePost(ri, d0, bzA + zTopLocal + 0.4 * scale, false, wallish ? bzA : undefined);
+          notePost(ri, d1, bzB + zTopLocal + 0.4 * scale, false, wallish ? bzB : undefined);
         }
       }
     });
@@ -707,7 +755,7 @@ export function Fence3D({
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, retainingWall, postUpgrade]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, sections, retainingWall, postUpgrade]);
 
   /* ===================== orbit (axonometric) ======================== */
   const orbitScene = useMemo(() => {
@@ -1207,15 +1255,18 @@ export function Fence3D({
         </g>
       );
     }
-    // panel
-    const fill = f.face.shaded ? style.shade : style.face;
+    // panel — mixed-type sections swap in THAT fence's style
+    const st = f.face.alt ? (STYLES[f.face.alt.cat] ?? style) : style;
+    const rc = f.face.alt?.rails ?? railCount;
+    const cap = f.face.alt ? f.face.alt.cap : capRail;
+    const fill = f.face.shaded ? st.shade : st.face;
     if (!f.isQuad) {
-      return <path key={i} d={polyPath(f.poly)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />;
+      return <path key={i} d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeWidth={0.9} strokeLinejoin="round" />;
     }
     const [a, b, tb, ta] = f.poly;
     const details: React.ReactNode[] = [];
-    if (style.lines === "pickets" || style.lines === "bars") {
-      const n = Math.max(2, Math.floor(f.face.baseLenPx / (style.lines === "bars" ? 10 : 7)));
+    if (st.lines === "pickets" || st.lines === "bars") {
+      const n = Math.max(2, Math.floor(f.face.baseLenPx / (st.lines === "bars" ? 10 : 7)));
       for (let k = 1; k < n; k++) {
         const s = k / n;
         details.push(
@@ -1225,12 +1276,12 @@ export function Fence3D({
             y1={a.y + (b.y - a.y) * s}
             x2={ta.x + (tb.x - ta.x) * s}
             y2={ta.y + (tb.y - ta.y) * s}
-            stroke={style.lines === "bars" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)"}
-            strokeWidth={style.lines === "bars" ? 2 : 1}
+            stroke={st.lines === "bars" ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)"}
+            strokeWidth={st.lines === "bars" ? 2 : 1}
           />,
         );
       }
-    } else if (style.lines === "mesh") {
+    } else if (st.lines === "mesh") {
       const n = Math.max(2, Math.floor(f.face.baseLenPx / 9));
       for (let k = 0; k <= n; k++) {
         const s = k / n;
@@ -1240,10 +1291,10 @@ export function Fence3D({
         );
       }
     }
-    if (style.lines === "rails") {
+    if (st.lines === "rails") {
       const rails: React.ReactNode[] = [];
-      for (let r = 1; r <= railCount; r++) {
-        const s = r / (railCount + 1);
+      for (let r = 1; r <= rc; r++) {
+        const s = r / (rc + 1);
         rails.push(
           <line
             key={r}
@@ -1259,7 +1310,7 @@ export function Fence3D({
       }
       return <g key={i}>{rails}</g>;
     }
-    if (style.lines === "pickets") {
+    if (st.lines === "pickets") {
       for (const s of [0.22, 0.78]) {
         details.push(
           <line
@@ -1276,10 +1327,10 @@ export function Fence3D({
     }
     return (
       <g key={i}>
-        <path d={polyPath(f.poly)} fill={fill} stroke={style.stroke} strokeWidth={0.9} strokeLinejoin="round" />
+        <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeWidth={0.9} strokeLinejoin="round" />
         {details}
-        {capRail && (
-          <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={style.post} strokeWidth={2.2} strokeLinecap="round" />
+        {cap && (
+          <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={2.2} strokeLinecap="round" />
         )}
       </g>
     );
