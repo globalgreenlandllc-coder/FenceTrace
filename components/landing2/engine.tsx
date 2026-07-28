@@ -11,7 +11,7 @@ import { DEMO_ADDRESS, TOTAL_LF } from "./demo-property";
  */
 export function Engine() {
   return (
-    <section id="takeoffs" className="bg-paper py-24 md:py-32">
+    <section id="takeoffs" className="scroll-mt-16 bg-paper py-24 md:py-32">
       <Container>
         <Reveal>
           <div className="grid gap-8 md:grid-cols-[1.05fr_0.95fr] md:items-end md:gap-16">

@@ -1,18 +1,23 @@
 import { Container, SectionHeader } from "./ui";
 import { Reveal } from "./reveal";
 import Link from "next/link";
+import { FENCE_HEIGHT_FT } from "./demo-property";
+import { DEMO_NET_LF, DEMO_PER_LF, DEMO_TYPE, money } from "./demo-figures";
 
 function SpecTable() {
   const rows = [
     ["Imagery", "Aerial + Property lines"],
     ["Line confidence", "94%"],
-    ["Style", "6′ Cedar Privacy"],
-    ["Rate", "$28.50 / LF"],
+    ["Style", `${FENCE_HEIGHT_FT}′ ${DEMO_TYPE.label}`],
+    ["Rate", `${money(DEMO_PER_LF)} / LF`],
   ];
   return (
     <div className="mt-8 divide-y divide-zinc-100 rounded-xl border border-zinc-200/70 bg-white shadow-card">
       {rows.map(([k, v]) => (
-        <div key={k} className="flex items-center justify-between px-4 py-3 text-[13px]">
+        <div
+          key={k}
+          className="flex items-center justify-between px-4 py-3 text-[13px]"
+        >
           <span className="text-zinc-500">{k}</span>
           <span className="font-medium text-zinc-900">{v}</span>
         </div>
@@ -36,10 +41,22 @@ function ProfileCard() {
 
       <svg viewBox="0 0 400 300" className="my-4 w-full">
         {/* post-spacing dimension */}
-        <text x="196" y="46" textAnchor="middle" fill="#94C7A3" fontSize="11" fontFamily="var(--font-mono), monospace" fontWeight="700">
-          8 FT
+        <text
+          x="196"
+          y="46"
+          textAnchor="middle"
+          fill="#94C7A3"
+          fontSize="11"
+          fontFamily="var(--font-mono), monospace"
+          fontWeight="700"
+        >
+          {`${DEMO_TYPE.postSpacingFt} FT`}
         </text>
-        <path d="M137 58 H176 M216 58 H255" stroke="#94C7A3" strokeWidth="1.5" />
+        <path
+          d="M137 58 H176 M216 58 H255"
+          stroke="#94C7A3"
+          strokeWidth="1.5"
+        />
         <path d="M137 52v12M255 52v12" stroke="#94C7A3" strokeWidth="1.5" />
 
         {/* height dimension */}
@@ -55,20 +72,48 @@ function ProfileCard() {
           transform="rotate(-90 88 162)"
           textAnchor="middle"
         >
-          6 FT
+          {`${FENCE_HEIGHT_FT} FT`}
         </text>
 
         {/* pickets between the posts */}
         {Array.from({ length: 10 }, (_, i) => 152 + i * 10).map((x) => (
-          <line key={x} x1={x} y1={88} x2={x} y2={242} stroke="rgba(255,255,255,0.3)" strokeWidth="4" />
+          <line
+            key={x}
+            x1={x}
+            y1={88}
+            x2={x}
+            y2={242}
+            stroke="rgba(255,255,255,0.3)"
+            strokeWidth="4"
+          />
         ))}
 
         {/* 4×4 posts */}
-        <rect x="130" y="76" width="14" height="174" fill="none" stroke="#ffffff" strokeWidth="2.5" />
-        <rect x="248" y="76" width="14" height="174" fill="none" stroke="#ffffff" strokeWidth="2.5" />
+        <rect
+          x="130"
+          y="76"
+          width="14"
+          height="174"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="2.5"
+        />
+        <rect
+          x="248"
+          y="76"
+          width="14"
+          height="174"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="2.5"
+        />
 
         {/* rails */}
-        <path d="M144 108 H248 M144 176 H248 M144 228 H248" stroke="#ffffff" strokeWidth="3" />
+        <path
+          d="M144 108 H248 M144 176 H248 M144 228 H248"
+          stroke="#ffffff"
+          strokeWidth="3"
+        />
 
         {/* cap rail — animated trace along the top */}
         <path
@@ -91,30 +136,94 @@ function ProfileCard() {
         />
 
         {/* concrete footings below grade */}
-        <path d="M118 250 H400 M0 250 H106" stroke="rgba(255,255,255,0.25)" strokeWidth="2" strokeDasharray="5 5" />
-        <path d="M126 250 l4 26 h14 l4 -26 Z" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
-        <path d="M244 250 l4 26 h14 l4 -26 Z" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" />
+        <path
+          d="M118 250 H400 M0 250 H106"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="2"
+          strokeDasharray="5 5"
+        />
+        <path
+          d="M126 250 l4 26 h14 l4 -26 Z"
+          fill="none"
+          stroke="rgba(255,255,255,0.4)"
+          strokeWidth="2"
+        />
+        <path
+          d="M244 250 l4 26 h14 l4 -26 Z"
+          fill="none"
+          stroke="rgba(255,255,255,0.4)"
+          strokeWidth="2"
+        />
 
         {/* leader labels */}
-        <path d="M268 80 L318 74" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="322" y="77" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path
+          d="M268 80 L318 74"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1"
+        />
+        <text
+          x="322"
+          y="77"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="10"
+          fontFamily="var(--font-mono), monospace"
+        >
           CAP
         </text>
-        <path d="M248 176 L318 168" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="322" y="171" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path
+          d="M248 176 L318 168"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1"
+        />
+        <text
+          x="322"
+          y="171"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="10"
+          fontFamily="var(--font-mono), monospace"
+        >
           RAIL
         </text>
-        <path d="M197 242 L197 262 L232 262" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="236" y="265" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
-          RUN 186 LF
+        <path
+          d="M197 242 L197 262 L232 262"
+          fill="none"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1"
+        />
+        <text
+          x="236"
+          y="265"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="10"
+          fontFamily="var(--font-mono), monospace"
+        >
+          {`RUN ${DEMO_NET_LF} LF`}
         </text>
-        <path d="M148 276 L188 285" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
-        <text x="192" y="288" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace">
+        <path
+          d="M148 276 L188 285"
+          stroke="rgba(255,255,255,0.25)"
+          strokeWidth="1"
+        />
+        <text
+          x="192"
+          y="288"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="10"
+          fontFamily="var(--font-mono), monospace"
+        >
           CONCRETE FTG
         </text>
 
         {/* title block */}
-        <text x="130" y="298" fill="rgba(255,255,255,0.4)" fontSize="10" fontFamily="var(--font-mono), monospace" fontWeight="700" letterSpacing="2">
+        <text
+          x="130"
+          y="298"
+          fill="rgba(255,255,255,0.4)"
+          fontSize="10"
+          fontFamily="var(--font-mono), monospace"
+          fontWeight="700"
+          letterSpacing="2"
+        >
           CEDAR &middot; 4&times;4 POST &middot; STK GRADE
         </text>
       </svg>

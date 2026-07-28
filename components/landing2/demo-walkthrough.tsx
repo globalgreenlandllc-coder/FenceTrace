@@ -22,13 +22,17 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fenceType } from "@/lib/fence/catalog";
-import {
-  computeFenceTakeoff,
-  type FenceLayoutInput,
-} from "@/lib/fence/takeoff";
-import { fenceTiers, priceFence } from "@/lib/fence/pricing";
 import { DemoAerial } from "./demo-aerial";
+import {
+  DEMO_CHOSEN,
+  DEMO_CONCRETE_BAGS,
+  DEMO_PICKETS,
+  DEMO_RAILS,
+  DEMO_TAKEOFF,
+  DEMO_TIERS,
+  DEMO_TYPE,
+  money,
+} from "./demo-figures";
 import {
   CORNERS,
   DEMO_ADDRESS,
@@ -143,7 +147,6 @@ const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeInOut = (t: number) =>
   t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
-const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const ptsAttr = (pts: Pt[]) => pts.map((p) => `${p.x},${p.y}`).join(" ");
 
 /** Cumulative pixel length along the fence run. */
@@ -358,55 +361,24 @@ export function DemoWalkthrough() {
 
   /* ---------- the real engine output behind every number ---------- */
   const engine = useMemo(() => {
-    const layout: FenceLayoutInput = {
-      type: FENCE_TYPE_ID,
-      heightFt: FENCE_HEIGHT_FT,
-      totalLf: TOTAL_LF,
-      runLengths: [TOTAL_LF],
-      corners: CORNERS,
-      ends: ENDS,
-      gatesSingle: GATES.filter((g) => g.kind === "single").length,
-      gatesDouble: GATES.filter((g) => g.kind === "double").length,
-      terrain: "flat",
-      wastePct: 10,
-    };
-    const takeoff = computeFenceTakeoff(layout);
-    const tiers = fenceTiers(FENCE_TYPE_ID).map((t) => ({
-      ...t,
-      spec: fenceType(t.type),
-      price: priceFence(
-        { ...layout, type: t.type, stain: t.stain },
-        { markupPct: t.markupPct },
-      ),
-    }));
-    const bomBy = (k: string) => takeoff.bom.find((b) => b.key === k)?.qty ?? 0;
-    const type = fenceType(FENCE_TYPE_ID);
-    const pickets =
-      bomBy("pickets") ||
-      takeoff.bom.find((b) => /picket|board/i.test(b.label))?.qty ||
-      0;
-    const concrete =
-      takeoff.bom.find((b) => /concrete/i.test(b.label))?.qty ?? 0;
-    const rails = takeoff.bom.find((b) => /^rails/i.test(b.label))?.qty ?? 0;
     // The client-facing scope list — quantities straight off the BOM, so
     // the proposal can't promise something the takeoff didn't count.
     const scope = [
-      `${takeoff.netFenceLf} LF of ${FENCE_HEIGHT_FT}′ ${type.label.toLowerCase()} fence`,
-      `${takeoff.posts.total} posts (${takeoff.posts.corner} corner, ${takeoff.posts.gate} gate) set in ${concrete} bags of concrete`,
-      `${pickets.toLocaleString("en-US")} ${type.spec.infillMaterial} on ${rails} ${type.spec.railMaterial}`,
+      `${DEMO_TAKEOFF.netFenceLf} LF of ${FENCE_HEIGHT_FT}\u2032 ${DEMO_TYPE.label.toLowerCase()} fence`,
+      `${DEMO_TAKEOFF.posts.total} posts (${DEMO_TAKEOFF.posts.corner} corner, ${DEMO_TAKEOFF.posts.gate} gate) set in ${DEMO_CONCRETE_BAGS} bags of concrete`,
+      `${DEMO_PICKETS.toLocaleString("en-US")} ${DEMO_TYPE.spec.infillMaterial} on ${DEMO_RAILS} ${DEMO_TYPE.spec.railMaterial}`,
       GATES.map((g) => g.label).join(" + ") + ", framed and hung with hardware",
       `${CORNERS} real-turn corners and ${ENDS} tie-ins built square to the house`,
       "Post-hole digging, spoil haul-off, and full site cleanup",
     ];
     return {
-      layout,
-      takeoff,
-      tiers,
-      chosen: tiers.find((t) => t.recommended) ?? tiers[1],
-      type,
-      pickets,
-      concrete,
-      rails,
+      takeoff: DEMO_TAKEOFF,
+      tiers: DEMO_TIERS,
+      chosen: DEMO_CHOSEN,
+      type: DEMO_TYPE,
+      pickets: DEMO_PICKETS,
+      concrete: DEMO_CONCRETE_BAGS,
+      rails: DEMO_RAILS,
       scope,
     };
   }, []);

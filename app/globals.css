@@ -28,6 +28,15 @@ body {
   min-height: 100vh;
 }
 
+/* In-page anchors (the landing's "watch the demo" jump, the nav's section
+   links) glide instead of teleporting. Sections that sit under the sticky
+   nav carry their own scroll-mt. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 ::selection {
   background: rgba(30, 115, 64, 0.16);
   color: #114026;

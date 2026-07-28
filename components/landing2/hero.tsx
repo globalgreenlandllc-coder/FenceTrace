@@ -5,6 +5,15 @@ import { Container, Eyebrow, PillLink } from "./ui";
 import { TeaserScan } from "./teaser-scan";
 import { HouseScene, type SceneTab } from "./house-scene";
 import { Reveal } from "./reveal";
+import { CORNERS, DEMO_ADDRESS, FENCE_HEIGHT_FT } from "./demo-property";
+import {
+  DEMO_GATE_COUNT,
+  DEMO_NET_LF,
+  DEMO_PER_LF,
+  DEMO_TOTAL,
+  DEMO_TYPE,
+  money,
+} from "./demo-figures";
 
 const TABS: SceneTab[] = ["Detection", "Measurement", "Pricing", "Proposal"];
 
@@ -37,7 +46,14 @@ function PipelineTabs({
             }
           >
             {isActive && (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <svg
+                width="11"
+                height="11"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+              >
                 <circle cx="11" cy="11" r="7" />
                 <path d="m20 20-3.5-3.5" />
               </svg>
@@ -63,7 +79,9 @@ function Token({
     green: "bg-emerald-50 text-emerald-700",
   } as const;
   return (
-    <span className={`mx-0.5 rounded-md px-1.5 py-0.5 font-medium ${tones[tone]}`}>
+    <span
+      className={`mx-0.5 rounded-md px-1.5 py-0.5 font-medium ${tones[tone]}`}
+    >
       {children}
     </span>
   );
@@ -88,11 +106,16 @@ function ShowcaseCard() {
 
         <div className="rounded-2xl border border-white/70 bg-white/90 p-6 shadow-[0_24px_60px_-24px_rgba(12,27,36,0.35)] backdrop-blur md:p-7">
           <p className="text-[14px] leading-[1.9] text-zinc-700 md:text-[15px]">
-            A homeowner at <Token tone="blue">1425 Maple Ave</Token> requests a
+            A homeowner at <Token tone="blue">{DEMO_ADDRESS}</Token> requests a
             fence quote. FenceScan pulls the satellite view and property lines
             with <Token tone="green">94% confidence</Token>, measures the fence
-            line at <Token tone="orange">186 LF</Token>, and prices it as{" "}
-            <Token tone="blue">6&#8242; Cedar Privacy &middot; $28.50/LF</Token>.
+            line at <Token tone="orange">{DEMO_NET_LF} LF</Token>, and prices it
+            as{" "}
+            <Token tone="blue">
+              {FENCE_HEIGHT_FT}&#8242; {DEMO_TYPE.label} &middot;{" "}
+              {money(DEMO_PER_LF)}/LF
+            </Token>
+            .
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -102,16 +125,19 @@ function ShowcaseCard() {
                 <path d="M8 5v14l11-7z" />
               </svg>
             </span>
-            {["Line Trace", "3 Gates", "4 Corners", "$5,301 Estimate"].map(
-              (chip) => (
-                <span
-                  key={chip}
-                  className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wide text-zinc-500"
-                >
-                  {chip}
-                </span>
-              ),
-            )}
+            {[
+              "Line Trace",
+              `${DEMO_GATE_COUNT} Gates`,
+              `${CORNERS} Corners`,
+              `${money(DEMO_TOTAL)} Estimate`,
+            ].map((chip) => (
+              <span
+                key={chip}
+                className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wide text-zinc-500"
+              >
+                {chip}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -152,6 +178,37 @@ export function Hero() {
 
         <Reveal>
           <TeaserScan />
+        </Reveal>
+
+        {/* Without this the prebuilt walkthrough is two screens down with
+            nothing up here hinting it exists — visitors who don't have an
+            address to hand simply never find it. */}
+        <Reveal>
+          <div className="mt-4 flex justify-center">
+            <a
+              href="#takeoffs"
+              className="ring-focus group inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-[13px] font-semibold text-zinc-700 shadow-card transition hover:border-accent-300 hover:text-accent-700"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-pulse-soft rounded-full bg-accent-500" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent-600" />
+              </span>
+              No address handy? Watch a whole job run itself — {DEMO_ADDRESS}
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="transition-transform group-hover:translate-y-0.5 motion-reduce:transition-none"
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" />
+              </svg>
+            </a>
+          </div>
         </Reveal>
 
         <ShowcaseCard />

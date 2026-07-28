@@ -9,6 +9,8 @@ import {
   useSpring,
   useTransform,
 } from "framer-motion";
+import { DEMO_ADDRESS } from "./demo-property";
+import { DEMO_NET_LF, DEMO_PER_LF, DEMO_TIERS, money } from "./demo-figures";
 
 export type SceneTab = "Detection" | "Measurement" | "Pricing" | "Proposal";
 
@@ -65,7 +67,7 @@ function SvgChip({
  * line glows around it, and a fence builds along the front with a gate —
  * the FenceScan story. The active pipeline tab layers its overlay on
  * top: Detection traces the property boundary, Measurement pops dimension
- * labels and the "186 LF" tag, Pricing drops per-run price chips,
+ * labels and the footage tag, Pricing drops per-run price chips,
  * Proposal slides a mini proposal card over the scene. Pointer parallax
  * shifts the layers by a few px (spring-damped, off for reduced motion).
  */
@@ -135,19 +137,66 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
 
         <motion.g style={{ x: houseX, y: houseY }}>
           {/* house set back in the yard */}
-          <rect x="228" y="128" width="150" height="72" fill="#ffffff" fillOpacity="0.92" stroke={INK} strokeWidth="2.5" />
+          <rect
+            x="228"
+            y="128"
+            width="150"
+            height="72"
+            fill="#ffffff"
+            fillOpacity="0.92"
+            stroke={INK}
+            strokeWidth="2.5"
+          />
           <path d="M214 128 L253 96 L353 96 L392 128 Z" fill="#0A2B19" />
-          <rect x="288" y="158" width="26" height="42" fill="none" stroke={INK} strokeWidth="2" />
-          <rect x="246" y="146" width="28" height="22" fill="none" stroke={INK} strokeWidth="1.8" />
-          <rect x="330" y="146" width="28" height="22" fill="none" stroke={INK} strokeWidth="1.8" />
+          <rect
+            x="288"
+            y="158"
+            width="26"
+            height="42"
+            fill="none"
+            stroke={INK}
+            strokeWidth="2"
+          />
+          <rect
+            x="246"
+            y="146"
+            width="28"
+            height="22"
+            fill="none"
+            stroke={INK}
+            strokeWidth="1.8"
+          />
+          <rect
+            x="330"
+            y="146"
+            width="28"
+            height="22"
+            fill="none"
+            stroke={INK}
+            strokeWidth="1.8"
+          />
 
           {/* yard path to the gate */}
-          <path d="M300 200 L300 258" stroke={INK} strokeWidth="1.6" strokeDasharray="3 5" opacity="0.5" />
+          <path
+            d="M300 200 L300 258"
+            stroke={INK}
+            strokeWidth="1.6"
+            strokeDasharray="3 5"
+            opacity="0.5"
+          />
 
           {/* ---- the fence: front run with a gate ---- */}
           {/* rails */}
-          <path d={`M100 240 H${GATE_L} M${GATE_R} 240 H500`} stroke={INK} strokeWidth="2.5" />
-          <path d={`M100 268 H${GATE_L} M${GATE_R} 268 H500`} stroke={INK} strokeWidth="2.5" />
+          <path
+            d={`M100 240 H${GATE_L} M${GATE_R} 240 H500`}
+            stroke={INK}
+            strokeWidth="2.5"
+          />
+          <path
+            d={`M100 268 H${GATE_L} M${GATE_R} 268 H500`}
+            stroke={INK}
+            strokeWidth="2.5"
+          />
           {/* pickets */}
           {postXs.slice(0, -1).map((x, i) => {
             const next = postXs[i + 1];
@@ -155,23 +204,60 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
             const picks = [];
             for (let px = x + 10; px < next - 4; px += 11) {
               picks.push(
-                <line key={px} x1={px} y1={232} x2={px} y2={286} stroke={INK} strokeWidth="1.2" opacity="0.35" />,
+                <line
+                  key={px}
+                  x1={px}
+                  y1={232}
+                  x2={px}
+                  y2={286}
+                  stroke={INK}
+                  strokeWidth="1.2"
+                  opacity="0.35"
+                />,
               );
             }
             return <g key={`p${x}`}>{picks}</g>;
           })}
           {/* posts */}
           {postXs.map((x) => (
-            <rect key={x} x={x - 3.5} y={228} width={7} height={62} rx={2} fill="#ffffff" stroke={INK} strokeWidth="2.2" />
+            <rect
+              key={x}
+              x={x - 3.5}
+              y={228}
+              width={7}
+              height={62}
+              rx={2}
+              fill="#ffffff"
+              stroke={INK}
+              strokeWidth="2.2"
+            />
           ))}
           {/* gate: braced frame swinging slightly open */}
           <g>
-            <rect x={GATE_L + 6} y={234} width={GATE_R - GATE_L - 12} height={50} rx={3} fill="#ffffff" stroke={INK} strokeWidth="2.2" />
-            <path d={`M${GATE_L + 6} 282 L${GATE_R - 6} 236`} stroke={INK} strokeWidth="1.6" />
+            <rect
+              x={GATE_L + 6}
+              y={234}
+              width={GATE_R - GATE_L - 12}
+              height={50}
+              rx={3}
+              fill="#ffffff"
+              stroke={INK}
+              strokeWidth="2.2"
+            />
+            <path
+              d={`M${GATE_L + 6} 282 L${GATE_R - 6} 236`}
+              stroke={INK}
+              strokeWidth="1.6"
+            />
             <circle cx={GATE_R - 9} cy={258} r={2.2} fill={ACCENT} />
           </g>
           {/* ground */}
-          <path d="M84 292 H516" stroke={INK} strokeWidth="2.5" strokeLinecap="round" />
+          <path
+            d="M84 292 H516"
+            stroke={INK}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
 
           {/* the AI trace running the fence line (always on — the product motif) */}
           <path
@@ -215,7 +301,13 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                   style={{ animationDelay: `${0.1 + i * 0.08}s` }}
                 />
               ))}
-              <SvgChip x={218} y={36} w={164} label="Property line found" delay={0.25} />
+              <SvgChip
+                x={218}
+                y={36}
+                w={164}
+                label="Property line found"
+                delay={0.25}
+              />
             </g>
           )}
 
@@ -230,23 +322,64 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                 strokeDasharray="900"
                 className="anim-trace"
               />
-              <path d="M100 206v16M500 206v16" stroke={ACCENT} strokeWidth="2.5" />
+              <path
+                d="M100 206v16M500 206v16"
+                stroke={ACCENT}
+                strokeWidth="2.5"
+              />
               {/* width dimension under the yard */}
               <path d="M120 314 H480" stroke={ACCENT} strokeWidth="1.5" />
-              <path d="M120 308v12M480 308v12" stroke={ACCENT} strokeWidth="1.5" />
+              <path
+                d="M120 308v12M480 308v12"
+                stroke={ACCENT}
+                strokeWidth="1.5"
+              />
               <g className="ls-pop" style={{ animationDelay: "0.2s" }}>
-                <rect x="266" y="304" width="68" height="20" rx="10" fill="#ffffff" stroke={ACCENT} strokeWidth="1.5" />
-                <text x="300" y="318" textAnchor="middle" fontSize="11" fontWeight="600" fill={ACCENT} fontFamily={SANS}>
+                <rect
+                  x="266"
+                  y="304"
+                  width="68"
+                  height="20"
+                  rx="10"
+                  fill="#ffffff"
+                  stroke={ACCENT}
+                  strokeWidth="1.5"
+                />
+                <text
+                  x="300"
+                  y="318"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="600"
+                  fill={ACCENT}
+                  fontFamily={SANS}
+                >
                   42 FT
                 </text>
               </g>
               {/* floating LF tag */}
               <g className="anim-float">
                 <g className="ls-pop" style={{ animationDelay: "0.1s" }}>
-                  <rect x="242" y="34" width="116" height="30" rx="15" fill="#ffffff" stroke={INK} strokeWidth="2" />
+                  <rect
+                    x="242"
+                    y="34"
+                    width="116"
+                    height="30"
+                    rx="15"
+                    fill="#ffffff"
+                    stroke={INK}
+                    strokeWidth="2"
+                  />
                   <circle cx="262" cy="49" r="4" fill={ACCENT} />
-                  <text x="274" y="54" fontSize="14" fontWeight="700" fill={INK} fontFamily={SANS}>
-                    186 LF
+                  <text
+                    x="274"
+                    y="54"
+                    fontSize="14"
+                    fontWeight="700"
+                    fill={INK}
+                    fontFamily={SANS}
+                  >
+                    {DEMO_NET_LF} LF
                   </text>
                 </g>
               </g>
@@ -262,9 +395,28 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                 strokeWidth="2.5"
                 strokeDasharray="6 8"
               />
-              <SvgChip x={128} y={34} w={122} label="$28.50 / LF" delay={0.05} />
-              <SvgChip x={268} y={34} w={150} label="186 LF × $28.50" delay={0.18} />
-              <SvgChip x={392} y={118} w={104} label="$5,301" delay={0.32} filled />
+              <SvgChip
+                x={128}
+                y={34}
+                w={122}
+                label={`${money(DEMO_PER_LF)} / LF`}
+                delay={0.05}
+              />
+              <SvgChip
+                x={268}
+                y={34}
+                w={158}
+                label={`${DEMO_NET_LF} LF × ${money(DEMO_PER_LF)}`}
+                delay={0.18}
+              />
+              <SvgChip
+                x={392}
+                y={118}
+                w={104}
+                label={money(DEMO_TIERS[1].price.total)}
+                delay={0.32}
+                filled
+              />
             </g>
           )}
         </motion.g>
@@ -286,21 +438,17 @@ export function HouseScene({ tab = "Detection" }: { tab?: SceneTab }) {
                 Proposal ready
               </p>
               <p className="mt-1 text-[15px] font-semibold tracking-tight text-zinc-900">
-                1425 Maple Ave
+                {DEMO_ADDRESS}
               </p>
               <div className="mt-3 space-y-1.5 border-t border-zinc-200/70 pt-3">
-                {[
-                  ["Good", "$5,301"],
-                  ["Better", "$6,480"],
-                  ["Best", "$7,850"],
-                ].map(([tier, price]) => (
+                {DEMO_TIERS.map(({ name: tier, price: p }) => (
                   <div
                     key={tier}
                     className="flex items-center justify-between text-[13px]"
                   >
                     <span className="text-zinc-500">{tier}</span>
                     <span className="font-semibold tabular-nums text-zinc-900">
-                      {price}
+                      {money(p.total)}
                     </span>
                   </div>
                 ))}
@@ -360,10 +508,26 @@ export function PlanTrace() {
         [330, 190],
         [70, 190],
       ].map(([x, y]) => (
-        <rect key={`${x}-${y}`} x={x - 4} y={y - 4} width="8" height="8" fill="#ffffff" stroke={INK} strokeWidth="2" />
+        <rect
+          key={`${x}-${y}`}
+          x={x - 4}
+          y={y - 4}
+          width="8"
+          height="8"
+          fill="#ffffff"
+          stroke={INK}
+          strokeWidth="2"
+        />
       ))}
       {/* gate marker on the front run */}
-      <circle cx="160" cy="190" r="4.5" fill="#f472b6" stroke="#ffffff" strokeWidth="1.5" />
+      <circle
+        cx="160"
+        cy="190"
+        r="4.5"
+        fill="#f472b6"
+        stroke="#ffffff"
+        strokeWidth="1.5"
+      />
     </svg>
   );
 }
