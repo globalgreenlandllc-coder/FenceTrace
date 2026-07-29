@@ -1,7 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DoorOpen, Home, Layers, MousePointer2, PenLine, Trash2, Wand2 } from "lucide-react";
+import {
+  Check,
+  DoorOpen,
+  Home,
+  Layers,
+  MousePointer2,
+  PenLine,
+  Trash2,
+  Undo2,
+  Wand2,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FENCE_TYPES, fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import {
@@ -123,10 +134,18 @@ function pointInPoly(p: Pt, ring: Pt[]): boolean {
   return inside;
 }
 
-const SNAP_PX = 12;
-/** Snap radius in SCREEN pixels — divided by the zoom so snapping feels
- *  identical at 100% and 300%. */
-const SNAP_SCREEN_PX = 20;
+/** Snap radius in SCREEN pixels — converted to canvas units against the
+ *  live rendered size, so snapping feels identical on a 1400px desktop
+ *  canvas, a 375px phone canvas, and at any zoom. */
+const SNAP_SCREEN_PX = 24;
+/** How close a finger/cursor has to land on a run to drop a gate or pin
+ *  a section end — also SCREEN px, so a fingertip is enough on a phone.
+ *  Sized to match the forgiveness the old fixed 34-canvas-px radius gave
+ *  a desktop-width canvas. */
+const RUN_HIT_SCREEN_PX = 38;
+/** Movement past this many screen px turns a press into a pan (and
+ *  swallows the click that would otherwise place a post). */
+const PAN_SLOP_PX = 6;
 
 let idSeq = 0;
 const nextId = (p: string) => `${p}-${Date.now().toString(36)}-${idSeq++}`;
@@ -226,6 +245,104 @@ export function FenceCanvas({
   const camRef = useRef(cam);
   camRef.current = cam;
   const panRef = useRef<{ sx: number; sy: number; cx: number; cy: number } | null>(null);
+  // Live pointers on the canvas — one is a pan, two are a pinch.
+  const ptrsRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{
+    d: number;
+    mx: number;
+    my: number;
+    cam: { cx: number; cy: number; k: number };
+  } | null>(null);
+
+  /* ---- rendered size: canvas units per CSS pixel ----
+   * The 900×580 viewBox is drawn at whatever width the layout gives it —
+   * ~900 on a desktop rail, ~360 on a phone. Everything sized in world
+   * units (dot radii, label chips, text) has to be multiplied by this or
+   * it renders 2.5× too small to read on a phone. Strokes already opt
+   * out via vector-effect. */
+  const [pxRatio, setPxRatio] = useState(1);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const measure = () => {
+      const w = svg.getBoundingClientRect().width;
+      if (w > 0) setPxRatio(CANVAS_W / w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(svg);
+    return () => ro.disconnect();
+  }, []);
+  const pxRatioRef = useRef(pxRatio);
+  pxRatioRef.current = pxRatio;
+
+  // A press that starts on the canvas and releases OFF it never delivers
+  // pointerup here (capture is only taken once a drag is real), which
+  // would leave a phantom pointer behind — and the next press would then
+  // read as a two-finger pinch. Clean up at the window instead.
+  useEffect(() => {
+    const forget = (e: PointerEvent) => {
+      ptrsRef.current.delete(e.pointerId);
+      if (ptrsRef.current.size < 2) pinchRef.current = null;
+      if (ptrsRef.current.size === 0) panRef.current = null;
+    };
+    window.addEventListener("pointerup", forget);
+    window.addEventListener("pointercancel", forget);
+    return () => {
+      window.removeEventListener("pointerup", forget);
+      window.removeEventListener("pointercancel", forget);
+    };
+  }, []);
+
+  // Coarse pointer → the instructions say "tap" and talk about pinching
+  // instead of naming keyboard shortcuts the device doesn't have.
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setTouch(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const verb = touch ? "tap" : "click";
+
+  /** Canvas units spanned by one CSS pixel right now (zoom included). */
+  const perScreenPx = useCallback(
+    () => pxRatioRef.current / camRef.current.k,
+    [],
+  );
+
+  // On a phone the aerial lands about 340×220 CSS px, and most of that is
+  // the neighbours' roofs. Open zoomed to the county parcel instead, so
+  // the yard being fenced fills the working area from the first tap.
+  // Desktop (where the tile is already ~900px wide) opens unchanged.
+  const framedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (pxRatio < 1.6 || scan.parcelRings.length === 0) return;
+    const key = scan.address;
+    if (framedFor.current === key) return;
+    framedFor.current = key;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const ring of scan.parcelRings) {
+      for (const p of ring) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+    }
+    const w = maxX - minX;
+    const h = maxY - minY;
+    if (!(w > 1 && h > 1)) return;
+    // 12% breathing room — the fence usually sits just inside the line,
+    // and the corner snap targets have to stay reachable.
+    const k = Math.min(3, Math.max(1, Math.min(CANVAS_W / (w * 1.24), CANVAS_H / (h * 1.24))));
+    if (k <= 1.05) return;
+    setCam(clampCam({ k, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 }));
+  }, [pxRatio, scan.parcelRings, scan.address]);
 
   const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
     const svg = svgRef.current;
@@ -302,9 +419,10 @@ export function FenceCanvas({
 
   const snap = useCallback(
     (p: Pt): Pt => {
-      // Tolerance is a constant ~20 SCREEN px: generous at 100%, still
-      // precise when zoomed in (the canvas-px radius shrinks with zoom).
-      const tol = Math.max(8, SNAP_SCREEN_PX / camRef.current.k);
+      // Tolerance is a constant ~22 SCREEN px: generous at 100%, still
+      // precise when zoomed in (the canvas-px radius shrinks with zoom),
+      // and finger-sized on a phone (where one CSS px ≈ 2.4 canvas px).
+      const tol = Math.max(8, SNAP_SCREEN_PX * perScreenPx());
       // Corners win (parcel corners, run endpoints, house corners)…
       let best: Pt | null = null;
       let bestD = tol;
@@ -346,7 +464,7 @@ export function FenceCanvas({
       }
       return bestEdge ?? p;
     },
-    [snapTargets, layout.runs, buildings],
+    [snapTargets, layout.runs, buildings, perScreenPx],
   );
 
   /* ---- draw tool ---- */
@@ -438,7 +556,7 @@ export function FenceCanvas({
    *  the section tool needs both ends pinned to the same line. */
   function nearestOnRunsInfo(
     p: Pt,
-    tolerance = 34,
+    tolerance = Math.max(20, RUN_HIT_SCREEN_PX * perScreenPx()),
   ): { runId: string; q: Pt; arc: number } | null {
     let best: { runId: string; q: Pt; arc: number } | null = null;
     let bestD = tolerance;
@@ -464,7 +582,10 @@ export function FenceCanvas({
     return best;
   }
 
-  function nearestOnRuns(p: Pt, tolerance = 34): Pt | null {
+  function nearestOnRuns(
+    p: Pt,
+    tolerance = Math.max(20, RUN_HIT_SCREEN_PX * perScreenPx()),
+  ): Pt | null {
     let best: Pt | null = null;
     let bestD = tolerance;
     for (const run of layout.runs) {
@@ -486,13 +607,39 @@ export function FenceCanvas({
     return best;
   }
 
+  /** Aiming feedback for the active tool at a screen position — the
+   *  snap ring while drawing, the ghost gate, the section preview. Fed
+   *  by mouse hover AND by a finger resting on the canvas before it
+   *  lifts, so touch isn't drawing blind. */
+  function updateGhosts(e: { clientX: number; clientY: number }) {
+    if (tool === "draw") {
+      const raw = toCanvas(e);
+      const s = snap(raw);
+      setHover(s);
+      setSnapLocked(Math.hypot(s.x - raw.x, s.y - raw.y) > 0.75);
+    } else if (tool === "house") {
+      setHover(toCanvas(e));
+    } else if (tool === "gate") {
+      setGateGhost(nearestOnRuns(toCanvas(e)));
+    } else if (tool === "section") {
+      setSecGhost(nearestOnRunsInfo(toCanvas(e)));
+    }
+  }
+
+  /** True when the gesture that just ended was a pan/pinch, not a tap —
+   *  and clears the flag. Every click handler on the canvas (and on the
+   *  runs, gates and sections drawn over it) has to consult this, or
+   *  dragging the map from on top of a gate deletes the gate. */
+  function consumePan(): boolean {
+    if (!didPanRef.current) return false;
+    didPanRef.current = false;
+    return true;
+  }
+
   function onCanvasClick(e: React.MouseEvent) {
     // A drag-pan releases as a click — swallow it so panning never
     // deselects or places anything.
-    if (didPanRef.current) {
-      didPanRef.current = false;
-      return;
-    }
+    if (consumePan()) return;
     const raw = toCanvas(e);
     if (tool === "draw") {
       if (e.detail > 1) return; // second click of a dbl-click — finish handles it
@@ -502,10 +649,12 @@ export function FenceCanvas({
     }
     if (tool === "house") {
       if (e.detail > 1) return;
-      // clicking back on the first corner closes the outline
+      // tapping back on the first corner closes the outline (finger-sized
+      // target — 12 canvas px is 5 CSS px on a phone)
       if (
         houseDraft.length >= 3 &&
-        Math.hypot(raw.x - houseDraft[0].x, raw.y - houseDraft[0].y) < 12
+        Math.hypot(raw.x - houseDraft[0].x, raw.y - houseDraft[0].y) <
+          Math.max(12, 22 * perScreenPx())
       ) {
         finishHouse();
         return;
@@ -616,7 +765,10 @@ export function FenceCanvas({
 
   // The contour layer is static per (topo, zoom) — memoized so the
   // per-mousemove hover re-renders don't rebuild 100+ SVG nodes.
-  const uiScale = 1 / cam.k;
+  // Clamped at 1 on the low side: a canvas WIDER than 900 px would
+  // otherwise shrink every label below what desktop renders today. This
+  // only ever scales annotations UP, when the sheet is being squeezed.
+  const uiScale = Math.min(3.2, Math.max(1, pxRatio)) / cam.k;
   const topoLayer = useMemo(() => {
     const ui = uiScale;
     return (
@@ -696,52 +848,61 @@ export function FenceCanvas({
     );
   }, [topo, uiScale]);
 
-  // Counter-scale for zoom: strokes use vector-effect, but dot radii,
-  // label chips and text live in world units — multiply by `ui` so they
-  // stay the same SCREEN size at any zoom instead of blowing up.
-  const ui = 1 / cam.k;
+  // Counter-scale for zoom AND for the rendered canvas size: strokes use
+  // vector-effect, but dot radii, label chips and text live in world
+  // units — multiply by `ui` so they stay the same CSS size at any zoom
+  // and on any screen. Without the pxRatio term a "40 ft" chip is 4 CSS
+  // px tall on a phone; capped so a very narrow canvas can't blow the
+  // labels up past the fence they annotate.
+  const ui = uiScale;
 
   return (
     <div className={cn("space-y-2", className)}>
-      {/* Toolbar */}
+      {/* Toolbar. The tool picker scrolls sideways on a phone rather than
+          wrapping to three rows and eating the aerial; every control is
+          a 40px-tall touch target down there. */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
-          {(
-            [
-              { id: "select", label: "Select", Icon: MousePointer2 },
-              { id: "draw", label: "Draw fence", Icon: PenLine },
-              { id: "gate", label: "Add gate", Icon: DoorOpen },
-              { id: "section" as Tool, label: "Section", Icon: Layers },
-              ...(onBuildingsChange
-                ? [{ id: "house" as Tool, label: "House", Icon: Home }]
-                : []),
-            ] as { id: Tool; label: string; Icon: typeof PenLine }[]
-          ).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTool(t.id)}
-              className={cn(
-                "transition-smooth ring-focus inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold",
-                tool === t.id
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-800",
-              )}
-            >
-              <t.Icon className="h-3.5 w-3.5" />
-              {t.label}
-            </button>
-          ))}
+        <div className="-mx-1 max-w-full overflow-x-auto px-1 pb-0.5 sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="inline-flex rounded-full bg-zinc-100 p-0.5">
+            {(
+              [
+                { id: "select", label: "Select", Icon: MousePointer2 },
+                { id: "draw", label: "Draw fence", Icon: PenLine },
+                { id: "gate", label: "Add gate", Icon: DoorOpen },
+                { id: "section" as Tool, label: "Section", Icon: Layers },
+                ...(onBuildingsChange
+                  ? [{ id: "house" as Tool, label: "House", Icon: Home }]
+                  : []),
+              ] as { id: Tool; label: string; Icon: typeof PenLine }[]
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTool(t.id)}
+                aria-pressed={tool === t.id}
+                className={cn(
+                  "transition-smooth ring-focus inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-xs font-semibold sm:h-7 sm:px-3",
+                  tool === t.id
+                    ? "bg-white text-zinc-900 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-800",
+                )}
+              >
+                <t.Icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
         {tool === "section" && (
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-3 pr-1">
-            <span className="text-[11px] font-semibold text-zinc-500">
+          <div className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-zinc-100 py-0.5 pl-3 pr-1">
+            <span className="hidden shrink-0 text-[11px] font-semibold text-zinc-500 sm:inline">
               Build this stretch as
             </span>
             <select
               value={secType}
               onChange={(e) => setSecType(e.target.value as FenceTypeId)}
-              className="h-6 rounded-full border-0 bg-white px-2 text-[11px] font-semibold text-zinc-800 shadow-sm outline-none"
+              aria-label="Fence type for this section"
+              className="h-8 min-w-0 rounded-full border-0 bg-white px-2 text-[11px] font-semibold text-zinc-800 shadow-sm outline-none sm:h-6"
             >
               {FENCE_TYPES.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -758,8 +919,9 @@ export function FenceCanvas({
                 key={k}
                 type="button"
                 onClick={() => setGateKind(k)}
+                aria-pressed={gateKind === k}
                 className={cn(
-                  "transition-smooth ring-focus rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                  "transition-smooth ring-focus inline-flex h-8 items-center whitespace-nowrap rounded-full px-3 text-[11px] font-semibold sm:h-6 sm:px-2.5",
                   gateKind === k
                     ? "bg-white text-zinc-900 shadow-sm"
                     : "text-zinc-500 hover:text-zinc-800",
@@ -772,61 +934,25 @@ export function FenceCanvas({
               <span className="flex items-center gap-1 pr-1.5 text-[11px] font-semibold text-zinc-600">
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={3}
                   max={24}
                   step={1}
                   value={customGateFt}
+                  aria-label="Custom gate width in feet"
                   onChange={(e) => setCustomGateFt(Number(e.target.value) || 6)}
-                  className="h-6 w-12 rounded-md border border-zinc-200 bg-white px-1.5 text-center text-[11px] tabular-nums outline-none focus:border-accent-400"
+                  className="h-8 w-14 rounded-md border border-zinc-200 bg-white px-1.5 text-center text-[11px] tabular-nums outline-none focus:border-accent-400 sm:h-6 sm:w-12"
                 />
                 ft
               </span>
             )}
           </div>
         )}
-        {draft.length > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={finishDraft}
-              disabled={draft.length < 2}
-              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-accent-700 disabled:opacity-50"
-            >
-              ✓ Finish run
-            </button>
-            <button
-              type="button"
-              onClick={() => setDraft([])}
-              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
-            >
-              ✕ Cancel
-            </button>
-          </>
-        )}
-        {houseDraft.length > 0 && (
-          <>
-            <button
-              type="button"
-              onClick={finishHouse}
-              disabled={houseDraft.length < 3}
-              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-accent-700 disabled:opacity-50"
-            >
-              ✓ Close outline
-            </button>
-            <button
-              type="button"
-              onClick={() => setHouseDraft([])}
-              className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:bg-zinc-50"
-            >
-              ✕ Cancel
-            </button>
-          </>
-        )}
         {scan.suggestedRuns.length > 0 && draft.length === 0 && (
           <button
             type="button"
             onClick={usePropertyLine}
-            className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-accent-300 bg-accent-50 px-3 py-1.5 text-xs font-semibold text-accent-800 hover:bg-accent-100"
+            className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-accent-300 bg-accent-50 px-3.5 text-xs font-semibold text-accent-800 hover:bg-accent-100 sm:h-7 sm:px-3"
           >
             <Wand2 className="h-3.5 w-3.5" />
             Use property line
@@ -836,7 +962,7 @@ export function FenceCanvas({
           <button
             type="button"
             onClick={() => removeRun(selectedRun)}
-            className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+            className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-rose-200 bg-rose-50 px-3.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 sm:h-7 sm:px-3"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete run
@@ -849,13 +975,13 @@ export function FenceCanvas({
               onBuildingsChange(buildings.filter((_, i) => i !== selectedHouse));
               setSelectedHouse(null);
             }}
-            className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+            className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-rose-200 bg-rose-50 px-3.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 sm:h-7 sm:px-3"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete house
           </button>
         )}
-        <span className="ml-auto rounded-full bg-accent-600 px-3 py-1 text-xs font-bold text-white">
+        <span className="ml-auto shrink-0 rounded-full bg-accent-600 px-3 py-1 text-xs font-bold text-white">
           {totalLf} LF · {layout.gates.length}{" "}
           {layout.gates.length === 1 ? "gate" : "gates"}
         </span>
@@ -866,8 +992,12 @@ export function FenceCanvas({
         <svg
           ref={svgRef}
           viewBox={`${cam.cx - CANVAS_W / 2 / cam.k} ${cam.cy - CANVAS_H / 2 / cam.k} ${CANVAS_W / cam.k} ${CANVAS_H / cam.k}`}
+          // Touch owns this surface: without touch-action:none a drag
+          // scrolls the page instead of panning the yard, and a pinch
+          // zooms the whole document instead of the aerial.
+          style={{ touchAction: "none" }}
           className={cn(
-            "block h-auto w-full select-none",
+            "block h-auto w-full touch-none select-none",
             tool === "draw" || tool === "gate" || tool === "house" || tool === "section"
               ? "cursor-crosshair"
               : "cursor-grab active:cursor-grabbing",
@@ -880,20 +1010,86 @@ export function FenceCanvas({
             else zoomAt(e.clientX, e.clientY, 1.6);
           }}
           onPointerDown={(e) => {
-            // middle-button drag pans in any tool; in Select, plain
-            // left-drag on the photo pans too (drag-the-map feel).
-            if (e.button === 1 || (e.button === 0 && tool === "select")) {
-              if (e.button === 1) e.preventDefault();
-              e.currentTarget.setPointerCapture(e.pointerId);
-              panRef.current = { sx: e.clientX, sy: e.clientY, cx: cam.cx, cy: cam.cy };
-              didPanRef.current = false;
+            ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            // Two fingers down = pinch. Park the pan and remember the
+            // starting spread/midpoint so zoom tracks the gesture.
+            if (ptrsRef.current.size === 2) {
+              const [a, b] = [...ptrsRef.current.values()];
+              pinchRef.current = {
+                d: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+                mx: (a.x + b.x) / 2,
+                my: (a.y + b.y) / 2,
+                cam: camRef.current,
+              };
+              panRef.current = null;
+              didPanRef.current = true; // never let a pinch place a post
+              return;
             }
+            if (ptrsRef.current.size > 2) return;
+            // Drag-to-pan works in EVERY tool — on a phone there is no
+            // middle button, and you have to be able to move the yard
+            // around while drawing. A press that never travels past the
+            // slop threshold still lands as a tap. Capture is deliberately
+            // NOT taken here: while a pointer is captured the follow-up
+            // click retargets to the <svg>, and the runs/gates/sections
+            // would stop receiving their own clicks. It's taken below,
+            // the moment the press turns into a real drag.
+            if (e.button === 1) e.preventDefault();
+            panRef.current = { sx: e.clientX, sy: e.clientY, cx: cam.cx, cy: cam.cy };
+            didPanRef.current = false;
           }}
           onPointerMove={(e) => {
+            if (ptrsRef.current.has(e.pointerId)) {
+              ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            }
+            const pinch = pinchRef.current;
+            if (pinch && ptrsRef.current.size >= 2) {
+              const [a, b] = [...ptrsRef.current.values()];
+              const r = svgRef.current!.getBoundingClientRect();
+              const d = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+              const mx = (a.x + b.x) / 2;
+              const my = (a.y + b.y) / 2;
+              const c0 = pinch.cam;
+              const k = Math.min(5, Math.max(1, c0.k * (d / pinch.d)));
+              // World point that sat under the pinch's starting midpoint…
+              const vw0 = CANVAS_W / c0.k;
+              const vh0 = CANVAS_H / c0.k;
+              const wx = c0.cx - vw0 / 2 + ((pinch.mx - r.left) / r.width) * vw0;
+              const wy = c0.cy - vh0 / 2 + ((pinch.my - r.top) / r.height) * vh0;
+              // …stays under the fingers as they spread and slide.
+              const vw = CANVAS_W / k;
+              const vh = CANVAS_H / k;
+              setCam(
+                clampCam({
+                  k,
+                  cx: wx - ((mx - r.left) / r.width - 0.5) * vw,
+                  cy: wy - ((my - r.top) / r.height - 0.5) * vh,
+                }),
+              );
+              return;
+            }
             const pan = panRef.current;
-            if (!pan) return;
+            if (!pan) {
+              updateGhosts(e);
+              return;
+            }
             const moved = Math.hypot(e.clientX - pan.sx, e.clientY - pan.sy);
-            if (!didPanRef.current && moved < 5) return; // click, not a drag
+            if (!didPanRef.current && moved < PAN_SLOP_PX) {
+              // Still a tap — show what it would do (snap ring, ghost
+              // gate, section preview) so touch users get the same
+              // aiming feedback a mouse gets from hovering.
+              updateGhosts(e);
+              return;
+            }
+            if (!didPanRef.current) {
+              // Real drag now — take the pointer so it keeps panning even
+              // if the finger leaves the canvas.
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+                /* pointer already gone — panning still works unaptured */
+              }
+            }
             didPanRef.current = true;
             const r = svgRef.current!.getBoundingClientRect();
             const s = CANVAS_W / camRef.current.k / r.width;
@@ -905,22 +1101,22 @@ export function FenceCanvas({
               }),
             );
           }}
-          onPointerUp={() => {
-            panRef.current = null;
+          onPointerUp={(e) => {
+            ptrsRef.current.delete(e.pointerId);
+            if (ptrsRef.current.size < 2) pinchRef.current = null;
+            if (ptrsRef.current.size === 0) panRef.current = null;
           }}
-          onMouseMove={(e) => {
-            if (tool === "draw") {
-              const raw = toCanvas(e);
-              const s = snap(raw);
-              setHover(s);
-              setSnapLocked(Math.hypot(s.x - raw.x, s.y - raw.y) > 0.75);
-            } else if (tool === "house") setHover(toCanvas(e));
-            else if (tool === "gate") setGateGhost(nearestOnRuns(toCanvas(e)));
-            else if (tool === "section") setSecGhost(nearestOnRunsInfo(toCanvas(e)));
+          onPointerCancel={(e) => {
+            ptrsRef.current.delete(e.pointerId);
+            if (ptrsRef.current.size < 2) pinchRef.current = null;
+            if (ptrsRef.current.size === 0) panRef.current = null;
           }}
-          onMouseLeave={() => {
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "mouse") return;
             setHover(null);
             setGateGhost(null);
+            setSecGhost(null);
+            setSnapLocked(false);
           }}
           onContextMenu={(e) => {
             // Right-click = finish (or cancel an empty draft) — the "let
@@ -1028,6 +1224,7 @@ export function FenceCanvas({
                     // things — the run must not steal those clicks.
                     if (tool !== "gate" && tool !== "section") {
                       e.stopPropagation();
+                      if (consumePan()) return;
                       setSelectedRun(run.id);
                       setTool("select");
                     }
@@ -1066,6 +1263,7 @@ export function FenceCanvas({
                 style={{ cursor: "pointer" }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (consumePan()) return;
                   onChange({
                     ...layout,
                     sections: (layout.sections ?? []).filter((x) => x.id !== s.id),
@@ -1213,6 +1411,7 @@ export function FenceCanvas({
                 style={{ cursor: "pointer" }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (consumePan()) return;
                   onChange({
                     ...layout,
                     gates: layout.gates.filter((x) => x.id !== g.id),
@@ -1235,8 +1434,45 @@ export function FenceCanvas({
           })}
         </svg>
 
+        {/* Draft controls, floating over the aerial where the hand
+            already is. On a phone the toolbar is off at the top of the
+            screen and there is no Backspace — Undo has to live here. */}
+        {(draft.length > 0 || houseDraft.length > 0) && (
+          <div className="anim-enter-fade absolute bottom-3 left-3 flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                draft.length > 0
+                  ? setDraft((d) => d.slice(0, -1))
+                  : setHouseDraft((d) => d.slice(0, -1))
+              }
+              aria-label="Undo last post"
+              className="transition-smooth ring-focus press-scale inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white sm:h-8 sm:w-8"
+            >
+              <Undo2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={draft.length > 0 ? finishDraft : finishHouse}
+              disabled={draft.length > 0 ? draft.length < 2 : houseDraft.length < 3}
+              className="transition-smooth ring-focus press-scale inline-flex h-10 items-center gap-1.5 rounded-full bg-accent-600 px-4 text-xs font-bold text-white shadow-elevated hover:bg-accent-700 disabled:opacity-50 sm:h-8 sm:px-3.5"
+            >
+              <Check className="h-4 w-4" />
+              {draft.length > 0 ? "Finish run" : "Close outline"}
+            </button>
+            <button
+              type="button"
+              onClick={() => (draft.length > 0 ? setDraft([]) : setHouseDraft([]))}
+              aria-label="Cancel"
+              className="transition-smooth ring-focus press-scale inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-zinc-600 shadow-sm ring-1 ring-zinc-200 hover:bg-white sm:h-8 sm:w-8"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* zoom controls — pinch / ctrl+scroll zooms, scroll pans,
-            middle-drag pans, double-click (select tool) zooms in */}
+            drag pans in any tool, double-click (select tool) zooms in */}
         <div className="absolute bottom-3 right-3 flex items-center gap-1">
           <button
             type="button"
@@ -1245,7 +1481,7 @@ export function FenceCanvas({
               const r = svgRef.current?.getBoundingClientRect();
               if (r) zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1 / 1.45);
             }}
-            className="transition-smooth ring-focus h-7 w-7 rounded-full bg-white/90 text-sm font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+            className="transition-smooth ring-focus press-scale h-9 w-9 rounded-full bg-white/90 text-base font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white sm:h-7 sm:w-7 sm:text-sm"
           >
             −
           </button>
@@ -1253,7 +1489,7 @@ export function FenceCanvas({
             type="button"
             title="Reset view"
             onClick={() => setCam({ cx: CANVAS_W / 2, cy: CANVAS_H / 2, k: 1 })}
-            className="transition-smooth ring-focus h-7 rounded-full bg-white/90 px-2 text-[11px] font-bold tabular-nums text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+            className="transition-smooth ring-focus press-scale h-9 rounded-full bg-white/90 px-2.5 text-[11px] font-bold tabular-nums text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white sm:h-7 sm:px-2"
           >
             {cam.k === 1 ? "100%" : `${Math.round(cam.k * 100)}% ⤺`}
           </button>
@@ -1264,7 +1500,7 @@ export function FenceCanvas({
               const r = svgRef.current?.getBoundingClientRect();
               if (r) zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.45);
             }}
-            className="transition-smooth ring-focus h-7 w-7 rounded-full bg-white/90 text-sm font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+            className="transition-smooth ring-focus press-scale h-9 w-9 rounded-full bg-white/90 text-base font-bold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white sm:h-7 sm:w-7 sm:text-sm"
           >
             +
           </button>
@@ -1276,22 +1512,28 @@ export function FenceCanvas({
           {notice}
         </p>
       )}
-      <p className="text-xs text-zinc-400">
+      <p className="text-xs leading-relaxed text-zinc-400">
         {tool === "draw"
           ? draft.length > 0
-            ? "Click to keep adding posts — ✓ Finish (or double-click / right-click / Enter) ends the run · Backspace steps back · Esc cancels."
-            : "Click to start a fence line. Points snap to the property corners and to your other runs."
+            ? touch
+              ? "Keep tapping posts — ✓ Finish ends the run, ↩ steps back one post. Drag to move the photo, pinch to zoom."
+              : "Click to keep adding posts — ✓ Finish (or double-click / right-click / Enter) ends the run · Backspace steps back · Esc cancels."
+            : touch
+              ? "Tap to start a fence line — points snap to the property corners and to your other runs. Drag to move the photo, pinch to zoom."
+              : "Click to start a fence line. Points snap to the property corners and to your other runs. Drag to pan, pinch or ctrl+scroll to zoom."
           : tool === "section"
             ? sectionStart
-              ? "Now click the OTHER end of the stretch on the same line — it becomes the picked type. Esc cancels."
-              : "Pick the type above, then click where the different fence STARTS on a line. Click a marked section to remove it."
+              ? `Now ${verb} the OTHER end of the stretch on the same line — it becomes the picked type.`
+              : `Pick the type above, then ${verb} where the different fence STARTS on a line. ${touch ? "Tap" : "Click"} a marked section to remove it.`
             : tool === "house"
-            ? houseDraft.length > 0
-              ? "Click corner to corner around the house — click the green first dot (or Enter / double-click) to close the outline."
-              : "Trace the house: click its corners on the photo. The outline shows in the client's diagram and 3D."
-            : tool === "gate"
-              ? "Click anywhere on a fence line to place the gate. Click a gate to remove it."
-              : "Drag the photo to move around, scroll or pinch to zoom. Click a fence run or the house outline to select — Delete removes it."}
+              ? houseDraft.length > 0
+                ? `${touch ? "Tap" : "Click"} corner to corner around the house — ${touch ? "tap" : "click"} the green first dot to close the outline.`
+                : `Trace the house: ${verb} its corners on the photo. The outline shows in the client's diagram and 3D.`
+              : tool === "gate"
+                ? `${touch ? "Tap" : "Click"} anywhere on a fence line to place the gate. ${touch ? "Tap" : "Click"} a gate to remove it.`
+                : touch
+                  ? "Drag the photo to move around, pinch to zoom. Tap a fence run or the house outline to select it."
+                  : "Drag the photo to move around, scroll or pinch to zoom. Click a fence run or the house outline to select — Delete removes it."}
       </p>
     </div>
   );

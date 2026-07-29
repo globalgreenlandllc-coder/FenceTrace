@@ -197,7 +197,7 @@ export function AerialSection({
 
   return (
     <section data-section="aerial" className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
         <SectionHeader
           title="What we measured"
           sub={
@@ -213,7 +213,7 @@ export function AerialSection({
           }
         />
         {isSatellite && hasRealTakeoff && (
-          <div className="mt-1 inline-flex shrink-0 rounded-full border border-ink/10 bg-white p-0.5 text-[11px] font-semibold shadow-sm">
+          <div className="inline-flex shrink-0 rounded-full border border-ink/10 bg-white p-0.5 text-[11px] font-semibold shadow-sm sm:mt-1">
             <button
               type="button"
               onClick={() => setView("diagram")}
@@ -339,9 +339,13 @@ export function AerialSection({
             </div>
           )}
           {editable && !showDiagram && (
-            <div className="anim-enter-fade stagger-2 pointer-events-none absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[10px] font-medium text-white/85 ring-1 ring-inset ring-white/15">
-              <Pencil className="h-3 w-3" />
-              Hover a run to drag a corner — totals re-price live
+            <div className="anim-enter-fade stagger-2 pointer-events-none absolute bottom-3 left-3 right-3 inline-flex w-fit max-w-[calc(100%-1.5rem)] items-center gap-1.5 rounded-full bg-ink/80 px-2.5 py-1 text-[10px] font-medium text-white/85 ring-1 ring-inset ring-white/15">
+              <Pencil className="h-3 w-3 shrink-0" />
+              {/* "Hover" is meaningless on a touch screen — say the thing
+                  that's true on both. */}
+              <span className="truncate">
+                Drag a corner to adjust — totals re-price live
+              </span>
             </div>
           )}
         </div>

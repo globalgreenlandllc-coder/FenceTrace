@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   VIEWBOX_W,
   VIEWBOX_H,
@@ -135,6 +135,28 @@ export function GutterDiagram({
   className?: string;
 }) {
   const rawScale = Number.isFinite(pxPerFt) && (pxPerFt ?? 0) > 0 ? pxPerFt! : PX_PER_FT;
+
+  // The sheet is a fixed 900×580 coordinate space rendered at whatever
+  // width the layout gives it. On a phone that's ~340 CSS px, so a 10-unit
+  // dimension label lands under 4 px — the measurements the client is
+  // being asked to approve, illegible on the device they're reading on.
+  // `ds` scales the annotation layer (pills, pins, chips, sheet furniture)
+  // back to a constant on-screen size. It feeds the collision solver AND
+  // the renderers from the same value, so pills stay de-collided.
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [ds, setDs] = useState(1);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const measure = () => {
+      const w = svg.getBoundingClientRect().width;
+      if (w > 0) setDs(Math.min(2, Math.max(1, VIEWBOX_W / w)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(svg);
+    return () => ro.disconnect();
+  }, []);
 
   const rawPerimeter = roofStructure?.perimeter ?? [];
 
@@ -295,10 +317,10 @@ export function GutterDiagram({
       }
       items.push({
         id: line.id,
-        cx: mid.x + nx * 13,
-        cy: mid.y + ny * 13,
-        w: 44,
-        h: 17,
+        cx: mid.x + nx * 13 * ds,
+        cy: mid.y + ny * 13 * ds,
+        w: 44 * ds,
+        h: 17 * ds,
       });
     }
     if (items.length === 0) return new Map<string, PlacedLabel>();
@@ -315,12 +337,12 @@ export function GutterDiagram({
         });
       }
     }
-    const discs = nDownspouts.map((d) => ({ x: d.x, y: d.y, r: 11 }));
+    const discs = nDownspouts.map((d) => ({ x: d.x, y: d.y, r: 11 * ds }));
     const rects = orientationChips.map((c) => ({
       cx: c.at.x,
       cy: c.at.y,
-      w: c.label.length * 6.2 + 12,
-      h: 14,
+      w: (c.label.length * 6.2 + 12) * ds,
+      h: 14 * ds,
     }));
     return layoutLabels(
       items,
@@ -342,6 +364,7 @@ export function GutterDiagram({
     orientationChips,
     scale,
     centroid,
+    ds,
   ]);
 
   return (
@@ -353,6 +376,7 @@ export function GutterDiagram({
       style={{ background: C.paper }}
     >
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
         preserveAspectRatio="xMidYMid meet"
         className="h-full w-full select-none"
@@ -450,6 +474,7 @@ export function GutterDiagram({
               centroid={centroid}
               tier={runTier(line)}
               at={labelPlaced.get(line.id)}
+              ds={ds}
             />
           ))}
 
@@ -472,12 +497,12 @@ export function GutterDiagram({
           const num = dropOrder.get(d.id) ?? i + 1;
           return (
             <g key={d.id}>
-              <circle cx={d.x} cy={d.y} r={8} fill={C.drop} stroke="#fff" strokeWidth={1.8} />
+              <circle cx={d.x} cy={d.y} r={8 * ds} fill={C.drop} stroke="#fff" strokeWidth={1.8 * ds} />
               <text
                 x={d.x}
-                y={d.y + 3}
+                y={d.y + 3 * ds}
                 textAnchor="middle"
-                fontSize={num >= 10 ? 8 : 9}
+                fontSize={(num >= 10 ? 8 : 9) * ds}
                 fontWeight={700}
                 fill="#fff"
                 fontFamily="ui-sans-serif, system-ui"
@@ -490,24 +515,24 @@ export function GutterDiagram({
 
         {/* Orientation chips (paired with the north arrow for true bearing) */}
         {orientationChips.map((c) => {
-          const w = c.label.length * 6.2 + 12;
+          const w = (c.label.length * 6.2 + 12) * ds;
           return (
             <g key={c.label}>
               <rect
                 x={c.at.x - w / 2}
-                y={c.at.y - 7}
+                y={c.at.y - 7 * ds}
                 width={w}
-                height={14}
-                rx={3}
+                height={14 * ds}
+                rx={3 * ds}
                 fill={C.chipFill}
                 stroke={C.chipStroke}
-                strokeWidth={0.8}
+                strokeWidth={0.8 * ds}
               />
               <text
                 x={c.at.x}
-                y={c.at.y + 3.4}
+                y={c.at.y + 3.4 * ds}
                 textAnchor="middle"
-                fontSize={8}
+                fontSize={8 * ds}
                 fontWeight={700}
                 letterSpacing="1"
                 fill={C.chipText}
@@ -520,7 +545,7 @@ export function GutterDiagram({
         })}
 
         {/* North arrow (tile is north-up) */}
-        <g transform={`translate(${VIEWBOX_W - 44}, 40)`}>
+        <g transform={`translate(${VIEWBOX_W - 44}, 40) scale(${ds})`}>
           <line x1={0} y1={26} x2={0} y2={2} stroke={C.eave} strokeWidth={2} />
           <path d={`M -4 8 L 0 0 L 4 8`} fill="none" stroke={C.eave} strokeWidth={2} strokeLinejoin="round" />
           <text x={0} y={40} textAnchor="middle" fontSize={11} fontWeight={700} fill={C.eaveInk} fontFamily="ui-sans-serif, system-ui">
@@ -528,13 +553,14 @@ export function GutterDiagram({
           </text>
         </g>
 
-        {/* Scale bar */}
-        <g transform={`translate(40, ${VIEWBOX_H - 40})`} fontFamily="ui-monospace, monospace" fontSize={9} fill="#5a7583">
-          <line x1={0} y1={0} x2={scaleBarPx} y2={0} stroke="#5a7583" strokeWidth={1.4} />
-          <line x1={0} y1={-4} x2={0} y2={4} stroke="#5a7583" strokeWidth={1.4} />
-          <line x1={scaleBarPx} y1={-4} x2={scaleBarPx} y2={4} stroke="#5a7583" strokeWidth={1.4} />
-          <text x={0} y={14}>0</text>
-          <text x={scaleBarPx} y={14} textAnchor="end">10 ft</text>
+        {/* Scale bar — the bar itself is a real measurement, so only the
+            tick marks and the numerals counter-scale, never its length. */}
+        <g transform={`translate(40, ${VIEWBOX_H - 40})`} fontFamily="ui-monospace, monospace" fontSize={9 * ds} fill="#5a7583">
+          <line x1={0} y1={0} x2={scaleBarPx} y2={0} stroke="#5a7583" strokeWidth={1.4 * ds} />
+          <line x1={0} y1={-4 * ds} x2={0} y2={4 * ds} stroke="#5a7583" strokeWidth={1.4 * ds} />
+          <line x1={scaleBarPx} y1={-4 * ds} x2={scaleBarPx} y2={4 * ds} stroke="#5a7583" strokeWidth={1.4 * ds} />
+          <text x={0} y={14 * ds}>0</text>
+          <text x={scaleBarPx} y={14 * ds} textAnchor="end">10 ft</text>
         </g>
       </svg>
 
@@ -605,6 +631,7 @@ function EaveLabel({
   centroid,
   tier = "main",
   at,
+  ds = 1,
 }: {
   line: SimpleLine;
   pxPerFt: number;
@@ -613,6 +640,9 @@ function EaveLabel({
   /** Solver-resolved pill center (de-collided from other pills, drops,
    *  chips and runs). When it traveled, a thin leader ties it back. */
   at?: PlacedLabel;
+  /** Annotation scale — must match the value the solver laid out with,
+   *  or the pills render at a different size than they were packed at. */
+  ds?: number;
 }) {
   if (line.points.length < 2) return null;
   const len = Math.round(polylineLengthFt(line.points, pxPerFt));
@@ -621,8 +651,8 @@ function EaveLabel({
   // the first→last chord breaks on jogging runs and closed tier loops.
   const anchor = polylineLabelAnchor(line.points);
   if (!anchor) return null;
-  let nx = anchor.nx * 12;
-  let ny = anchor.ny * 12;
+  let nx = anchor.nx * 12 * ds;
+  let ny = anchor.ny * 12 * ds;
   const cx = anchor.mid.x;
   const cy = anchor.mid.y;
   // Kick the label to the side away from the centroid.
@@ -632,8 +662,8 @@ function EaveLabel({
   }
   const lx = at ? at.cx : cx + nx;
   const ly = at ? at.cy : cy + ny;
-  const showLeader = !!at && at.moved > 16;
-  const w = 42;
+  const showLeader = !!at && at.moved > 16 * ds;
+  const w = 42 * ds;
   return (
     <g pointerEvents="none">
       {showLeader && (
@@ -643,16 +673,16 @@ function EaveLabel({
           x2={lx}
           y2={ly}
           stroke={TIER_STYLE[tier].stroke}
-          strokeWidth={0.8}
+          strokeWidth={0.8 * ds}
           opacity={0.5}
         />
       )}
-      <rect x={lx - w / 2} y={ly - 8} width={w} height={16} rx={3.5} fill={C.paper} stroke={TIER_STYLE[tier].stroke} strokeWidth={0.8} />
+      <rect x={lx - w / 2} y={ly - 8 * ds} width={w} height={16 * ds} rx={3.5 * ds} fill={C.paper} stroke={TIER_STYLE[tier].stroke} strokeWidth={0.8 * ds} />
       <text
         x={lx}
-        y={ly + 3.5}
+        y={ly + 3.5 * ds}
         textAnchor="middle"
-        fontSize={10}
+        fontSize={10 * ds}
         fontWeight={600}
         fill={TIER_STYLE[tier].ink}
         fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"

@@ -129,7 +129,10 @@ export function SendModal({
             exit={{ scale: 0.97, opacity: 0 }}
             transition={{ type: "spring", damping: 22, stiffness: 280 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-lg rounded-xl border border-zinc-200 bg-white shadow-elevated"
+            // max-h + scroll: on a phone with the keyboard up the compose
+            // form is taller than the viewport, and without this the send
+            // button ends up off-screen with no way to reach it.
+            className="relative max-h-[88vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-zinc-200 bg-white shadow-elevated"
           >
             <button
               type="button"

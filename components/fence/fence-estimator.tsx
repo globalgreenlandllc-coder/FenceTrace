@@ -434,6 +434,16 @@ export function FenceEstimator() {
     }));
   }, [layoutInput, typeId, totalLf]);
 
+  // The tier the rail marks "recommended" — mirrored into the mobile
+  // action bar so the number the contractor quotes is always on screen.
+  const recommendedPrice = useMemo(() => {
+    const pick =
+      tierPrices.find((p) => p.tier.recommended) ?? tierPrices[0] ?? null;
+    return pick
+      ? { name: pick.tier.name, total: pick.price.total }
+      : null;
+  }, [tierPrices]);
+
   /* ---- proposal handoff ---- */
   async function buildProposal() {
     if (!scan || !takeoff || totalLf === 0 || saving) return;
@@ -528,7 +538,8 @@ export function FenceEstimator() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6">
+      {/* Bottom padding on small screens clears the sticky action bar. */}
+      <main className="mx-auto max-w-[1500px] px-4 py-5 pb-28 sm:px-6 lg:pb-5">
         {/* Address bar (shown until a scan succeeds, and for re-scans) */}
         {!scan && (
           <form
@@ -994,6 +1005,44 @@ export function FenceEstimator() {
           </div>
         )}
       </main>
+
+      {/* Phone/tablet action bar. On a small screen the pricing rail sits
+          a long scroll below the aerial, so the live total and the way
+          forward follow the contractor down the page instead of making
+          them hunt for the button after every edit. */}
+      {scan && totalLf > 0 && (
+        <div className="anim-enter-fade fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 backdrop-blur pb-[env(safe-area-inset-bottom)] lg:hidden">
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold tabular-nums text-zinc-900">
+                {totalLf} LF
+                <span className="font-medium text-zinc-400">
+                  {" · "}
+                  {layout.gates.length}{" "}
+                  {layout.gates.length === 1 ? "gate" : "gates"}
+                </span>
+              </div>
+              <div className="truncate text-[11px] text-zinc-500">
+                {recommendedPrice
+                  ? `${recommendedPrice.name} — ${fmt(recommendedPrice.total)}`
+                  : `${t.label} · ${heightFt}′`}
+              </div>
+            </div>
+            <Button
+              onClick={buildProposal}
+              disabled={!takeoff || saving}
+              className="h-11 shrink-0 px-4"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Build proposal
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
