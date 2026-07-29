@@ -1,3 +1,4 @@
+import { fenceType, type FenceTypeId } from "./fence/catalog";
 import { packageTotal, type Proposal } from "./proposal-mock";
 
 /**
@@ -6,6 +7,25 @@ import { packageTotal, type Proposal } from "./proposal-mock";
  * this is a money document, so the audio must read the exact same
  * numbers `packageTotal` puts on the page. Pure module (no server-only,
  * no DB) so it's unit-testable and hashable anywhere.
+ *
+ * WRITTEN FOR A WINDSHIELD, NOT A SCREEN. The listener is driving: they
+ * get one pass, no scrollback, and roughly a minute of attention. So the
+ * script is ordered by what a driver actually needs and everything else
+ * is cut:
+ *
+ *   1. who it's from, and how long this will take
+ *   2. WHAT they're getting — height, material, footage, gates. This is
+ *      the spec that decides whether the price is even comparable to the
+ *      other bids in their inbox, and it has to come before any number.
+ *   3. the recommended package's price, alone, so one number lands
+ *   4. the other two in a single compact sentence
+ *   5. deposit + how long the price holds
+ *   6. one action they can take at the wheel — call — and one for later
+ *
+ * Deliberately NOT spoken: the ZIP and state (they know their own
+ * address), per-package marketing highlights (three paragraphs of
+ * feature copy is unlistenable), warranty terms, line items. Those are
+ * what the link is for.
  *
  * The hash of the script is the audio cache key: /api/p/[token]/audio
  * regenerates the MP3 only when the script text changes (price edit,
@@ -17,19 +37,10 @@ import { packageTotal, type Proposal } from "./proposal-mock";
 /** OpenAI TTS rejects inputs past 4096 chars; stay well under it. */
 export const MAX_SCRIPT_CHARS = 4000;
 
-const COUNT_WORDS = [
-  "zero",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-];
+/** Speaking rate we estimate the intro's "about N seconds" from. TTS
+ *  voices at default speed land near this; it only has to be close
+ *  enough that the promise isn't a lie. */
+const WORDS_PER_SECOND = 2.6;
 
 function money(n: number): string {
   return `$${Math.round(n).toLocaleString("en-US")}`;
@@ -41,55 +52,91 @@ function money(n: number): string {
  * measurement notation into speakable words.
  */
 export function spokenText(s: string): string {
-  return s
-    .replace(/(\d)\s*["″]?\s*[×x]\s*(\d+)\s*["″]/g, "$1 by $2 inch")
-    .replace(/(\d)\s*["″]/g, "$1 inch")
-    .replace(/×/g, " by ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    s
+      .replace(/(\d)\s*["″]?\s*[×x]\s*(\d+)\s*["″]/g, "$1 by $2 inch")
+      .replace(/(\d)\s*["″]/g, "$1 inch")
+      .replace(/×/g, " by ")
+      // Package names carry typography meant for the eye — "Best — Cedar,
+      // Stained & Sealed". An em dash makes some voices swallow the pause
+      // and "&" can come out as "ampersand"; both become plain speech.
+      .replace(/\s*[—–]\s*/g, ", ")
+      .replace(/\s*&\s*/g, " and ")
+      .replace(/\s+([,.])/g, "$1")
+      .replace(/,\s*,/g, ",")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+/**
+ * A phone number a voice can actually dictate. "(512) 555-0184" makes
+ * TTS read punctuation or run the digits together; grouped digits get
+ * read at a pace someone can repeat back or dial at a light.
+ */
+export function spokenPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  const local =
+    digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  if (local.length !== 10) return raw.trim();
+  const say = (s: string) => s.split("").join(" ");
+  return `${say(local.slice(0, 3))}, ${say(local.slice(3, 6))}, ${say(local.slice(6))}`;
+}
+
+/**
+ * Street line only. "1247 Maple Ridge Drive, Austin, TX 78704" spoken in
+ * full wastes five seconds telling people where they live; the street is
+ * enough to confirm which property this quote is for.
+ */
+export function spokenAddress(raw: string): string {
+  return raw.split(",")[0]?.trim() ?? "";
+}
+
+/** "about 45 seconds" / "about a minute" / "about 2 minutes". */
+function spokenDuration(wordCount: number): string {
+  const secs = wordCount / WORDS_PER_SECOND;
+  if (secs < 50)
+    return `about ${Math.max(15, Math.round(secs / 15) * 15)} seconds`;
+  if (secs < 80) return "about a minute";
+  if (secs < 105) return "about a minute and a half";
+  return `about ${Math.round(secs / 60)} minutes`;
+}
+
+/** Gate wording from the fence config — "a walk gate and a drive gate"
+ *  beats "2 gates" when the difference is a thousand dollars. */
+function gatePhrase(
+  fence:
+    | {
+        gatesSingle?: number;
+        gatesDouble?: number;
+        gatesCustomWidthsFt?: number[];
+      }
+    | undefined,
+  fallbackCount: number,
+): string {
+  const single = Math.max(0, Math.round(fence?.gatesSingle ?? 0));
+  const dbl = Math.max(0, Math.round(fence?.gatesDouble ?? 0));
+  const custom = (fence?.gatesCustomWidthsFt ?? []).length;
+  const bits: string[] = [];
+  if (single > 0)
+    bits.push(single === 1 ? "a walk gate" : `${single} walk gates`);
+  if (dbl > 0) bits.push(dbl === 1 ? "a drive gate" : `${dbl} drive gates`);
+  if (custom > 0)
+    bits.push(custom === 1 ? "a custom gate" : `${custom} custom gates`);
+  if (bits.length === 0) {
+    const n = Math.max(0, Math.round(fallbackCount));
+    return n > 0 ? `${n} gate${n === 1 ? "" : "s"}` : "";
+  }
+  if (bits.length === 1) return bits[0];
+  return `${bits.slice(0, -1).join(", ")} and ${bits[bits.length - 1]}`;
 }
 
 export function buildProposalAudioScript(proposal: Proposal): string {
-  const firstName =
-    proposal.client.name.trim().split(/\s+/)[0] || "there";
+  const firstName = proposal.client.name.trim().split(/\s+/)[0] || "there";
   const company = proposal.contractor.company.trim() || "your contractor";
   const parts: string[] = [];
 
-  parts.push(
-    `Hi ${firstName}. Here's a quick summary of your fence quote from ${company}, so you can listen on the go.`,
-  );
-  if (proposal.address.trim()) {
-    parts.push(`This quote is for ${proposal.address.trim()}.`);
-  }
-
-  // Scope line from the measurements. jobType is an extra key on the
-  // data blob (set by saveDraftFromEstimate), not part of the typed
-  // Proposal shape — absent means we don't assume tear-off vs new build.
-  const jobType = (proposal as Proposal & { jobType?: "new" | "replacement" })
-    .jobType;
-  const eave = Math.round(proposal.measurements?.eaveLF ?? 0);
-  const spouts = Math.round(proposal.measurements?.downspoutCount ?? 0);
-  if (eave > 0) {
-    const spoutBit =
-      spouts > 0 ? ` with ${spouts} gate${spouts === 1 ? "" : "s"}` : "";
-    if (jobType === "replacement") {
-      parts.push(
-        `The job covers taking down your old fence and installing about ${eave} feet of new fence${spoutBit}, including full cleanup.`,
-      );
-    } else if (jobType === "new") {
-      parts.push(
-        `The job covers installing about ${eave} feet of new fence${spoutBit} on your property, including full cleanup.`,
-      );
-    } else {
-      parts.push(
-        `The job covers about ${eave} feet of fence${spoutBit}, installed and cleaned up.`,
-      );
-    }
-  }
-
-  // Package options — priced through the same packageTotal (markup →
-  // discount → tax) the portal page uses, so the voice and the screen
-  // can never disagree on a number.
+  /* ---- 2. the spec, before any price ---- */
   const discountPct = Math.max(0, Math.min(50, proposal.discountPct ?? 0));
   const priced = (proposal.packages ?? []).flatMap((p) => {
     try {
@@ -99,62 +146,111 @@ export function buildProposalAudioScript(proposal: Proposal): string {
       return []; // malformed measurements — skip the tier, keep the script
     }
   });
+  const lead = priced.find(({ p }) => p.recommended) ?? priced[0] ?? null;
+  const fence = lead?.p.config?.fence;
 
-  if (priced.length === 1) {
-    const { p, total } = priced[0];
-    parts.push(`The ${p.name} package comes to ${money(total)}.`);
-  } else if (priced.length > 1) {
-    const countWord = COUNT_WORDS[priced.length] ?? String(priced.length);
-    parts.push(`You have ${countWord} options.`);
-    for (const { p, total } of priced) {
-      const rec = p.recommended ? `, which ${company} recommends,` : "";
-      const flavor = p.highlights?.[0]
-        ? ` — that's ${spokenText(p.highlights[0])}`
-        : "";
-      parts.push(
-        `The ${p.name} package${rec} comes to ${money(total)}${flavor}.`,
-      );
+  const street = spokenAddress(proposal.address);
+  const lf = Math.round(proposal.measurements?.eaveLF ?? 0);
+  const gates = gatePhrase(fence, proposal.measurements?.downspoutCount ?? 0);
+
+  if (lf > 0) {
+    // "341 feet of 6 foot cedar privacy fence, with a walk gate and a
+    // drive gate" — the sentence a homeowner repeats to their spouse.
+    let spec = `${lf} feet of `;
+    if (fence?.heightFt) spec += `${Math.round(fence.heightFt)} foot `;
+    if (fence?.type) {
+      try {
+        spec += `${fenceType(fence.type as FenceTypeId).label.toLowerCase()} fence`;
+      } catch {
+        spec += "fence";
+      }
+    } else {
+      spec += "fence";
     }
+    if (gates) spec += `, with ${gates}`;
+    parts.push(
+      street
+        ? `At ${street}, you're getting ${spec}.`
+        : `You're getting ${spec}.`,
+    );
+    const removal = Math.round(fence?.removalLf ?? 0);
+    parts.push(
+      removal > 0
+        ? `That includes taking the old fence out and hauling it away.`
+        : `That includes the post holes, concrete, and cleanup.`,
+    );
+  } else if (street) {
+    parts.push(`This is your fence quote for ${street}.`);
+  }
+
+  /* ---- 3. the number that matters, on its own ---- */
+  if (lead) {
+    const rec = lead.p.recommended
+      ? `The option ${company} recommends is ${lead.p.name}, at ${money(lead.total)}.`
+      : `The ${lead.p.name} package comes to ${money(lead.total)}.`;
+    parts.push(rec);
+  }
+
+  /* ---- 4. the alternatives, compactly ---- */
+  const others = priced.filter((x) => x !== lead);
+  if (others.length === 1) {
+    parts.push(
+      `There's also ${others[0].p.name} at ${money(others[0].total)}.`,
+    );
+  } else if (others.length > 1) {
+    const list = others
+      .map((o) => `${o.p.name} at ${money(o.total)}`)
+      .join(", and ");
+    parts.push(`Your other options are ${list}.`);
   }
 
   if (discountPct > 0 && priced.length > 0) {
     const pct = Math.round(discountPct * 10) / 10;
     const label = proposal.discountLabel?.trim();
     parts.push(
-      `Good news — a ${pct} percent discount${label ? ` for ${label}` : ""} is already included in these prices.`,
+      `A ${pct} percent discount${label ? ` for ${label}` : ""} is already in those prices.`,
     );
   }
 
+  /* ---- 5. terms, one line ---- */
   const validDays = Math.round(proposal.validDays || 0);
   const depositPct = Math.round(proposal.depositPct || 0);
   if (depositPct > 0 && validDays > 0) {
     parts.push(
-      `A ${depositPct} percent deposit locks in your spot, and this pricing is valid for ${validDays} days.`,
+      `A ${depositPct} percent deposit books the job, and the price holds for ${validDays} days.`,
     );
   } else if (validDays > 0) {
-    parts.push(`This pricing is valid for ${validDays} days.`);
+    parts.push(`This price holds for ${validDays} days.`);
+  } else if (depositPct > 0) {
+    parts.push(`A ${depositPct} percent deposit books the job.`);
   }
 
-  parts.push(
-    `When you're parked, open the proposal link to see the full details, photos, and accept online.`,
-  );
+  /* ---- 6. what to do, hands on the wheel ---- */
   const contractorName = proposal.contractor.name.trim();
   const phone = proposal.contractor.phone.trim();
   if (phone) {
     parts.push(
-      `Questions? Call ${contractorName || company} at ${phone}. Thanks!`,
+      `If you have questions, call ${contractorName || company} at ${spokenPhone(phone)}.`,
     );
-  } else {
-    parts.push(`Thanks!`);
   }
+  parts.push(
+    `When you're parked, open the link to see the drawing, the full materials list, and accept online.`,
+  );
 
-  let script = parts.join(" ");
+  /* ---- 1. the opener, written last so it can promise a length ---- */
+  const body = parts.join(" ");
+  const words = body.split(/\s+/).filter(Boolean).length;
+  const opener =
+    `Hi ${firstName}. Here's your fence quote from ${company} — ` +
+    `${spokenDuration(words + 24)}, so you can keep driving.`;
+
+  let script = `${opener} ${body}`;
   if (script.length > MAX_SCRIPT_CHARS) {
     const cut = script.lastIndexOf(". ", MAX_SCRIPT_CHARS);
     script =
       cut > 0 ? script.slice(0, cut + 1) : script.slice(0, MAX_SCRIPT_CHARS);
   }
-  return script;
+  return spokenText(script);
 }
 
 /**
