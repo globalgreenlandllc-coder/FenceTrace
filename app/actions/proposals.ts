@@ -4,6 +4,7 @@ import { fenceTierPatches, type FenceDraftInput } from "@/lib/fence/proposal";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
+import type { BrandLogo } from "@/lib/types";
 import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { sendEmailViaResend } from "@/lib/email/resend";
@@ -62,7 +63,8 @@ export async function sendProposal(args: {
 
   // Persist (or update) the proposal so /p/[token] resolves to real data.
   const data = proposal as unknown as Prisma.InputJsonValue;
-  const contractorSnap = proposal.contractor as unknown as Prisma.InputJsonValue;
+  const contractorSnap =
+    proposal.contractor as unknown as Prisma.InputJsonValue;
 
   // Scope the lookup to the current user. publicToken travels in the
   // emailed portal link, so it's semi-public — without the userId filter a
@@ -225,7 +227,48 @@ export async function getProposalByToken(
   // so contractor-private pricing internals (AI quote, stashed manual
   // markup, pricing mode) are stripped here — the client sees one
   // price, with no trace of how it was set.
-  return sanitizeProposalForClient(row.data as unknown as Proposal);
+  const proposal = sanitizeProposalForClient(row.data as unknown as Proposal);
+  return withContractorBrand(proposal, row.userId);
+}
+
+/**
+ * Fill in the brand mark for proposals whose snapshot predates it.
+ *
+ * The client opens this page logged-out, so the portal can only show a
+ * logo that travels with the proposal. New proposals snapshot it at
+ * build time; anything already sent has no logo in its JSON and would
+ * keep rendering the monogram forever. One lookup against the owner's
+ * current profile fixes every one of them. Display-only — the stored
+ * snapshot is left alone, so a proposal's saved contractor details stay
+ * exactly as they were when it was sent.
+ */
+async function withContractorBrand(
+  proposal: Proposal,
+  userId: string,
+): Promise<Proposal> {
+  if (proposal.contractor.logo?.url) return proposal;
+  try {
+    const profile = await db.contractorProfile.findUnique({
+      where: { userId },
+      select: { logoInitials: true, logoTone: true, logoUrl: true },
+    });
+    if (!profile) return proposal;
+    return {
+      ...proposal,
+      contractor: {
+        ...proposal.contractor,
+        logo: {
+          initials: proposal.contractor.logo?.initials || profile.logoInitials,
+          tone: (proposal.contractor.logo?.tone ??
+            profile.logoTone) as BrandLogo["tone"],
+          url: profile.logoUrl,
+        },
+      },
+    };
+  } catch {
+    // Branding is cosmetic — never fail the client's proposal over it.
+    return proposal;
+  }
 }
 
 function isPlausibleEmail(s: string): boolean {
@@ -309,7 +352,11 @@ export async function saveDraftFromEstimate(args: {
   /** FenceScan: building footprints for the client diagram + 3D. */
   buildings?: { x: number; y: number }[][];
   /** FenceScan: mixed-type stretches for the client 3D. */
-  fenceSections?: { a: { x: number; y: number }; b: { x: number; y: number }; type: string }[];
+  fenceSections?: {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    type: string;
+  }[];
 }): Promise<SaveDraftResult> {
   try {
     return await saveDraftFromEstimateImpl(args);
@@ -332,7 +379,11 @@ async function saveDraftFromEstimateImpl(args: {
   topoGridFt?: number[][];
   view3d?: { yawDeg: number; squash: number };
   buildings?: { x: number; y: number }[][];
-  fenceSections?: { a: { x: number; y: number }; b: { x: number; y: number }; type: string }[];
+  fenceSections?: {
+    a: { x: number; y: number };
+    b: { x: number; y: number };
+    type: string;
+  }[];
   address: string;
   measurements: Measurements;
   eaves: EditableLine[];
@@ -375,7 +426,8 @@ async function saveDraftFromEstimateImpl(args: {
         ...p,
         config: {
           ...p.config,
-          oldGutterRemoval: args.jobType === "new" ? ("none" as const) : ("free" as const),
+          oldGutterRemoval:
+            args.jobType === "new" ? ("none" as const) : ("free" as const),
         },
       };
       if (!args.fence) return base;
@@ -420,6 +472,7 @@ async function saveDraftFromEstimateImpl(args: {
       license: me.profile.license,
       stripePaymentUrl: me.profile.payments.stripeUrl ?? null,
       squarePaymentUrl: me.profile.payments.squareUrl ?? null,
+      logo: { ...me.profile.logo },
     },
   };
 
@@ -525,8 +578,7 @@ async function saveDraftFromEstimateImpl(args: {
 /* ------------------------------------------------------------------ */
 
 export type SaveProposalDraftResult =
-  | { ok: true; id: string; token: string }
-  | { ok: false; reason: string };
+  { ok: true; id: string; token: string } | { ok: false; reason: string };
 
 export async function saveProposalDraft(args: {
   proposal: Proposal;
@@ -764,7 +816,8 @@ export async function acceptProposalByToken(args: {
 
     // Best-effort contractor notification.
     let contractorNotified = false;
-    const contractorEmail = row.user?.contractorProfile?.email ?? row.user?.email;
+    const contractorEmail =
+      row.user?.contractorProfile?.email ?? row.user?.email;
     if (contractorEmail) {
       try {
         const portalUrl = `${appBaseUrl()}/p/${row.publicToken}`;
@@ -839,9 +892,7 @@ function escapeHtml(s: string): string {
 /*  Delete proposal                                                    */
 /* ------------------------------------------------------------------ */
 
-export type DeleteProposalResult =
-  | { ok: true }
-  | { ok: false; reason: string };
+export type DeleteProposalResult = { ok: true } | { ok: false; reason: string };
 
 /**
  * Permanently deletes a proposal owned by the signed-in contractor.

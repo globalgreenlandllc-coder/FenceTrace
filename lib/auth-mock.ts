@@ -1,15 +1,9 @@
 "use client";
 
 import { useSessionContext } from "@/components/auth/session-provider";
+import type { BrandLogo, LogoTone } from "@/lib/types";
 
-export type LogoTone =
-  | "emerald"
-  | "sky"
-  | "indigo"
-  | "rose"
-  | "amber"
-  | "violet"
-  | "zinc";
+export type { LogoTone };
 
 export type ContractorProfile = {
   company: string;
@@ -18,7 +12,7 @@ export type ContractorProfile = {
   phone: string;
   license: string;
   tagline: string;
-  logo: { initials: string; tone: LogoTone; url: string | null };
+  logo: BrandLogo;
   payments: {
     stripeUrl: string | null;
     squareUrl: string | null;

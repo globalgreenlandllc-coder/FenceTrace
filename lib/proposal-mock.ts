@@ -1,4 +1,5 @@
 import type {
+  BrandLogo,
   Downspout,
   EditableLine,
   EstimateConfig,
@@ -72,10 +73,7 @@ export type Package = {
    *  unit price WITHOUT detaching the bill of materials from the live
    *  config — change the material and the un-overridden lines still
    *  refresh. Absent = pure auto BOM (the common case). */
-  lineItemOverrides?: Record<
-    string,
-    { quantity?: number; unitPrice?: number }
-  >;
+  lineItemOverrides?: Record<string, { quantity?: number; unitPrice?: number }>;
   /** Hand-added BOM lines beyond the auto-generated system (custom
    *  fabrication, a one-off charge, etc.). */
   customLineItems?: LineItem[];
@@ -264,6 +262,12 @@ export type Proposal = {
     license: string;
     stripePaymentUrl?: string | null;
     squarePaymentUrl?: string | null;
+    /** Brand mark snapshotted at build time. The client portal is opened
+     *  logged-out, so it cannot read the contractor's live profile —
+     *  without this the homeowner sees the default monogram instead of
+     *  the uploaded logo. Optional: proposals stored before this existed
+     *  simply fall back to the monogram. */
+    logo?: BrandLogo | null;
   };
   intro: string;
   measurements: Measurements;
@@ -314,6 +318,7 @@ export const sampleProposal: Proposal = {
     license: "TX-RCC-48217",
     stripePaymentUrl: "https://buy.stripe.com/test_demo_link",
     squarePaymentUrl: null,
+    logo: { initials: "RF", tone: "emerald", url: null },
   },
   intro:
     "Thanks for the opportunity to quote your new fence. Below are three package options for your property with detailed materials, labor, and a 1-click way to accept. Pricing is locked for 30 days.",
@@ -456,7 +461,11 @@ export const sampleProposal: Proposal = {
     { id: "p1", caption: "Front facade — south exposure", tone: "front" },
     { id: "p2", caption: "Side yard — clear equipment access", tone: "side" },
     { id: "p3", caption: "Backyard tree overhang", tone: "back" },
-    { id: "p4", caption: "Existing fence condition (NW corner)", tone: "detail" },
+    {
+      id: "p4",
+      caption: "Existing fence condition (NW corner)",
+      tone: "detail",
+    },
   ],
   terms: [
     {
@@ -515,6 +524,7 @@ export function blankProposal(): Proposal {
       license: "",
       stripePaymentUrl: null,
       squarePaymentUrl: null,
+      logo: null,
     },
     intro:
       "Thanks for the opportunity to quote your fence project. Below you'll find package options sized to your property, with detailed materials, labor, and a 1-click way to accept.",
@@ -693,7 +703,8 @@ export function packageTotal(
     // legacy national rate, materials only.
     const market = p.config.fence.market;
     const share = fenceTaxableShare(items, market, addOns);
-    tax = (afterMarkup - discount) * share * fenceTaxRate(market, FENCE_TAX_RATE);
+    tax =
+      (afterMarkup - discount) * share * fenceTaxRate(market, FENCE_TAX_RATE);
   } else {
     tax = (afterMarkup - discount) * EFFECTIVE_TAX_RATE;
   }
@@ -776,8 +787,7 @@ export function markupPctForTarget(
 ): number {
   if (subtotal <= 0) return 0;
   const d = Math.max(0, Math.min(50, discountPct)) / 100;
-  const ratio =
-    targetTotal / (subtotal * (1 - d) * (1 + EFFECTIVE_TAX_RATE));
+  const ratio = targetTotal / (subtotal * (1 - d) * (1 + EFFECTIVE_TAX_RATE));
   return (ratio - 1) * 100;
 }
 

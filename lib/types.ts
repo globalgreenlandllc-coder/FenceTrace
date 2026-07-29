@@ -1,5 +1,22 @@
 import type { MarketSnapshot } from "./fence/market";
 
+/** Palette for the fallback monogram when no logo image is uploaded. */
+export type LogoTone =
+  "emerald" | "sky" | "indigo" | "rose" | "amber" | "violet" | "zinc";
+
+/**
+ * A contractor's brand mark. Lives here (not in the client-only
+ * auth-mock) because it is snapshotted onto every proposal: the client
+ * portal is opened logged-out, so it cannot read the contractor's live
+ * profile and must carry the brand with the proposal itself.
+ */
+export type BrandLogo = {
+  initials: string;
+  tone: LogoTone;
+  /** Data URL of the uploaded image, or null to use the monogram. */
+  url: string | null;
+};
+
 export type GutterStyle = "k-style" | "half-round";
 export type GutterSize = "5" | "6" | "7";
 export type GutterMaterial = "aluminum" | "copper" | "steel";
@@ -45,11 +62,7 @@ export type EaveFeature =
   | "unknown";
 
 export type RoofStructureLineKind =
-  | "ridge"
-  | "valley"
-  | "hip"
-  | "gable"
-  | "step";
+  "ridge" | "valley" | "hip" | "gable" | "step";
 
 export type RoofStructureLine = {
   id: string;
@@ -85,7 +98,10 @@ export type RoofStructure = {
   /** Roof PLANES (canvas space) tiling the perimeter — shaded by the
    *  overlay. `downhill` = unit direction the plane slopes down toward.
    *  Optional; absent on satellite/older stored takeoffs. */
-  faces?: { polygon: { x: number; y: number }[]; downhill: { x: number; y: number } }[];
+  faces?: {
+    polygon: { x: number; y: number }[];
+    downhill: { x: number; y: number };
+  }[];
   /** Tier STEP edges (kind "step") — interior mass boundaries where one roof
    *  level drops to another (the engine's tier decomposition). Drawn as thin
    *  solid lines so multi-tier plans read as tiers, not bare outlines.

@@ -151,6 +151,7 @@ function Inner() {
         license: profile.license,
         stripePaymentUrl: profile.payments.stripeUrl,
         squarePaymentUrl: profile.payments.squareUrl,
+        logo: { ...profile.logo },
       },
     }));
   }, [
@@ -161,6 +162,9 @@ function Inner() {
     profile.license,
     profile.payments.stripeUrl,
     profile.payments.squareUrl,
+    profile.logo.initials,
+    profile.logo.tone,
+    profile.logo.url,
   ]);
 
   // Debounced autosave. Only runs once the draft already has a row
@@ -360,9 +364,7 @@ function Inner() {
           onChange={(next) =>
             setProposal((prev) => ({
               ...prev,
-              packages: prev.packages.map((p) =>
-                p.id === next.id ? next : p,
-              ),
+              packages: prev.packages.map((p) => (p.id === next.id ? next : p)),
             }))
           }
           onChangeAll={(next) =>

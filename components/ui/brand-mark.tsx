@@ -47,8 +47,8 @@ export function BrandMark({
     rounded === "full"
       ? "rounded-full"
       : rounded === "xl"
-      ? "rounded-2xl"
-      : "rounded-xl";
+        ? "rounded-2xl"
+        : "rounded-xl";
 
   if (logoUrl) {
     return (
@@ -60,10 +60,13 @@ export function BrandMark({
           className,
         )}
       >
+        {/* contain, not cover: uploads are no longer size- or shape-gated,
+            so a wide wordmark must letterbox instead of being centre-cropped
+            down to two letters. */}
         <img
           src={logoUrl}
           alt=""
-          className="h-full w-full object-cover"
+          className="h-full w-full object-contain"
           draggable={false}
         />
       </div>

@@ -24,9 +24,12 @@ import {
   type LogoTone,
 } from "@/lib/auth-mock";
 import { cn } from "@/lib/utils";
+import { logoDecodeMessage, prepareLogo } from "@/lib/logo-image";
 
-const ACCEPTED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
-const MAX_LOGO_BYTES = 450 * 1024;
+// No size gate and no format allow-list: prepareLogo decodes whatever the
+// browser can open and resizes it down to something storable, so the only
+// thing left to reject is a file with no decoder (HEIC, RAW, PSD).
+const LOGO_FILE_ACCEPT = "image/*,.svg,.heic,.heif";
 
 const TONES: { id: LogoTone; label: string; swatch: string }[] = [
   { id: "emerald", label: "Emerald", swatch: "bg-accent-500" },
@@ -47,6 +50,8 @@ export function BrandProfileSection() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
 
   useEffect(() => {
     setDraft(stored);
@@ -64,30 +69,26 @@ export function BrandProfileSection() {
 
   async function handleFile(file: File | null) {
     setUploadError(null);
+    setUploadNote(null);
     if (!file) return;
-    if (!ACCEPTED_LOGO_TYPES.includes(file.type)) {
-      setUploadError(
-        "Use PNG, JPEG, WebP, or SVG. Other formats aren't supported.",
-      );
-      return;
+    setPreparing(true);
+    try {
+      const { dataUrl, note } = await prepareLogo(file);
+      setLogo("url", dataUrl);
+      setUploadNote(note);
+    } catch {
+      setUploadError(logoDecodeMessage(file));
+    } finally {
+      setPreparing(false);
+      // Clearing the input lets the same file be re-picked after an error.
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
-    if (file.size > MAX_LOGO_BYTES) {
-      setUploadError(
-        `That file is ${Math.round(file.size / 1024)} KB. Max is 450 KB — try a smaller one or a tighter crop.`,
-      );
-      return;
-    }
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
-    setLogo("url", dataUrl);
   }
 
   function removeLogo() {
     setLogo("url", null);
+    setUploadError(null);
+    setUploadNote(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -145,7 +146,9 @@ export function BrandProfileSection() {
           </p>
         </div>
         <Badge tone={dirty ? "amber" : "emerald"}>
-          {dirty ? "Unsaved changes" : (
+          {dirty ? (
+            "Unsaved changes"
+          ) : (
             <>
               <Check className="h-3 w-3" />
               Saved
@@ -186,9 +189,7 @@ export function BrandProfileSection() {
             <Field
               label="Logo monogram"
               value={draft.logo.initials}
-              onChange={(v) =>
-                setLogo("initials", v.slice(0, 3).toUpperCase())
-              }
+              onChange={(v) => setLogo("initials", v.slice(0, 3).toUpperCase())}
               hint="1–3 letters"
             />
           </div>
@@ -226,8 +227,8 @@ export function BrandProfileSection() {
                   <span>Custom image active. Replace or remove below.</span>
                 ) : (
                   <span>
-                    Optional. Upload a square PNG, JPEG, WebP, or SVG. Max
-                    450&nbsp;KB. Without an image, the colored monogram is
+                    Optional. Any image, any size &mdash; we resize it for you.
+                    Square works best. Without an image, the colored monogram is
                     used.
                   </span>
                 )}
@@ -236,17 +237,22 @@ export function BrandProfileSection() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept={ACCEPTED_LOGO_TYPES.join(",")}
+                  accept={LOGO_FILE_ACCEPT}
                   className="hidden"
                   onChange={(e) => handleFile(e.target.files?.[0] ?? null)}
                 />
                 <Button
                   variant="secondary"
                   size="sm"
+                  disabled={preparing}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Upload className="h-3.5 w-3.5" />
-                  {draft.logo.url ? "Replace" : "Upload"}
+                  {preparing
+                    ? "Resizing…"
+                    : draft.logo.url
+                      ? "Replace"
+                      : "Upload"}
                 </Button>
                 {draft.logo.url && (
                   <button
@@ -264,6 +270,12 @@ export function BrandProfileSection() {
               <div className="anim-enter-fade mt-2 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 <ImageIcon className="h-3.5 w-3.5" />
                 {uploadError}
+              </div>
+            )}
+            {uploadNote && !uploadError && (
+              <div className="anim-enter-fade mt-2 flex items-center gap-2 rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs text-accent-800">
+                <ImageIcon className="h-3.5 w-3.5" />
+                {uploadNote} &mdash; save to use it on your proposals.
               </div>
             )}
           </div>
@@ -287,7 +299,9 @@ export function BrandProfileSection() {
                         : "border-zinc-200 text-zinc-600 hover:border-zinc-300",
                     )}
                   >
-                    <span className={cn("h-3.5 w-3.5 rounded-full", t.swatch)} />
+                    <span
+                      className={cn("h-3.5 w-3.5 rounded-full", t.swatch)}
+                    />
                     {t.label}
                   </button>
                 );
@@ -344,7 +358,8 @@ function ProposalPreview({ draft }: { draft: ContractorProfile }) {
               {draft.company || "Your company"}
             </div>
             <div className="truncate text-xs text-zinc-500">
-              {draft.contractorName || "Contractor"} · License {draft.license || "—"}
+              {draft.contractorName || "Contractor"} · License{" "}
+              {draft.license || "—"}
             </div>
             <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
               {draft.tagline}
@@ -361,8 +376,10 @@ function ProposalPreview({ draft }: { draft: ContractorProfile }) {
       <div className="rounded-xl border border-dashed border-zinc-200 p-3 text-xs text-zinc-500">
         <div className="flex items-center gap-1.5">
           <Pencil className="h-3 w-3" />
-          Changes flow into <span className="font-medium text-zinc-700">/proposal</span>{" "}
-          and <span className="font-medium text-zinc-700">/p/[token]</span> immediately.
+          Changes flow into{" "}
+          <span className="font-medium text-zinc-700">/proposal</span> and{" "}
+          <span className="font-medium text-zinc-700">/p/[token]</span>{" "}
+          immediately.
         </div>
       </div>
     </motion.div>

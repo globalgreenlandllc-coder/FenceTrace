@@ -232,6 +232,7 @@ export function ManualMeasureForm() {
       license: profile.license,
       stripePaymentUrl: profile.payments.stripeUrl ?? null,
       squarePaymentUrl: profile.payments.squareUrl ?? null,
+      logo: { ...profile.logo },
     },
     measurements,
     priceDisplay,
@@ -436,10 +437,9 @@ export function ManualMeasureForm() {
                 {mode === "runs" ? (
                   <>
                     <p className="mt-3 text-sm text-zinc-500">
-                      Enter each straight fence section as you measured it
-                      — Enter adds the run and keeps the cursor ready for
-                      the next one. Gates and end posts suggest themselves
-                      from the runs.
+                      Enter each straight fence section as you measured it —
+                      Enter adds the run and keeps the cursor ready for the next
+                      one. Gates and end posts suggest themselves from the runs.
                     </p>
                     <div className="mt-4 flex gap-2">
                       <div className="relative flex-1">
@@ -513,8 +513,7 @@ export function ManualMeasureForm() {
                   <>
                     <p className="mt-3 text-sm text-zinc-500">
                       Already summed it up on paper? Enter the total fence
-                      footage — you can still fine-tune corners and posts
-                      below.
+                      footage — you can still fine-tune corners and posts below.
                     </p>
                     <label
                       htmlFor="manual-total-lf"
@@ -865,8 +864,7 @@ export function ManualMeasureForm() {
             )}
             {step === "measure" && (
               <p className="mt-2 text-center text-xs text-zinc-400">
-                Nothing saves until you say so — review first, no credits
-                used.
+                Nothing saves until you say so — review first, no credits used.
               </p>
             )}
           </div>
@@ -884,9 +882,7 @@ export function ManualMeasureForm() {
           discountPct={0}
           address={address}
           onChange={(next) =>
-            setPkgs((prev) =>
-              prev.map((p) => (p.id === next.id ? next : p)),
-            )
+            setPkgs((prev) => prev.map((p) => (p.id === next.id ? next : p)))
           }
           onChangeAll={(next) => setPkgs(next)}
           priceDisplay={priceDisplay}
@@ -912,9 +908,7 @@ function RecapItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className={cn(MICROLABEL, "text-zinc-400")}>{label}</dt>
-      <dd className="mt-0.5 font-medium tabular-nums text-zinc-900">
-        {value}
-      </dd>
+      <dd className="mt-0.5 font-medium tabular-nums text-zinc-900">{value}</dd>
     </div>
   );
 }

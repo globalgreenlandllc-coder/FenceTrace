@@ -6,7 +6,8 @@ import { ShieldCheck, Phone, Mail } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Badge } from "@/components/ui/badge";
 import { BrandMark } from "@/components/ui/brand-mark";
-import { useProfile } from "@/lib/auth-mock";
+import { useProfile, type ContractorProfile } from "@/lib/auth-mock";
+import type { LogoTone } from "@/lib/types";
 import { AerialSection } from "@/components/proposal/aerial-section";
 import { PackagesSection } from "@/components/proposal/packages-section";
 import { PhotosSection } from "@/components/proposal/photos-section";
@@ -75,10 +76,7 @@ export function ClientPortalView({
     : undefined;
 
   const canAccept =
-    !!signature &&
-    signerName.trim().length > 1 &&
-    agreed &&
-    !previewMode;
+    !!signature && signerName.trim().length > 1 && agreed && !previewMode;
 
   let reason: string | undefined;
   if (previewMode) reason = "Preview mode — accepting is disabled";
@@ -262,16 +260,61 @@ export function ClientPortalView({
   );
 }
 
+/**
+ * Which brand mark to paint on the portal.
+ *
+ * The homeowner opens /p/<token> with no session, so useProfile() hands
+ * back the empty default and the contractor's uploaded logo silently
+ * vanished from the client's copy of the proposal. The brand is now
+ * snapshotted onto proposal.contractor at build time, so prefer that and
+ * keep the live profile only as the fallback — which is what makes the
+ * contractor's own preview of an older proposal still look right.
+ */
+function portalBrand(
+  proposal: Proposal,
+  profile: ContractorProfile,
+): { initials: string; tone: LogoTone; url: string | null } {
+  const snap = proposal.contractor.logo;
+  if (snap && (snap.url || snap.initials)) {
+    return {
+      initials: snap.initials || initialsFrom(proposal.contractor.company),
+      tone: snap.tone,
+      url: snap.url ?? null,
+    };
+  }
+  return {
+    initials:
+      profile.logo.initials ||
+      initialsFrom(proposal.contractor.company) ||
+      "FT",
+    tone: profile.logo.tone,
+    url: profile.logo.url,
+  };
+}
+
+/** "Rivera Fenceworks" -> "RF", so a proposal with no saved monogram
+ *  still shows the company rather than the FenceScan placeholder. */
+function initialsFrom(company: string): string {
+  return (
+    company
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? "")
+      .join("") || ""
+  );
+}
+
 function PortalNav({ proposal }: { proposal: Proposal }) {
-  const profile = useProfile();
+  const brand = portalBrand(proposal, useProfile());
   return (
     <header className="sticky top-0 z-30 border-b border-zinc-200 bg-white print:hidden">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         <div className="flex items-center gap-2.5">
           <BrandMark
-            initials={profile.logo.initials || "FT"}
-            tone={profile.logo.tone}
-            logoUrl={profile.logo.url}
+            initials={brand.initials}
+            tone={brand.tone}
+            logoUrl={brand.url}
             size="sm"
           />
           <div className="leading-none">
@@ -297,14 +340,14 @@ function PortalNav({ proposal }: { proposal: Proposal }) {
 }
 
 function Header({ proposal }: { proposal: Proposal }) {
-  const profile = useProfile();
+  const brand = portalBrand(proposal, useProfile());
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-card sm:p-8">
       <div className="flex flex-wrap items-start gap-4">
         <BrandMark
-          initials={profile.logo.initials || "FT"}
-          tone={profile.logo.tone}
-          logoUrl={profile.logo.url}
+          initials={brand.initials}
+          tone={brand.tone}
+          logoUrl={brand.url}
           size="xl"
         />
         <div className="min-w-0 flex-1">
@@ -331,11 +374,7 @@ function Header({ proposal }: { proposal: Proposal }) {
   );
 }
 
-function ContactCard({
-  contractor,
-}: {
-  contractor: Proposal["contractor"];
-}) {
+function ContactCard({ contractor }: { contractor: Proposal["contractor"] }) {
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-card">
       <div className="font-label text-[11px] text-zinc-500">
