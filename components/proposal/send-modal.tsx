@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { AlertTriangle, Check, Copy, Mail, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, Headphones, Mail, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Proposal } from "@/lib/proposal-mock";
 import { sendProposal } from "@/app/actions/proposals";
@@ -45,6 +45,8 @@ export function SendModal({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [sentPortalUrl, setSentPortalUrl] = useState<string | null>(null);
+  // Whether the spoken summary finished building during the send.
+  const [audioReady, setAudioReady] = useState(false);
   const portalUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/p/${proposal.token}`
@@ -53,7 +55,7 @@ export function SendModal({
   function onClientNameChange(v: string) {
     setClientName(v);
     if (!messageDirty) {
-      const first = (v.trim().split(/\s+/)[0] || "there");
+      const first = v.trim().split(/\s+/)[0] || "there";
       setMessage(
         `Hi ${first},\n\nAttached is your fence proposal. Tap below to review the three options, sign, and pay your deposit. Pricing locked for ${proposal.validDays} days.\n\n— ${proposal.contractor.name}`,
       );
@@ -98,6 +100,7 @@ export function SendModal({
       });
       if (res.ok) {
         setSentPortalUrl(res.portalUrl);
+        setAudioReady(res.audioReady);
         setPhase("sent");
       } else {
         setError(res.reason);
@@ -280,6 +283,13 @@ export function SendModal({
                   {clientName.trim() || "Your client"} will receive an email and
                   can review, sign, and pay from the portal.
                 </p>
+                {audioReady && (
+                  <p className="mx-auto mt-3 inline-flex max-w-sm items-center gap-2 rounded-lg bg-accent-50 px-3 py-2 text-[12.5px] leading-snug text-accent-800">
+                    <Headphones className="h-3.5 w-3.5 shrink-0" />A spoken
+                    summary is attached — they can listen to the quote while
+                    driving.
+                  </p>
+                )}
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
                   <Button
                     size="sm"

@@ -1,6 +1,7 @@
 "use server";
 
 import { fenceTierPatches, type FenceDraftInput } from "@/lib/fence/proposal";
+import { freezeFenceRatesForEstimate } from "./fence-rates";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
@@ -9,6 +10,7 @@ import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { sendEmailViaResend } from "@/lib/email/resend";
 import { renderProposalEmail } from "@/lib/email/proposal-template";
+import { warmProposalAudio } from "@/lib/proposal-audio";
 import {
   blankProposal,
   deriveTotalCentsFromData,
@@ -25,7 +27,16 @@ import { getMe } from "./me";
 import { createDefaultSchedule } from "./payments";
 
 export type SendProposalResult =
-  | { ok: true; token: string; portalUrl: string; messageId: string }
+  | {
+      ok: true;
+      token: string;
+      portalUrl: string;
+      messageId: string;
+      /** The spoken summary was built and is ready to play. False when
+       *  TTS is unconfigured or was too slow — the portal generates it on
+       *  the client's first tap instead. */
+      audioReady: boolean;
+    }
   | { ok: false; reason: string };
 
 /**
@@ -177,6 +188,14 @@ export async function sendProposal(args: {
     },
   });
 
+  // Build the spoken summary now, so it ships WITH the proposal. The
+  // email invites the client to listen on the road; making them wait out
+  // a TTS round trip at the wheel is exactly the wrong moment for it.
+  // Best-effort and time-boxed — a slow or unconfigured provider must
+  // never fail a send that already went out, and the portal route still
+  // generates on demand for anything that doesn't finish here.
+  const audioReady = await warmProposalAudio(row.id);
+
   revalidatePath("/dashboard/proposals");
   revalidatePath("/admin");
 
@@ -185,6 +204,7 @@ export async function sendProposal(args: {
     token: row.publicToken,
     portalUrl,
     messageId: result.id,
+    audioReady,
   };
 }
 
@@ -406,6 +426,14 @@ async function saveDraftFromEstimateImpl(args: {
     return { ok: false, reason: "Address is required" };
   }
 
+  // The contractor's price book is resolved HERE rather than trusted
+  // from the browser: a saved proposal has to quote at the rates that
+  // are actually in their settings, not whatever a long-open tab had
+  // cached. Frozen onto every tier from this point on.
+  const fenceInput = args.fence
+    ? { ...args.fence, rates: await freezeFenceRatesForEstimate() }
+    : undefined;
+
   // Compose a Proposal-shaped JSON blob so /proposal can re-hydrate the
   // draft later. We start from the blank template and overlay the live
   // estimate data + the contractor's profile.
@@ -430,9 +458,9 @@ async function saveDraftFromEstimateImpl(args: {
             args.jobType === "new" ? ("none" as const) : ("free" as const),
         },
       };
-      if (!args.fence) return base;
+      if (!fenceInput) return base;
       // FenceScan: rebuild each tier around the drawn layout.
-      const patch = fenceTierPatches(args.fence).find((t) => t.id === p.id);
+      const patch = fenceTierPatches(fenceInput).find((t) => t.id === p.id);
       if (!patch) return base;
       return {
         ...base,
