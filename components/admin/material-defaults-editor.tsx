@@ -326,9 +326,11 @@ export function MaterialDefaultsEditor({
         })}
 
         <div className="rounded-xl border border-zinc-200 bg-zinc-50/50 p-4 text-xs text-zinc-500">
-          New contractors get a copy of these defaults at signup. Existing
-          contractors keep their own overrides — changes here only flow to
-          accounts created after you save.
+          This is the platform&apos;s reference price book — the national
+          numbers quoting starts from. Contractors set what they actually
+          charge in Settings → Your fence prices; a type they haven&apos;t
+          overridden keeps tracking the platform rate. Live fence rates
+          are the ones in lib/fence/catalog.ts, which these rows mirror.
         </div>
       </div>
 
@@ -415,7 +417,7 @@ function DeleteDialog({
             <p className="mt-2 text-sm text-zinc-600">
               {row._new
                 ? "Discards this unsaved row."
-                : "Existing contractors keep their own row even if you delete the platform default. Only new contractors signing up after this change won't get this material."}
+                : "Removes this line from the platform reference book. Contractors who set their own price for it in Settings keep that price."}
             </p>
             <div className="mt-6 flex items-center justify-end gap-2">
               <Button variant="secondary" size="sm" onClick={onClose} disabled={pending}>

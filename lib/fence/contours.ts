@@ -150,3 +150,50 @@ export function buildContours(
   }
   return out;
 }
+
+/**
+ * The full grid → contours pipeline, in one call.
+ *
+ * Finds the grid's own low point, picks a readable interval for its
+ * relief, and returns contours measured UP FROM THAT LOW POINT — which
+ * is what both the estimator canvas and the client's proposal label
+ * ("+8′ above the low point"). Shared so the working canvas and the
+ * deliverable can never draw the yard's topography differently.
+ *
+ * `cols`/`rows` are the lattice dimensions the grid was sampled at; the
+ * contours come back in canvas px spanning `canvasW` × `canvasH`.
+ * Returns null when the ground is too flat to contour or the samples
+ * are unusable.
+ */
+export function contoursFromGrid(
+  grid: number[][] | null | undefined,
+  opts: {
+    cols: number;
+    rows: number;
+    canvasW: number;
+    canvasH: number;
+  },
+): { lines: ContourLine[]; intervalFt: number; reliefFt: number } | null {
+  if (!grid || grid.length < 2) return null;
+  let min = Infinity;
+  let max = -Infinity;
+  for (const row of grid) {
+    for (const v of row) {
+      if (!Number.isFinite(v)) return null;
+      min = Math.min(min, v);
+      max = Math.max(max, v);
+    }
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  const intervalFt = pickContourInterval(min, max);
+  if (intervalFt <= 0) return null;
+  const lines = buildContours(
+    grid.map((row) => row.map((v) => v - min)),
+    opts.canvasW / Math.max(1, opts.cols - 1),
+    opts.canvasH / Math.max(1, opts.rows - 1),
+    intervalFt,
+  );
+  return lines.length > 0
+    ? { lines, intervalFt, reliefFt: Math.round(max - min) }
+    : null;
+}

@@ -5,6 +5,7 @@
 import { fenceType, type FenceTypeId, type Terrain } from "./catalog";
 import { fenceTiers } from "./pricing";
 import type { MarketSnapshot } from "./market";
+import type { RateBook } from "./rates";
 import type { FenceEstimateConfig } from "@/lib/types";
 
 export type FenceDraftInput = {
@@ -26,6 +27,10 @@ export type FenceDraftInput = {
    *  onto every tier so the saved proposal reprices at the same
    *  state/ZIP rates the contractor saw on the rail. */
   market?: MarketSnapshot;
+  /** The contractor's own price book, frozen the same way and for the
+   *  same reason — every tier quotes at the rates in their settings at
+   *  the moment the proposal was built, not whatever they are later. */
+  rates?: RateBook;
 };
 
 export type FenceTierPatch = {
@@ -100,6 +105,10 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         postUpgrade: input.postUpgrade,
         mixed: input.mixed,
         market: input.market,
+        // Every tier quotes off the same price book — including the
+        // upgraded material a higher tier steps up to, which is why the
+        // whole book rides along rather than just this tier's type.
+        rates: input.rates,
       },
       highlights,
       markupPct: tier.markupPct,

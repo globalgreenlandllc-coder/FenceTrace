@@ -125,6 +125,8 @@ model User {
   jobExpenses       JobExpense[]           @relation("ExpenseOwner")
   clientNotes       ClientNote[]
   financialSettings FinancialSettings?
+  // The contractor's own fence price book (overrides the catalog).
+  fenceRates        ContractorFenceRate[]
 
   // Referral program: shareable code (lazily minted on first visit to
   // Settings) + who referred this account (set once at creation from
@@ -1272,6 +1274,39 @@ model OverheadItem {
 // crew and to the salesperson, with overhead fixed and the remainder =
 // the owner's profit. One row per contractor; the financials page profit
 // planner reads/writes it. Percentages are 0–100.
+/// A contractor's own price for ONE fence type — what they charge, not
+/// the catalog's national starting number (lib/fence/rates.ts).
+///
+/// Sparse by design: a type with no row here prices at the catalog rate,
+/// and a field left NULL still tracks the catalog. That way a
+/// platform-wide price refresh reaches every contractor who has not
+/// deliberately overridden that number, and "reset to standard" is a
+/// delete rather than a write-back of today's figure.
+///
+/// Nothing here retro-prices a sent proposal: the book is frozen onto
+/// the estimate config when the quote is built.
+model ContractorFenceRate {
+  id String @id @default(cuid())
+
+  userId String
+  /// FenceTypeId from lib/fence/catalog.ts, e.g. "cedar-privacy".
+  fenceTypeId String
+
+  /// Dollars. NULL = this field still tracks the catalog.
+  materialPerLf Float?
+  laborPerLf    Float?
+  gateSingle    Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fenceTypeId])
+  @@index([userId])
+  @@map("contractor_fence_rates")
+}
+
 model FinancialSettings {
   id        String   @id @default(cuid())
   userId    String   @unique

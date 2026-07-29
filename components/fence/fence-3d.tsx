@@ -10,6 +10,20 @@ import {
   runDistanceModel,
   type RunElevationModel,
 } from "@/lib/fence/geo";
+import {
+  DEFAULT_SQUASH,
+  DEFAULT_YAW_DEG,
+  SQUASH_MAX,
+  SQUASH_MIN,
+  ZOOM_MAX,
+  easeInOut,
+  lerpView,
+  lerpZoom,
+  type Fence3DView,
+  type Fence3DZoom,
+  type FenceInteraction,
+  type FenceShot,
+} from "@/lib/fence/viewpoints";
 
 /**
  * Fence3D — a to-scale preview of the drawn fence, hand-rolled in SVG
@@ -42,8 +56,6 @@ type GateIn = Pt & {
 
 const VIEW_W = 900;
 const VIEW_H = 560;
-const DEFAULT_YAW_DEG = -28;
-const DEFAULT_SQUASH = 0.52;
 const HEIGHT_EXAGGERATION = 1.3; // readability: fences are long + short
 /** Posts render at TRUE stock width so a 1⅝″ chain-link pipe can't be
  *  mistaken for a 5×5 vinyl post — with a small uniform gain (ratios
@@ -57,7 +69,10 @@ const TURN_RAD_PER_S = 2.0;
 const FOCAL = 640; // walk-mode focal length, screen px
 const NEAR_PX = 4; // walk-mode near plane, plan px
 
-export type Fence3DView = { yawDeg: number; squash: number };
+/** Re-exported so existing importers (estimator, proposal, portal)
+ *  keep working now that the camera model lives in lib/fence/viewpoints
+ *  alongside the saved-shot logic. */
+export type { Fence3DView, Fence3DZoom } from "@/lib/fence/viewpoints";
 
 type WFace = {
   kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree" | "bwall" | "roof" | "shadow";
@@ -273,6 +288,11 @@ export function Fence3D({
   postUpgrade,
   initialView,
   onViewChange,
+  shots,
+  activeShotId,
+  onActiveShotChange,
+  interaction = "free",
+  onCapture,
   className,
 }: {
   /** Fence runs in canvas space ({points} is all that's read). */
@@ -313,12 +333,34 @@ export function Fence3D({
   /** Fires when the user releases a drag — the estimator stores the
    *  angle so "Build the proposal" freezes it as the client's view. */
   onViewChange?: (v: Fence3DView) => void;
+  /** Saved camera positions the contractor froze onto the proposal.
+   *  Rendered as a strip the viewer can step through; the camera FLIES
+   *  to the tapped shot rather than cutting, so the client keeps their
+   *  bearings on which side of the yard they're looking at. */
+  shots?: FenceShot[];
+  /** Which shot is currently framed (controlled). */
+  activeShotId?: string | null;
+  onActiveShotChange?: (id: string) => void;
+  /** How much camera freedom the viewer gets — see lib/fence/viewpoints.
+   *  "free" spins, "guided" allows saved shots only, "locked" is a
+   *  fixed image with no controls at all. */
+  interaction?: FenceInteraction;
+  /** Provided in builder mode: renders "Save this angle", handing back
+   *  the live camera INCLUDING zoom so a framed close-up survives. */
+  onCapture?: (view: Fence3DView, zoom: Fence3DZoom | null) => void;
   className?: string;
 }) {
   const [view, setView] = useState<Fence3DView>({
     yawDeg: initialView?.yawDeg ?? DEFAULT_YAW_DEG,
-    squash: Math.min(0.8, Math.max(0.3, initialView?.squash ?? DEFAULT_SQUASH)),
+    squash: Math.min(
+      SQUASH_MAX,
+      Math.max(SQUASH_MIN, initialView?.squash ?? DEFAULT_SQUASH),
+    ),
   });
+  // "locked" hides every control and ignores every gesture; "guided"
+  // keeps the saved-shot strip but takes away free spin and walk mode.
+  const canOrbit = interaction === "free";
+  const canWalk = interaction === "free";
   // Screen zoom over the orbit view: screen = world*k + t (an SVG group
   // transform, so zooming never rebuilds the scene).
   const [zoomCam, setZoomCam] = useState({ k: 1, tx: 0, ty: 0 });
@@ -339,6 +381,7 @@ export function Fence3D({
   walkCamRef.current = walkCam;
   const zoomRef = useRef(zoomCam);
   zoomRef.current = zoomCam;
+  const flightRef = useRef<number | null>(null);
 
   const scheduleFrame = useCallback((apply: () => void) => {
     pendingRef.current = apply;
@@ -1239,6 +1282,75 @@ export function Fence3D({
 
   /* ======================= interactions ============================= */
 
+  /**
+   * Fly the camera to a saved shot instead of cutting to it.
+   *
+   * A hard jump between two angles of the same yard is disorienting —
+   * the client can't tell whether they're looking at a different side
+   * or a different job. An eased ~620 ms move over the shortest yaw
+   * path keeps the geometry continuous, so the fence visibly rotates
+   * to its new face. Respects prefers-reduced-motion by cutting.
+   */
+  const flyTo = useCallback(
+    (shot: FenceShot) => {
+      if (flightRef.current !== null) cancelAnimationFrame(flightRef.current);
+      setMode("orbit");
+      const from = { ...viewRef.current };
+      const fromZoom = { ...zoomRef.current };
+      const to = shot.view;
+      const toZoom = shot.zoom ?? { k: 1, tx: 0, ty: 0 };
+      const reduced =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (reduced) {
+        setView(to);
+        setZoomCam(toZoom);
+        return;
+      }
+      const t0 = performance.now();
+      const DURATION = 620;
+      const step = (now: number) => {
+        const t = Math.min(1, (now - t0) / DURATION);
+        const e = easeInOut(t);
+        setView(lerpView(from, to, e));
+        setZoomCam(lerpZoom(fromZoom, toZoom, e));
+        if (t < 1) flightRef.current = requestAnimationFrame(step);
+        else flightRef.current = null;
+      };
+      flightRef.current = requestAnimationFrame(step);
+    },
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      if (flightRef.current !== null) cancelAnimationFrame(flightRef.current);
+    },
+    [],
+  );
+
+  // Follow the controlled active shot. Keyed on the id (not the object)
+  // so a parent re-render can't retrigger the flight mid-move.
+  const shotList = shots ?? [];
+  const lastShotRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeShotId || shotList.length === 0) return;
+    if (lastShotRef.current === activeShotId) return;
+    const shot = shotList.find((s) => s.id === activeShotId);
+    if (!shot) return;
+    lastShotRef.current = activeShotId;
+    flyTo(shot);
+  }, [activeShotId, shotList, flyTo]);
+
+  const selectShot = useCallback(
+    (shot: FenceShot) => {
+      lastShotRef.current = shot.id;
+      flyTo(shot);
+      onActiveShotChange?.(shot.id);
+    },
+    [flyTo, onActiveShotChange],
+  );
+
   // Native wheel: zoom the orbit view toward the cursor (React root
   // wheel handlers are passive — preventDefault needs a native listener).
   useEffect(() => {
@@ -1246,13 +1358,16 @@ export function Fence3D({
     if (!svg) return;
     const onWheel = (e: WheelEvent) => {
       if (modeRef.current !== "orbit") return;
+      // Locked/guided views are a fixed frame — scrolling the page over
+      // the preview must scroll the page, not the camera.
+      if (!canOrbit) return;
       e.preventDefault();
       const r = svg.getBoundingClientRect();
       const sx = ((e.clientX - r.left) / r.width) * VIEW_W;
       const sy = ((e.clientY - r.top) / r.height) * VIEW_H;
       const factor = Math.exp(-e.deltaY * 0.0022);
       setZoomCam((z0) => {
-        const k = Math.min(8, Math.max(1, z0.k * factor));
+        const k = Math.min(ZOOM_MAX, Math.max(1, z0.k * factor));
         if (k === z0.k) return z0;
         // keep the world point under the cursor fixed
         const wx = (sx - z0.tx) / z0.k;
@@ -1262,7 +1377,7 @@ export function Fence3D({
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [canOrbit]);
 
   /** Screen → plan-ground point (inverts zoom, fit and the axonometric
    *  rotation, iterating for terrain height). */
@@ -1313,6 +1428,9 @@ export function Fence3D({
   const onPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (e.button !== 0) return;
+      // Guided/locked: the camera belongs to the contractor. Swallow the
+      // gesture entirely rather than starting a drag that goes nowhere.
+      if (!canOrbit) return;
       e.currentTarget.setPointerCapture(e.pointerId);
       const v = viewRef.current;
       const w = walkCamRef.current;
@@ -1326,7 +1444,7 @@ export function Fence3D({
         moved: false,
       };
     },
-    [],
+    [canOrbit],
   );
   const onPointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
@@ -1365,12 +1483,12 @@ export function Fence3D({
         return;
       }
       // clean click: in orbit mode, step into the yard at that spot
-      if (modeRef.current === "orbit") {
+      if (modeRef.current === "orbit" && canWalk) {
         const at = pickGround(e.clientX, e.clientY);
         if (at) enterWalk(at);
       }
     },
-    [onViewChange, pickGround, enterWalk],
+    [onViewChange, pickGround, enterWalk, canWalk],
   );
 
   // Walk-mode movement loop + keys.
@@ -2085,6 +2203,8 @@ export function Fence3D({
   };
 
   const walking = mode === "walk" && walkScene;
+  // The strip is worth showing only when there is somewhere to go.
+  const showShots = shotList.length > 1 && interaction !== "locked";
   const isDefaultView =
     Math.abs(view.yawDeg - DEFAULT_YAW_DEG) < 0.5 &&
     Math.abs(view.squash - DEFAULT_SQUASH) < 0.005 &&
@@ -2095,10 +2215,25 @@ export function Fence3D({
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        className={cn("block h-full w-full", walking ? "cursor-move" : "cursor-grab active:cursor-grabbing")}
-        style={{ touchAction: "none" }}
+        className={cn(
+          "block h-full w-full",
+          !canOrbit
+            ? "cursor-default"
+            : walking
+              ? "cursor-move"
+              : "cursor-grab active:cursor-grabbing",
+        )}
+        // A locked view must not swallow touch scrolling — the client is
+        // reading a proposal on a phone and needs the page to move.
+        style={{ touchAction: canOrbit ? "none" : "auto" }}
         role="img"
-        aria-label={`3D preview of the ${label} fence as designed — drag to orbit, click a spot to walk`}
+        aria-label={
+          canOrbit
+            ? `3D preview of the ${label} fence as designed — drag to orbit, click a spot to walk`
+            : interaction === "guided"
+              ? `3D preview of the ${label} fence as designed — choose a saved angle to view it from another side`
+              : `3D preview of the ${label} fence as designed`
+        }
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -2185,7 +2320,23 @@ export function Fence3D({
           </button>
         ) : (
           <>
-            {!isDefaultView && (
+            {/* Builder-only: freeze the live camera (zoom included) as a
+                named shot the client will get. */}
+            {onCapture && (
+              <button
+                type="button"
+                onClick={() =>
+                  onCapture(
+                    viewRef.current,
+                    zoomRef.current.k > 1 ? zoomRef.current : null,
+                  )
+                }
+                className="transition-smooth ring-focus rounded-full bg-accent-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm ring-1 ring-accent-500 hover:bg-accent-700"
+              >
+                📌 Save this angle
+              </button>
+            )}
+            {canOrbit && !isDefaultView && (
               <button
                 type="button"
                 onClick={() => {
@@ -2199,19 +2350,54 @@ export function Fence3D({
                 Reset view
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => enterWalk()}
-              className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
-            >
-              🚶 Walk the yard
-            </button>
-            <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
-              ↻ Drag to spin · scroll to zoom · click a spot to walk
-            </span>
+            {canWalk && (
+              <button
+                type="button"
+                onClick={() => enterWalk()}
+                className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
+              >
+                🚶 Walk the yard
+              </button>
+            )}
+            {canOrbit ? (
+              <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
+                ↻ Drag to spin · scroll to zoom · click a spot to walk
+              </span>
+            ) : interaction === "guided" && showShots ? (
+              <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
+                Tap an angle below to view from that side
+              </span>
+            ) : null}
           </>
         )}
       </div>
+
+      {/* Saved angles — the contractor's shot list. Tapping flies the
+          camera; this is the client's way "around" the fence in guided
+          mode and a set of bookmarks in free mode. */}
+      {showShots && !walking && (
+        <div className="absolute inset-x-3 top-12 flex flex-wrap justify-end gap-1.5">
+          {shotList.map((s) => {
+            const active = s.id === activeShotId;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => selectShot(s)}
+                aria-pressed={active}
+                className={cn(
+                  "transition-smooth ring-focus rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1",
+                  active
+                    ? "bg-accent-600 text-white ring-accent-500"
+                    : "bg-white/90 text-zinc-700 ring-zinc-200 hover:bg-white",
+                )}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* client-readable summary chips */}
       <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">

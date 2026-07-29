@@ -1,4 +1,5 @@
 import type { MarketSnapshot } from "./fence/market";
+import type { RateBook } from "./fence/rates";
 
 /** Palette for the fallback monogram when no logo image is uploaded. */
 export type LogoTone =
@@ -219,6 +220,14 @@ export type FenceEstimateConfig = {
    *  Absent = priced at national rates — every proposal saved before
    *  market pricing existed keeps the total it was sent with. */
   market?: MarketSnapshot;
+  /** The contractor's own price book (lib/fence/rates.ts), FROZEN at
+   *  estimate time the same way `market` is. Catalog rates are the
+   *  platform's national starting point; this is what THIS contractor
+   *  charges. Freezing it means editing the price book later never
+   *  reprices a quote that was already sent. Absent = catalog rates,
+   *  which is what every estimate saved before the price book existed
+   *  was quoted at. */
+  rates?: RateBook;
 };
 
 export type EstimateConfig = {

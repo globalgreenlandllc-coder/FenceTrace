@@ -11,8 +11,9 @@ export default async function AdminMaterialDefaultsPage() {
           Material defaults
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-          Baseline national-average prices that pre-populate every new
-          contractor's account. Existing contractors keep their own overrides.
+          The platform's reference price book — baseline national-average
+          prices every quote starts from. Contractors override what they
+          charge in Settings → Your fence prices.
         </p>
       </header>
 

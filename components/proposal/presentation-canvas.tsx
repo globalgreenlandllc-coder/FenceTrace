@@ -14,6 +14,7 @@ import {
   RoofStructureOverlay,
   orientationChipBoxes,
 } from "@/components/estimate/aerial-shared";
+import { contoursFromGrid } from "@/lib/fence/contours";
 import {
   layoutLabels,
   type LabelBox,
@@ -165,6 +166,8 @@ export function PresentationCanvas({
   onBuildingsChange,
   fenceSections,
   onFenceSectionsChange,
+  topoGridFt,
+  topoGridSize,
 }: {
   eaves: EditableLine[];
   rakes?: EditableLine[];
@@ -198,7 +201,28 @@ export function PresentationCanvas({
    *  another fence — priced + drawn everywhere. */
   fenceSections?: SectionIn[] | null;
   onFenceSectionsChange?: (next: SectionIn[]) => void;
+  /** FenceScan: the scan's elevation lattice. When present the client's
+   *  satellite view carries topo contours under the fence trace, so the
+   *  proposal shows the GROUND the fence has to follow — the reason a
+   *  sloped yard costs more than a flat one. */
+  topoGridFt?: number[][] | null;
+  /** Lattice dimensions the grid was sampled at (cols × rows). */
+  topoGridSize?: { cols: number; rows: number };
 }) {
+  // Contours are derived by the same shared pipeline the estimator
+  // canvas uses, so the working drawing and the client's deliverable
+  // can never disagree about the yard's shape.
+  const topoContours = useMemo(
+    () =>
+      contoursFromGrid(topoGridFt, {
+        cols: topoGridSize?.cols ?? topoGridFt?.[0]?.length ?? 0,
+        rows: topoGridSize?.rows ?? topoGridFt?.length ?? 0,
+        canvasW: VIEWBOX_W,
+        canvasH: VIEWBOX_H,
+      }),
+    [topoGridFt, topoGridSize?.cols, topoGridSize?.rows],
+  );
+
   const svgRef = useRef<SVGSVGElement>(null);
   // viewBox units per CSS pixel — 1 on a full-width desktop canvas, ~2.6
   // when the same 900-unit drawing is rendered on a phone. Feeds `vs` so
@@ -846,6 +870,61 @@ export function PresentationCanvas({
             fill="rgba(2,6,23,0.32)"
             pointerEvents="none"
           />
+        )}
+
+        {/* Topography — drawn on the scrim, UNDER the fence trace, so the
+            client reads the ground first and the fence as sitting on it.
+            Deliberately quiet: thin lines, one label per level, and the
+            index contour (the low point) slightly stronger. */}
+        {topoContours && (
+          <g pointerEvents="none">
+            {topoContours.lines.map((line, li) => (
+              <g key={`topo-${li}`}>
+                {line.chains.map((chain, ci) => (
+                  <polyline
+                    key={ci}
+                    points={chain
+                      .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+                      .join(" ")}
+                    fill="none"
+                    stroke={
+                      planMode ? "rgba(20,58,74,0.30)" : "rgba(226,232,240,0.42)"
+                    }
+                    strokeWidth={(li === 0 ? 1.5 : 1) * vs}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                  />
+                ))}
+                {/* Label the level once, on its longest chain, at the
+                    midpoint — enough to read the slope, not enough to
+                    clutter the deliverable. */}
+                {(() => {
+                  const longest = line.chains.reduce(
+                    (best, c) => (c.length > (best?.length ?? 0) ? c : best),
+                    null as { x: number; y: number }[] | null,
+                  );
+                  if (!longest || longest.length < 6) return null;
+                  const at = longest[Math.floor(longest.length / 2)];
+                  return (
+                    <text
+                      x={at.x}
+                      y={at.y}
+                      textAnchor="middle"
+                      fontSize={9 * vs}
+                      fontWeight={600}
+                      fill={
+                        planMode
+                          ? "rgba(20,58,74,0.55)"
+                          : "rgba(226,232,240,0.62)"
+                      }
+                    >
+                      {line.levelFt > 0 ? `+${line.levelFt}′` : "0′"}
+                    </text>
+                  );
+                })()}
+              </g>
+            ))}
+          </g>
         )}
 
         {/* Geometry group — scaled about its centroid in plan mode so a

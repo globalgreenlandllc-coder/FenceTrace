@@ -40,10 +40,13 @@ import {
   type Terrain,
 } from "@/lib/fence/catalog";
 import { computeFenceTakeoff } from "@/lib/fence/takeoff";
+import { addShot, suggestShots } from "@/lib/fence/viewpoints";
 import { fenceTiers, priceFence } from "@/lib/fence/pricing";
 import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, countCornersAndEnds, walkPostPositions } from "@/lib/fence/geo";
-import { buildContours, pickContourInterval } from "@/lib/fence/contours";
+import { contoursFromGrid } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
+import { getMyFenceRates } from "@/app/actions/fence-rates";
+import type { RateBook } from "@/lib/fence/rates";
 import { getScanBuildings } from "@/app/actions/fence-buildings";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { Mountain } from "lucide-react";
@@ -85,6 +88,22 @@ export function FenceEstimator() {
   );
   const [scanError, setScanError] = useState<string | null>(null);
   const [layout, setLayout] = useState<FenceLayout>({ runs: [], gates: [] });
+
+  // The contractor's own price book (Settings → Your fence prices).
+  // Undefined until it loads, and undefined when they've overridden
+  // nothing — both mean "quote at the platform's standard rates".
+  const [rateBook, setRateBook] = useState<RateBook | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    getMyFenceRates()
+      .then((b) => {
+        if (alive && Object.keys(b).length > 0) setRateBook(b);
+      })
+      .catch(() => undefined); // no book ⇒ standard rates, never a blocker
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [typeId, setTypeId] = useState<FenceTypeId>("cedar-privacy");
   const t = fenceType(typeId);
@@ -299,26 +318,18 @@ export function FenceEstimator() {
 
   // Contours from the lattice, relative to the lot's low point (labels
   // read "+8′"). Null when the yard is too flat to contour.
-  const topoContours = useMemo(() => {
-    if (!topoGrid) return null;
-    let min = Infinity;
-    let max = -Infinity;
-    for (const row of topoGrid) {
-      for (const v of row) {
-        min = Math.min(min, v);
-        max = Math.max(max, v);
-      }
-    }
-    const intervalFt = pickContourInterval(min, max);
-    if (intervalFt <= 0) return null;
-    const lines = buildContours(
-      topoGrid.map((row) => row.map((v) => v - min)),
-      CANVAS_W / (TOPO_COLS - 1),
-      CANVAS_H / (TOPO_ROWS - 1),
-      intervalFt,
-    );
-    return lines.length > 0 ? { lines, intervalFt } : null;
-  }, [topoGrid]);
+  // Same pipeline the client's proposal canvas uses — one helper so the
+  // working drawing and the deliverable can't disagree about the ground.
+  const topoContours = useMemo(
+    () =>
+      contoursFromGrid(topoGrid, {
+        cols: TOPO_COLS,
+        rows: TOPO_ROWS,
+        canvasW: CANVAS_W,
+        canvasH: CANVAS_H,
+      }),
+    [topoGrid],
+  );
 
   /* ---- live math ---- */
   const totalLf = useMemo(
@@ -411,8 +422,10 @@ export function FenceEstimator() {
       // Local market resolved from the scanned address's state + ZIP —
       // scales every catalog rate and carries the local tax rule.
       market: scan?.market,
+      // …and the contractor's own rates, which the market then scales.
+      rates: rateBook,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType, scan?.market],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType, scan?.market, rateBook],
   );
 
   const takeoff = useMemo(
@@ -485,6 +498,22 @@ export function FenceEstimator() {
       topoGridFt: topoGrid ?? undefined,
       buildings: buildings.length > 0 ? buildings : undefined,
       view3d: cam3d,
+      // Seed the proposal's 3D presentation from the drawn geometry:
+      // an overview plus a face-on shot of each side the fence actually
+      // covers, with whatever the contractor was looking at added as
+      // the cover. They can re-cut the list in the proposal builder,
+      // but the common case ships professional angles with no work.
+      views3d: (() => {
+        const seeded = addShot(
+          {
+            shots: suggestShots(layout.runs),
+            interaction: "free" as const,
+          },
+          cam3d,
+          null,
+        );
+        return { ...seeded, coverShotId: seeded.shots[seeded.shots.length - 1].id };
+      })(),
       jobType,
       fence: {
         type: typeId,
@@ -502,6 +531,7 @@ export function FenceEstimator() {
         postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
         mixed: mixedByType.length > 0 ? mixedByType : undefined,
         market: scan.market,
+        rates: rateBook,
       },
       fenceSections: layout.sections,
     });

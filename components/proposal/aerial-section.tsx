@@ -18,6 +18,16 @@ const Fence3D = dynamic(
     ),
   },
 );
+import { View3DStudio } from "./view3d-studio";
+import {
+  addShot,
+  coverShot,
+  normalizeViewSet,
+  suggestShots,
+  type Fence3DView,
+  type Fence3DZoom,
+  type FenceViewSet,
+} from "@/lib/fence/viewpoints";
 import { GutterSystemBreakdown } from "./gutter-system-breakdown";
 import { ManualMeasurementsCard } from "./manual-measurements-card";
 import { sampleEaves, sampleDownspouts } from "@/lib/mock-estimate";
@@ -61,6 +71,59 @@ export function AerialSection({
   );
   const show3d = !!fenceCfg && hasRealTakeoff && view === "3d";
   const showDiagram = isSatellite && view === "diagram";
+
+  /* ---- 3D presentation: the saved angles the client receives ---- */
+  // Normalized on every read: the takeoff blob is untrusted JSON, and a
+  // proposal built before saved angles existed carries only the legacy
+  // single `view3d`, which promotes to a one-shot set.
+  const viewSet = useMemo(
+    () => normalizeViewSet(takeoff?.views3d, takeoff?.view3d),
+    [takeoff?.views3d, takeoff?.view3d],
+  );
+  // Which angle the preview is currently framed on. Opens on the cover
+  // shot — the one the contractor starred — for contractor and client
+  // alike, so the builder shows exactly what will be sent.
+  const [activeShotId, setActiveShotId] = useState<string | null>(
+    () => coverShot(viewSet).id,
+  );
+  const activeShot =
+    viewSet.shots.find((s) => s.id === activeShotId) ?? coverShot(viewSet);
+
+  const commitViewSet = (next: FenceViewSet) => {
+    if (!onChange || !takeoff) return;
+    onChange({
+      ...proposal,
+      takeoff: {
+        ...takeoff,
+        views3d: next,
+        // Keep the legacy field pointing at the cover so any surface
+        // still reading `view3d` (PDF export, older portal builds)
+        // opens on the same angle the client sees.
+        view3d: coverShot(next).view,
+      },
+    });
+  };
+
+  const handleCapture = (v: Fence3DView, zoom: Fence3DZoom | null) => {
+    const next = addShot(viewSet, v, zoom);
+    // addShot no-ops on a near-duplicate angle or a full list — don't
+    // write (or jump the selection) when nothing was added.
+    if (next.shots.length === viewSet.shots.length) return;
+    commitViewSet(next);
+    setActiveShotId(next.shots[next.shots.length - 1].id);
+  };
+
+  const handleSuggest = () => {
+    if (!takeoff) return;
+    const shots = suggestShots(takeoff.eaves);
+    const next: FenceViewSet = {
+      shots,
+      coverShotId: shots[0].id,
+      interaction: viewSet.interaction,
+    };
+    commitViewSet(next);
+    setActiveShotId(shots[0].id);
+  };
 
   // Recompute total LF from the live edited eaves so the badge stays in
   // sync as the contractor adjusts the trace. NaN-guard each line:
@@ -275,7 +338,15 @@ export function AerialSection({
                 sections={takeoff!.fenceSections ?? null}
                 retainingWall={(fenceCfg!.wallTopLf ?? 0) > 0}
                 postUpgrade={fenceCfg!.postUpgrade}
-                initialView={takeoff!.view3d}
+                initialView={activeShot.view}
+                shots={viewSet.shots}
+                activeShotId={activeShot.id}
+                onActiveShotChange={setActiveShotId}
+                // The contractor always gets a free camera in the
+                // builder — the lock governs the CLIENT's copy, and
+                // you can't frame a shot you aren't allowed to move to.
+                interaction={editable ? "free" : viewSet.interaction}
+                onCapture={editable ? handleCapture : undefined}
                 className="aspect-[16/10]"
               />
             ) : showDiagram ? (
@@ -316,6 +387,9 @@ export function AerialSection({
                   }
                   pxPerFt={takeoff!.canvasPxPerFt}
                   aerialImageUrl={takeoff!.aerial?.imageDataUrl}
+                  // Topography under the trace — fence proposals only.
+                  // A gutter takeoff has no ground story to tell.
+                  topoGridFt={fenceCfg ? takeoff!.topoGridFt ?? null : null}
                   // Plan-based takeoffs have no satellite image. Switch
                   // the canvas into drafting-paper mode so the gutter
                   // trace reads as an architectural drawing instead of
@@ -349,6 +423,15 @@ export function AerialSection({
             </div>
           )}
         </div>
+        {show3d && editable && (
+          <View3DStudio
+            viewSet={viewSet}
+            activeShotId={activeShot.id}
+            onChange={commitViewSet}
+            onActiveShotChange={setActiveShotId}
+            onSuggest={handleSuggest}
+          />
+        )}
         {hasRealTakeoff && (
           <GutterSystemBreakdown
             eaves={takeoff!.eaves}

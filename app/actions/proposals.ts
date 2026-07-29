@@ -1,6 +1,7 @@
 "use server";
 
 import { fenceTierPatches, type FenceDraftInput } from "@/lib/fence/proposal";
+import { normalizeViewSet, type FenceViewSet } from "@/lib/fence/viewpoints";
 import { freezeFenceRatesForEstimate } from "./fence-rates";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -369,6 +370,9 @@ export async function saveDraftFromEstimate(args: {
   topoGridFt?: number[][];
   /** FenceScan: the frozen 3D camera — the client's opening view. */
   view3d?: { yawDeg: number; squash: number };
+  /** FenceScan: the 3D presentation — named angles the client can step
+   *  through plus how much they may move the camera. */
+  views3d?: FenceViewSet;
   /** FenceScan: building footprints for the client diagram + 3D. */
   buildings?: { x: number; y: number }[][];
   /** FenceScan: mixed-type stretches for the client 3D. */
@@ -398,6 +402,7 @@ async function saveDraftFromEstimateImpl(args: {
   elevationSpacingPx?: number;
   topoGridFt?: number[][];
   view3d?: { yawDeg: number; squash: number };
+  views3d?: FenceViewSet;
   buildings?: { x: number; y: number }[][];
   fenceSections?: {
     a: { x: number; y: number };
@@ -489,6 +494,11 @@ async function saveDraftFromEstimateImpl(args: {
       elevationSpacingPx: args.elevationSpacingPx,
       topoGridFt: args.topoGridFt,
       view3d: args.view3d,
+      // Normalized on the way in so a malformed shot list can never
+      // reach the logged-out client portal.
+      views3d: args.views3d
+        ? normalizeViewSet(args.views3d, args.view3d)
+        : undefined,
       buildings: args.buildings,
       fenceSections: args.fenceSections,
     },

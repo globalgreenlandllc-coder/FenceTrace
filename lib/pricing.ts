@@ -15,6 +15,7 @@ import {
   type FenceTypeId,
   type Terrain,
 } from "./fence/catalog";
+import { ratedType } from "./fence/rates";
 import {
   blendedFactor,
   laborFactor,
@@ -107,7 +108,9 @@ function buildFenceLineItems(
   measurements: Measurements,
   fence: FenceEstimateConfig,
 ): LineItemPlan[] {
-  const t = fenceType(fence.type as FenceTypeId);
+  // The contractor's own price book is the BASE rate; the market
+  // snapshot below still scales it. Absent book ⇒ catalog rates.
+  const t = ratedType(fence.type as FenceTypeId, fence.rates);
   const hf = heightFactor(t, fence.heightFt);
   const waste = 1 + Math.max(0, measurements.wasteFactorPct) / 100;
   // Local market calibration (state + ZIP). Undefined → every factor is
@@ -174,7 +177,10 @@ function buildFenceLineItems(
     },
   ];
   for (const m of mixed) {
-    const mt = fenceType(m.type as FenceTypeId);
+    // A mixed-in stretch prices at the contractor's rate for THAT type,
+    // not the primary one — chain link across the back of a cedar job
+    // bills at their chain-link number.
+    const mt = ratedType(m.type as FenceTypeId, fence.rates);
     const mLf = Math.round(m.lf);
     // A mixed section is a DIFFERENT commodity — chain link across the
     // back of a cedar job is steel, not lumber — so it takes its own

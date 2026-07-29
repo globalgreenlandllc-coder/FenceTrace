@@ -106,6 +106,9 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       // Local market rides along so the proposal prices at the same
       // state/ZIP rates the estimator quoted.
       market: layout.market,
+      // …and so does the contractor's price book, for the same reason:
+      // the saved proposal must reprice to the number they showed.
+      rates: layout.rates,
     },
   };
   return { measurements, config, netFenceLf: take.netFenceLf };

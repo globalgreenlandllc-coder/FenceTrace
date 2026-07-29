@@ -14,6 +14,7 @@ import {
   type Terrain,
 } from "./catalog";
 import type { MarketSnapshot } from "./market";
+import type { RateBook } from "./rates";
 
 export type FenceLayoutInput = {
   type: FenceTypeId;
@@ -55,6 +56,11 @@ export type FenceLayoutInput = {
    *  layout only so pricing can scale the catalog's national rates and
    *  the same object can hand off to the proposal. */
   market?: MarketSnapshot;
+  /** The contractor's own price book (lib/fence/rates.ts). Like
+   *  `market`, takeoff QUANTITIES ignore it — a fence needs the same
+   *  posts whoever is billing for them — but it rides on the layout so
+   *  pricing and the proposal quote at this contractor's rates. */
+  rates?: RateBook;
 };
 
 export type BomLine = {

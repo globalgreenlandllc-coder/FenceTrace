@@ -8,6 +8,7 @@ import type {
   RoofStructure,
 } from "./types";
 import { buildLineItems, fenceTaxRate, fenceTaxableShare } from "./pricing";
+import type { FenceViewSet } from "./fence/viewpoints";
 import { sampleMeasurements } from "./mock-estimate";
 
 export type PackageId = "good" | "better" | "best";
@@ -232,8 +233,15 @@ export type ProposalTakeoff = {
   topoGridFt?: number[][];
   /** FenceScan: the 3D camera the contractor froze when building the
    *  proposal — the client's portal opens on this exact angle (and they
-   *  can spin it from there). */
+   *  can spin it from there). Superseded by `views3d`; kept because
+   *  proposals sent before saved angles existed carry only this, and
+   *  normalizeViewSet promotes it to a one-shot set. */
   view3d?: { yawDeg: number; squash: number };
+  /** FenceScan: the contractor's 3D PRESENTATION — the named camera
+   *  angles the client can step through, which one the portal opens on,
+   *  and how much the client is allowed to move the camera
+   *  (free / guided / locked). See lib/fence/viewpoints. */
+  views3d?: FenceViewSet;
   /** FenceScan: building footprints (canvas coords) — the house renders
    *  in the client's diagram + 3D so wall-connected fence reads right. */
   buildings?: { x: number; y: number }[][];
