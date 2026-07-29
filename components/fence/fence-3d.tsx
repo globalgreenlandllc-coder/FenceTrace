@@ -32,7 +32,7 @@ import {
  *
  * One WORLD model (fence faces, terrain cells, trees — all in plan px +
  * height px), two cameras:
- *  - ORBIT: axonometric bird's-eye. Drag spins/tilts, wheel zooms
+ *  - ORBIT: axonometric bird's-eye. Drag spins/tilts, wheel or pinch zooms
  *    toward the cursor, double-click zooms a spot.
  *  - WALK: click any spot on the ground to stand there — a simple
  *    first-person perspective renderer. WASD/arrows walk & turn, drag
@@ -369,6 +369,11 @@ export function Fence3D({
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean } | null>(null);
+  // Live pointers over the svg: one spins the camera, two pinch-zoom it.
+  // Touch has no wheel, so without this the orbit view can't zoom at all
+  // on a phone.
+  const ptrsRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<{ d: number; k0: number; wx: number; wy: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   const pendingRef = useRef<(() => void) | null>(null);
   const keysRef = useRef<Set<string>>(new Set());
@@ -1351,6 +1356,32 @@ export function Fence3D({
     [flyTo, onActiveShotChange],
   );
 
+  /** Client point → VIEW-space point on the svg. */
+  const toView = useCallback((clientX: number, clientY: number) => {
+    const r = svgRef.current!.getBoundingClientRect();
+    return {
+      x: ((clientX - r.left) / r.width) * VIEW_W,
+      y: ((clientY - r.top) / r.height) * VIEW_H,
+    };
+  }, []);
+
+  /** Put world point (wx,wy) under VIEW point (sx,sy) at scale k, keeping
+   *  the framed scene inside the viewport. At k=1 the clamp collapses to
+   *  tx=ty=0, so pinching back out always lands on the framed view. */
+  const zoomTo = useCallback(
+    (k: number, wx: number, wy: number, sx: number, sy: number) => {
+      const kc = Math.min(ZOOM_MAX, Math.max(1, k));
+      const tx = Math.min(0, Math.max(VIEW_W * (1 - kc), sx - wx * kc));
+      const ty = Math.min(0, Math.max(VIEW_H * (1 - kc), sy - wy * kc));
+      setZoomCam((z0) =>
+        // Wheel and pinch both fire in bursts; once a gesture is pressed
+        // against the zoom stop every event would otherwise re-render.
+        z0.k === kc && z0.tx === tx && z0.ty === ty ? z0 : { k: kc, tx, ty },
+      );
+    },
+    [],
+  );
+
   // Native wheel: zoom the orbit view toward the cursor (React root
   // wheel handlers are passive — preventDefault needs a native listener).
   useEffect(() => {
@@ -1362,22 +1393,15 @@ export function Fence3D({
       // the preview must scroll the page, not the camera.
       if (!canOrbit) return;
       e.preventDefault();
-      const r = svg.getBoundingClientRect();
-      const sx = ((e.clientX - r.left) / r.width) * VIEW_W;
-      const sy = ((e.clientY - r.top) / r.height) * VIEW_H;
-      const factor = Math.exp(-e.deltaY * 0.0022);
-      setZoomCam((z0) => {
-        const k = Math.min(ZOOM_MAX, Math.max(1, z0.k * factor));
-        if (k === z0.k) return z0;
-        // keep the world point under the cursor fixed
-        const wx = (sx - z0.tx) / z0.k;
-        const wy = (sy - z0.ty) / z0.k;
-        return { k, tx: sx - wx * k, ty: sy - wy * k };
-      });
+      const s = toView(e.clientX, e.clientY);
+      const z0 = zoomRef.current;
+      const k = z0.k * Math.exp(-e.deltaY * 0.0022);
+      // keep the world point under the cursor fixed
+      zoomTo(k, (s.x - z0.tx) / z0.k, (s.y - z0.ty) / z0.k, s.x, s.y);
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
-  }, [canOrbit]);
+  }, [canOrbit, toView, zoomTo]);
 
   /** Screen → plan-ground point (inverts zoom, fit and the axonometric
    *  rotation, iterating for terrain height). */
@@ -1432,6 +1456,26 @@ export function Fence3D({
       // gesture entirely rather than starting a drag that goes nowhere.
       if (!canOrbit) return;
       e.currentTarget.setPointerCapture(e.pointerId);
+      ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // Second finger down → pinch. Drop the spin drag so the camera
+      // doesn't lurch while the fingers settle, and remember the world
+      // point under the midpoint so it stays pinned as the pinch runs.
+      if (ptrsRef.current.size === 2 && modeRef.current === "orbit") {
+        const [a, b] = [...ptrsRef.current.values()];
+        const s = toView((a.x + b.x) / 2, (a.y + b.y) / 2);
+        const z0 = zoomRef.current;
+        pinchRef.current = {
+          d: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)),
+          k0: z0.k,
+          wx: (s.x - z0.tx) / z0.k,
+          wy: (s.y - z0.ty) / z0.k,
+        };
+        dragRef.current = null;
+        return;
+      }
+      // Extra fingers in walk mode: leave the existing drag alone rather
+      // than re-seating its origin, which snapped the heading sideways.
+      if (ptrsRef.current.size > 1) return;
       const v = viewRef.current;
       const w = walkCamRef.current;
       dragRef.current = {
@@ -1444,10 +1488,25 @@ export function Fence3D({
         moved: false,
       };
     },
-    [canOrbit],
+    [canOrbit, toView],
   );
   const onPointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      if (ptrsRef.current.has(e.pointerId)) {
+        ptrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+      // Pinch: scale by the finger spread, and let the midpoint drag the
+      // zoomed frame around (two-finger pan comes free with it).
+      const pinch = pinchRef.current;
+      if (pinch && ptrsRef.current.size >= 2) {
+        const [a, b] = [...ptrsRef.current.values()];
+        const s = toView((a.x + b.x) / 2, (a.y + b.y) / 2);
+        // Scale off the spread the pinch STARTED at — reading the live k
+        // here would compound it into a runaway zoom.
+        const k = pinch.k0 * (Math.hypot(b.x - a.x, b.y - a.y) / pinch.d);
+        scheduleFrame(() => zoomTo(k, pinch.wx, pinch.wy, s.x, s.y));
+        return;
+      }
       const d = dragRef.current;
       if (!d) return;
       const dx = e.clientX - d.sx;
@@ -1475,8 +1534,14 @@ export function Fence3D({
   );
   const onPointerUp = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
+      ptrsRef.current.delete(e.pointerId);
+      const wasPinching = !!pinchRef.current;
+      if (ptrsRef.current.size < 2) pinchRef.current = null;
       const d = dragRef.current;
       dragRef.current = null;
+      // Lifting one finger out of a pinch is not a tap — without this it
+      // read as a clean click and dropped the client into walk mode.
+      if (wasPinching) return;
       if (!d) return;
       if (d.moved) {
         if (modeRef.current === "orbit") onViewChange?.(viewRef.current);
@@ -2360,9 +2425,16 @@ export function Fence3D({
               </button>
             )}
             {canOrbit ? (
-              <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
-                ↻ Drag to spin · scroll to zoom · click a spot to walk
-              </span>
+              <>
+                {/* Same gestures, named the way each input actually does
+                    them — the phone has no scroll wheel. */}
+                <span className="pointer-events-none rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:hidden">
+                  ↻ Drag to spin · pinch to zoom · tap to walk
+                </span>
+                <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
+                  ↻ Drag to spin · scroll to zoom · click a spot to walk
+                </span>
+              </>
             ) : interaction === "guided" && showShots ? (
               <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
                 Tap an angle below to view from that side

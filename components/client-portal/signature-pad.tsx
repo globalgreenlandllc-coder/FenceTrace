@@ -56,6 +56,12 @@ export function SignaturePad({
   const [mode, setMode] = useState<Mode>("type");
   const [drawing, setDrawing] = useState(false);
   const [hasInk, setHasInk] = useState(!!value);
+  // Read from the resize observer, which must not re-subscribe on every
+  // stroke (re-running it would wipe the canvas it is meant to preserve).
+  const hasInkRef = useRef(hasInk);
+  hasInkRef.current = hasInk;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   // Keep the typed signature image in sync with the name while in type mode.
   useEffect(() => {
@@ -83,9 +89,40 @@ export function SignaturePad({
 
   // (Re)initialize the drawing surface whenever draw mode becomes visible —
   // the canvas is unmounted while typing, so it needs a fresh context.
+  // Re-run on RESIZE too: rotating a phone mid-signature changes the
+  // canvas width, and assigning width/height wipes the backing store, so
+  // the stroke has to be re-drawn into the new box or it vanishes (it
+  // used to stretch/disappear, and the parent kept the pre-rotation
+  // dataURL as the signature of record).
   useEffect(() => {
     if (mode !== "draw") return;
+    const c = canvasRef.current;
+    if (!c) return;
     setupCanvas();
+    let last = c.getBoundingClientRect();
+    const ro = new ResizeObserver(() => {
+      const r = c.getBoundingClientRect();
+      if (Math.abs(r.width - last.width) < 1) return;
+      const old = last;
+      last = r;
+      const prev = hasInkRef.current ? c.toDataURL() : null;
+      setupCanvas();
+      if (!prev) return;
+      const img = new Image();
+      img.onload = () => {
+        const ctx = c.getContext("2d");
+        // Scale UNIFORMLY, anchored top-left. Stretching to the new width
+        // would re-shape the client's handwriting, and this image is the
+        // signature of record — better to leave slack at the edge.
+        const s = Math.min(r.width / old.width, r.height / old.height);
+        // setupCanvas left the context scaled by dpr, so CSS px here.
+        ctx?.drawImage(img, 0, 0, old.width * s, old.height * s);
+        onChangeRef.current(c.toDataURL());
+      };
+      img.src = prev;
+    });
+    ro.observe(c);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -123,8 +160,13 @@ export function SignaturePad({
   function up(e: React.PointerEvent) {
     const c = canvasRef.current;
     if (!c) return;
+    // pointercancel (a system gesture stealing the touch) already dropped
+    // the capture — releasing an uncaptured pointer throws.
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    if (!drawing) return;
     setDrawing(false);
-    e.currentTarget.releasePointerCapture(e.pointerId);
     onChange(c.toDataURL());
   }
 
@@ -215,6 +257,7 @@ export function SignaturePad({
             onPointerDown={down}
             onPointerMove={move}
             onPointerUp={up}
+            onPointerCancel={up}
             className="block h-44 w-full touch-none cursor-crosshair"
           />
           {/* Hint stays mounted and fades — no hard cut when the first
