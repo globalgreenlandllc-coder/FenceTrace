@@ -200,6 +200,22 @@ export function PresentationCanvas({
   onFenceSectionsChange?: (next: SectionIn[]) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  // viewBox units per CSS pixel — 1 on a full-width desktop canvas, ~2.6
+  // when the same 900-unit drawing is rendered on a phone. Feeds `vs` so
+  // strokes, handles and dimension labels keep a constant on-screen size.
+  const [deviceScale, setDeviceScale] = useState(1);
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const measure = () => {
+      const w = svg.getBoundingClientRect().width;
+      if (w > 0) setDeviceScale(VIEWBOX_W / w);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(svg);
+    return () => ro.disconnect();
+  }, []);
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Segment-level selection: clicking a run activates only the span
@@ -275,7 +291,12 @@ export function PresentationCanvas({
   // widths, handles, dots and labels are sized in viewBox units, so divide
   // them by k (multiply by `vs`) to keep them visually constant on screen
   // instead of fattening with the magnification.
-  const vs = frame ? 1 / frame.k : 1;
+  // …and multiply by how much the 900-unit viewBox is being squeezed to
+  // fit the screen. On a phone this canvas renders ~340 CSS px wide, so a
+  // "40 ft" label sized 9 viewBox units comes out under 4 CSS px — the
+  // measurements the whole proposal rests on, unreadable on the device
+  // most clients open it with. Capped so labels can't swamp the trace.
+  const vs = (frame ? 1 / frame.k : 1) * Math.min(2.2, Math.max(1, deviceScale));
   const geomTransform = frame
     ? `translate(${frame.tx} ${frame.ty}) scale(${frame.k})`
     : undefined;

@@ -48,10 +48,11 @@ export function ProposalTopBar({
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white print:hidden">
-      <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-3 px-4">
+      <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 px-3 sm:gap-3 sm:px-4">
         <Link
           href="/dashboard"
-          className="ring-focus flex items-center gap-2 rounded-md text-sm text-zinc-500 transition-smooth hover:text-zinc-900"
+          aria-label="Back to dashboard"
+          className="ring-focus flex shrink-0 items-center gap-2 rounded-md text-sm text-zinc-500 transition-smooth hover:text-zinc-900"
         >
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Dashboard</span>
@@ -62,21 +63,24 @@ export function ProposalTopBar({
         </div>
         <div className="hidden h-6 w-px bg-zinc-200 md:block" />
 
-        <div className="min-w-0 flex-1">
+        {/* The address is the first thing to give up room on a phone —
+            the five controls to its right are all load-bearing. */}
+        <div className="hidden min-w-0 flex-1 sm:block">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium text-zinc-900">
               Proposal · {address}
             </span>
-            <Badge tone={preview ? "accent" : "neutral"}>
+            <Badge tone={preview ? "accent" : "neutral"} className="hidden shrink-0 md:inline-flex">
               {preview ? "Client preview" : "Draft"}
             </Badge>
           </div>
         </div>
+        <div className="flex-1 sm:hidden" />
 
         {/* Builder / Preview tabs — both are always clickable so you can
             jump back to editing from preview with one tap. Bigger hit
             targets + clearer "active" styling than the previous version. */}
-        <div className="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1">
+        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1">
           <button
             type="button"
             onClick={() => preview && onTogglePreview()}
@@ -114,6 +118,8 @@ export function ProposalTopBar({
             onClick={onSave}
             disabled={saving}
             title="Save draft — edits also auto-save"
+            aria-label="Save draft"
+            className="shrink-0 px-3 sm:px-3.5"
           >
             <span
               key={saving ? "saving" : saved ? "saved" : "idle"}
@@ -142,7 +148,7 @@ export function ProposalTopBar({
           <Download className="h-4 w-4" />
           PDF
         </Button>
-        <Button size="sm" onClick={onSend}>
+        <Button size="sm" onClick={onSend} className="shrink-0 px-3 sm:px-3.5">
           <Send className="h-4 w-4" />
           Send
         </Button>
@@ -194,7 +200,7 @@ function OverflowMenu({
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

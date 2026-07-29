@@ -41,9 +41,11 @@ export function AcceptBar({
       initial={reduce ? false : { y: 24, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: DUR.slow, ease: EASE }}
-      className="sticky bottom-0 z-30 border-t border-zinc-200 bg-white print:hidden"
+      // pb keeps "Accept & pay" clear of the iPhone home indicator, which
+      // otherwise sits right on top of the one button that matters.
+      className="sticky bottom-0 z-30 border-t border-zinc-200 bg-white pb-[env(safe-area-inset-bottom)] print:hidden"
     >
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center">
+      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:py-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <div className="font-label text-[11px] text-zinc-500">
@@ -55,7 +57,7 @@ export function AcceptBar({
               </Badge>
             )}
           </div>
-          <div className="flex items-baseline gap-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900">
+          <div className="flex flex-wrap items-baseline gap-x-2 text-2xl font-semibold tracking-tight tabular-nums text-zinc-900">
             {formatCurrency(due)}
             {discounted && (
               <span className="text-sm font-normal text-zinc-400 line-through">
@@ -78,8 +80,9 @@ export function AcceptBar({
           <div className="flex rounded-xl border border-zinc-200 bg-white p-1 text-xs">
             <button
               onClick={() => onPaymentChoice("deposit")}
+              aria-pressed={paymentChoice === "deposit"}
               className={
-                "transition-smooth press-scale ring-focus rounded-lg px-3 py-1.5 " +
+                "transition-smooth press-scale ring-focus h-9 flex-1 rounded-lg px-3 sm:h-8 sm:flex-none " +
                 (paymentChoice === "deposit"
                   ? "bg-zinc-100 text-zinc-900"
                   : "text-zinc-600 hover:text-zinc-900")
@@ -89,8 +92,9 @@ export function AcceptBar({
             </button>
             <button
               onClick={() => onPaymentChoice("full")}
+              aria-pressed={paymentChoice === "full"}
               className={
-                "transition-smooth press-scale ring-focus rounded-lg px-3 py-1.5 " +
+                "transition-smooth press-scale ring-focus h-9 flex-1 rounded-lg px-3 sm:h-8 sm:flex-none " +
                 (paymentChoice === "full"
                   ? "bg-zinc-100 text-zinc-900"
                   : "text-zinc-600 hover:text-zinc-900")
