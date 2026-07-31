@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getActiveApiKey } from "@/lib/api-keys";
 import { getPrompt } from "@/lib/ai/prompts";
+import { classifyTrade } from "@/lib/ai/trade";
 import { buildLineItems } from "@/lib/pricing";
 import { fenceType, type FenceTypeId } from "@/lib/fence/catalog";
 import type { EstimateConfig, Measurements } from "@/lib/types";
@@ -332,8 +333,18 @@ export async function suggestMarketPrices(
   }
 
   // FenceScan packages carry config.fence — brief and prompt speak
-  // fence; the gutter path stays for legacy configs.
-  const isFence = packages.some((p) => p.config.fence);
+  // fence; the gutter path stays for legacy configs. A job is one trade
+  // or the other, never both (see lib/ai/trade.ts for why mixing breaks
+  // the brief).
+  const trade = classifyTrade(packages);
+  if (trade === "mixed") {
+    return {
+      ok: false,
+      reason:
+        "This proposal mixes fence and gutter packages. Market pricing runs on one trade at a time — split them into separate proposals.",
+    };
+  }
+  const isFence = trade === "fence";
   // Anchor the AI on the SAME market the engine priced in — the resolved
   // state/ZIP indices and the local tax rule, never the contractor's own
   // numbers. That keeps the suggestion an independent second opinion
