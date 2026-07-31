@@ -17,14 +17,14 @@ import {
   ChevronRight,
   Columns3,
   ExternalLink,
-  PanelRightClose,
-  PanelRightOpen,
   Hammer,
   MapPin,
+  MousePointer2,
+  PanelRightClose,
+  PanelRightOpen,
   Phone,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   Undo2,
   UserRound,
@@ -2462,7 +2462,7 @@ function Sidebar({
         </div>
       )}
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-accent-600" />
+        <MousePointer2 className="h-4 w-4 text-accent-600" />
         <h2 className="text-sm font-semibold text-zinc-900">Drag onto calendar</h2>
       </div>
       <p className="text-[11px] leading-snug text-zinc-500">

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  Calculator,
   Check,
   ChevronDown,
   CircleCheckBig,
@@ -12,7 +13,6 @@ import {
   Plus,
   Receipt,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   Undo2,
   X,
@@ -384,7 +384,7 @@ function JobsCard({
       <div className="flex items-center justify-between">
         <div className="microlabel">Profit per job</div>
         <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
-          <Sparkles className="h-3 w-3 text-accent-500" />
+          <Calculator className="h-3 w-3 text-accent-500" />
           Costs estimated from the takeoff — tap to correct
         </span>
       </div>
@@ -550,7 +550,7 @@ function CostBasisEditor({
         {usingManual ? (
           <PencilLine className="h-3.5 w-3.5 text-zinc-500" />
         ) : (
-          <Sparkles className="h-3.5 w-3.5 text-accent-600" />
+          <Calculator className="h-3.5 w-3.5 text-accent-600" />
         )}
         Materials + labor cost
         <Badge tone={usingManual ? "neutral" : "accent"}>

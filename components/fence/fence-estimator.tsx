@@ -6,10 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
+  Fence,
   Loader2,
   MapPin,
   ScanLine,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
@@ -1011,7 +1011,7 @@ export function FenceEstimator() {
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Sparkles className="h-4 w-4" />
+                  <Fence className="h-4 w-4" />
                 )}
                 Build the proposal
                 <ArrowRight className="h-4 w-4" />
@@ -1066,7 +1066,7 @@ export function FenceEstimator() {
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Sparkles className="h-4 w-4" />
+                <Fence className="h-4 w-4" />
               )}
               Build proposal
             </Button>

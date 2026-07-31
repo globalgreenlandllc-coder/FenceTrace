@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Fence, Plus } from "lucide-react";
 import { AuthGate } from "@/components/auth/auth-gate";
 import { DashboardShell } from "@/components/dashboard/dashboard-nav";
 import { StatTile } from "@/components/dashboard/stat-tile";
@@ -97,7 +97,7 @@ function Inner() {
         <>
           <Link href="/dashboard/proposals/new">
             <Button size="sm">
-              <Sparkles className="h-4 w-4" />
+              <Plus className="h-4 w-4" />
               New proposal
             </Button>
           </Link>
@@ -191,7 +191,7 @@ function EmptyProposals() {
   return (
     <div className="anim-enter rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center">
       <div className="mx-auto inline-flex h-11 w-11 items-center justify-center rounded-lg bg-accent-600 text-white">
-        <Sparkles className="h-5 w-5" />
+        <Fence className="h-5 w-5" />
       </div>
       <h3 className="mt-4 text-lg font-semibold tracking-tight text-zinc-900">
         No proposals yet
@@ -202,7 +202,7 @@ function EmptyProposals() {
       </p>
       <Link href="/dashboard/proposals/new" className="mt-5 inline-block">
         <Button>
-          <Sparkles className="h-4 w-4" />
+          <Fence className="h-4 w-4" />
           Start your first estimate
           <ArrowRight className="h-4 w-4" />
         </Button>

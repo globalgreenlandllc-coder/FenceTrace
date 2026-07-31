@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileText, Loader2, Send, Sparkles } from "lucide-react";
+import { CheckCircle2, Fence, FileText, Loader2, Send, Sparkles } from "lucide-react";
 import { DUR, EASE, fadeInUp, staggerContainer } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -222,7 +222,7 @@ export function Summary({
         className="space-y-1.5 text-xs text-zinc-500"
       >
         <li className="flex items-center gap-2">
-          <Sparkles className="h-3.5 w-3.5 text-accent-600" />
+          <Fence className="h-3.5 w-3.5 text-accent-600" />
           Builds a Good · Better · Best proposal from this takeoff
         </li>
         <li className="flex items-center gap-2">

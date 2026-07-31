@@ -6,10 +6,11 @@ import { DUR, EASE, fadeInUp, staggerContainer } from "@/lib/motion";
 import {
   AlertTriangle,
   Building2,
+  FlaskConical,
   PencilRuler,
   RefreshCcw,
   Ruler,
-  Sparkles,
+  Satellite,
 } from "lucide-react";
 import { TopBar } from "./top-bar";
 import { AerialCanvas, lineLengthFt } from "./aerial-canvas";
@@ -576,7 +577,7 @@ function SourceBadge({ source }: { source: EstimateResult["source"] }) {
   if (source === "ai") {
     return (
       <Badge tone="accent">
-        <Sparkles className="h-3 w-3" />
+        <Satellite className="h-3 w-3" />
         Smart takeoff
       </Badge>
     );
@@ -584,14 +585,14 @@ function SourceBadge({ source }: { source: EstimateResult["source"] }) {
   if (source === "partial") {
     return (
       <Badge tone="amber">
-        <Sparkles className="h-3 w-3" />
+        <Satellite className="h-3 w-3" />
         Partial read · geometry pending
       </Badge>
     );
   }
   return (
     <Badge tone="violet">
-      <Sparkles className="h-3 w-3" />
+      <FlaskConical className="h-3 w-3" />
       Mock data
     </Badge>
   );

@@ -6,12 +6,12 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
   CheckCircle2,
+  Coins,
   CreditCard,
   Eye,
   MoreHorizontal,
   Search,
   ShieldAlert,
-  Sparkles,
   Tag,
   UserCog,
   UserMinus,
@@ -398,7 +398,7 @@ function RowMenu({
               }}
               className="transition-smooth ring-focus flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50"
             >
-              <Sparkles className="h-3.5 w-3.5 text-accent-600" />
+              <Coins className="h-3.5 w-3.5 text-accent-600" />
               Adjust credits
             </button>
             <button

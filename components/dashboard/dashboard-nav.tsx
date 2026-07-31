@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDays,
   ChevronsUpDown,
+  Fence,
   FileText,
   HardHat,
   LayoutGrid,
@@ -20,7 +21,6 @@ import {
   Search,
   Settings,
   ShieldAlert,
-  Sparkles,
   User,
   Users,
   Wallet,
@@ -36,7 +36,14 @@ import { useSession } from "@/lib/auth-mock";
 import { cn } from "@/lib/utils";
 
 type NavIcon = typeof LayoutGrid;
-type NavEntry = { href: string; label: string; Icon: NavIcon };
+type NavEntry = {
+  href: string;
+  label: string;
+  Icon: NavIcon;
+  /** Tint the row in brand green even when it isn't the active route —
+   *  reserved for the estimator, the one entry that starts real work. */
+  featured?: boolean;
+};
 
 const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
@@ -66,7 +73,9 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Tools",
     items: [
-      { href: "/estimate", label: "Fence estimator", Icon: Sparkles },
+      // Not an AI feature — the takeoff is measured and computed, so it
+      // carries a fence, never the sparkle we reserve for AI surfaces.
+      { href: "/estimate", label: "Fence estimator", Icon: Fence, featured: true },
     ],
   },
   {
@@ -89,6 +98,7 @@ function NavItem({
   label,
   Icon,
   active,
+  featured,
 }: NavEntry & {
   active: boolean;
 }) {
@@ -99,13 +109,18 @@ function NavItem({
         "transition-smooth ring-focus flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
         active
           ? "bg-accent-50 text-accent-800"
-          : "text-zinc-600 hover:bg-zinc-100/70 hover:text-zinc-900",
+          : featured
+            ? // Resting state still reads green, with a hairline so the row
+              //  has an edge against the plain items above it.
+              "bg-accent-50/60 text-accent-800 ring-1 ring-inset ring-accent-100 hover:bg-accent-50 hover:ring-accent-200"
+            : "text-zinc-600 hover:bg-zinc-100/70 hover:text-zinc-900",
+        featured && "font-semibold",
       )}
     >
       <Icon
         className={cn(
           "transition-smooth h-4 w-4",
-          active ? "text-accent-700" : "text-zinc-400",
+          active || featured ? "text-accent-700" : "text-zinc-400",
         )}
       />
       {label}
