@@ -1,0 +1,220 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — 14 systems, pre-built (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1350px; }
+  .brand { top: 62px; font-size: 34px; }
+  .brand .sq { width: 13px; height: 13px; }
+  .head { position: absolute; left: 70px; right: 70px; top: 168px; font-size: 58px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 330px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 402px; font-size: 104px; }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 880px; font-size: 36px;
+    line-height: 1.42; font-weight: 500; }
+
+  /* the type selector, as the sidebar renders it */
+  .sel { position: absolute; left: 190px; right: 190px; top: 350px; background: #fff;
+    border-radius: 16px; padding: 20px 26px; display: flex; align-items: center; gap: 14px;
+    color: #18181b; box-shadow: 0 30px 70px -24px rgba(0,0,0,.8); }
+  .sel .lbl { font-family: "Space Mono", monospace; font-size: 20px; letter-spacing: .1em;
+    text-transform: uppercase; color: #71717a; }
+  .sel .val { margin-left: auto; font-size: 30px; font-weight: 700; }
+  .sel .car { color: #a1a1aa; font-size: 26px; }
+
+  /* the swatch card that swaps per system */
+  .card { position: absolute; left: 70px; right: 70px; top: 470px; border-radius: 30px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.045); padding: 50px 54px; }
+  .card .nm { font-family: "Archivo Black", sans-serif; font-size: 74px; text-transform: uppercase;
+    line-height: .96; letter-spacing: -0.01em; }
+  .card .price { display: flex; align-items: baseline; gap: 22px; margin-top: 30px; }
+  .card .tot { font-family: "Space Mono", monospace; font-weight: 700; font-size: 92px; color: var(--trace); }
+  .card .plf { font-family: "Space Mono", monospace; font-size: 34px; color: rgba(255,255,255,.6); }
+  .card .row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 34px; }
+  .card .chip { padding: 16px 24px; font-size: 26px; }
+  .swatch { position: absolute; right: 54px; top: 54px; width: 150px; height: 150px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,.2); overflow: hidden; }
+  .same { position: absolute; left: 70px; right: 70px; top: 1130px; text-align: center;
+    font-size: 33px; font-weight: 600; }
+  .same b { color: var(--trace); }
+
+  /* the mix beat — the real Section overlay pill */
+  #s3 .plate2 { position: absolute; left: 50px; top: 400px; width: 980px; height: 632px;
+    border-radius: 22px; overflow: hidden; background: #26331f;
+    box-shadow: 0 0 0 1px rgba(30,115,64,.3), 0 46px 110px -30px rgba(0,0,0,.95); }
+  #s3 .plate2 img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #s3 .plate2 svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #s3 .cap { position: absolute; left: 70px; right: 70px; top: 1090px; text-align: center;
+    font-size: 33px; font-weight: 600; }
+  #s3 .cap b { color: var(--trace); }
+
+  /* all 14, as a wall */
+  #s4 .grid { position: absolute; left: 60px; right: 60px; top: 390px; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 14px; }
+  #s4 .g { border: 1px solid var(--line); border-radius: 16px; padding: 22px 26px;
+    background: rgba(255,255,255,.04); font-size: 29px; font-weight: 600; }
+  #s4 .g em { font-style: normal; color: var(--a400); font-family: "Space Mono", monospace;
+    font-size: 24px; margin-right: 14px; }
+  #s4 .foot { position: absolute; left: 60px; right: 60px; top: 1160px; text-align: center;
+    font-size: 32px; font-weight: 700; }
+  #s4 .foot b { color: var(--trace); }
+
+  #s5 h2 { position: absolute; left: 70px; right: 70px; top: 340px; font-size: 92px; }
+  #s5 .btn { position: absolute; left: 70px; top: 820px; padding: 38px 54px; font-size: 33px; }
+  #s5 .site { position: absolute; left: 70px; top: 960px; font-size: 30px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:700px;height:700px;right:-220px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">The catalog is the takeoff</p>
+  <h1 class="display">14 systems.<br>Pre-built.<br><span class="hl">Priced.</span></h1>
+  <p class="sub">Pick the fence — posts, rails, panels and price rebuild themselves.</p>
+</section>
+
+<!-- 2. the cycler -->
+<section class="scene" id="s2">
+  <h2 class="head display">Same 355 feet.<br><span class="hl">Swap the system.</span></h2>
+  <div class="sel">
+    <span class="lbl">Fence type</span>
+    <span class="val" id="selval">Cedar privacy</span>
+    <span class="car">▾</span>
+  </div>
+  <div class="card" id="card">
+    <div class="swatch" id="swatch"></div>
+    <p class="nm" id="nm">Cedar<br>privacy</p>
+    <div class="price"><span class="tot" id="tot">$20,417</span><span class="plf" id="plf">$60 / LF</span></div>
+    <div class="row" id="bomrow"></div>
+  </div>
+  <p class="same">Recommended package, same yard, same 2 gates — <b>every line recomputed.</b></p>
+</section>
+
+<!-- 3. mix on one yard -->
+<section class="scene" id="s3">
+  <h2 class="head display">Mix them<br><span class="hl">on one yard.</span></h2>
+  <div class="plate2">
+    <img src="plates/aerial-clean.svg" alt="">
+    <svg viewBox="0 0 900 580">
+      <polygon points="196,88 704,78 716,500 206,508"
+        fill="rgba(74,222,128,0.06)" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="6 4"/>
+      <polyline fill="none" stroke="#22d3ee" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"
+        points="346,348 210,348 204,96 696,87 705,402 622,402"
+        style="filter:drop-shadow(0 0 4px rgba(34,211,238,0.6))"/>
+      <!-- the Section overlay: back run built as chain link -->
+      <g id="section" style="opacity:0">
+        <line x1="204" y1="96" x2="696" y2="87" stroke="#0b1210" stroke-width="7" opacity="0.45"/>
+        <line x1="204" y1="96" x2="696" y2="87" stroke="#A1A1AA" stroke-width="4.5" stroke-dasharray="10 4"/>
+        <rect x="330" y="58" width="240" height="26" rx="13" fill="#A1A1AA"/>
+        <text x="450" y="76" text-anchor="middle" font-size="14" font-weight="700" fill="#18181b"
+          font-family="Inter, sans-serif">Chain link (galvanized) · 137′</text>
+      </g>
+    </svg>
+  </div>
+  <p class="cap">Cedar where the neighbors see it. <b>Chain link across the back.</b> One proposal.</p>
+</section>
+
+<!-- 4. the wall of 14 -->
+<section class="scene" id="s4">
+  <h2 class="head display">Wood to steel,<br><span class="hl">picket to ranch rail.</span></h2>
+  <div class="grid">
+    <div class="g"><em>01</em>Cedar privacy</div>
+    <div class="g"><em>02</em>Pressure-treated privacy</div>
+    <div class="g"><em>03</em>Board-on-board</div>
+    <div class="g"><em>04</em>Shadowbox</div>
+    <div class="g"><em>05</em>Classic wood picket</div>
+    <div class="g"><em>06</em>Horizontal modern</div>
+    <div class="g"><em>07</em>Vinyl privacy</div>
+    <div class="g"><em>08</em>Vinyl picket</div>
+    <div class="g"><em>09</em>Chain link (galvanized)</div>
+    <div class="g"><em>10</em>Chain link (black vinyl)</div>
+    <div class="g"><em>11</em>Aluminum ornamental</div>
+    <div class="g"><em>12</em>Steel ornamental</div>
+    <div class="g"><em>13</em>Split rail (2-rail)</div>
+    <div class="g"><em>14</em>Ranch rail (3-rail)</div>
+  </div>
+  <p class="foot">Each one built from <b>its own posts, rails and hardware</b> — in 3D and in the BOM.</p>
+</section>
+
+<!-- 5. CTA -->
+<section class="scene" id="s5">
+  <h2 class="display">Sell the fence<br><span class="hl">they actually want.</span></h2>
+  <span class="btn">Price all 14 on one address →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* engine-verified figures: recommended tier on the 355.1 LF demo yard */
+  const SYSTEMS = [
+    { nm: "Cedar<br>privacy", sel: "Cedar privacy", tot: "$20,417", plf: "$60 / LF",
+      chips: ["48 posts · 8′ o.c.", "142 rails · 819 pickets", "96 bags concrete"],
+      sw: "repeating-linear-gradient(90deg,#a87f56 0 12px,#8a6844 12px 14px)" },
+    { nm: "Vinyl<br>privacy", sel: "Vinyl privacy", tot: "$24,740", plf: "$73 / LF",
+      chips: ["48 posts · 8′ o.c.", "48 prefab panels", "Routed posts + caps"],
+      sw: "repeating-linear-gradient(90deg,#eef1f4 0 12px,#cfd6dd 12px 14px)" },
+    { nm: "Chain link<br>(galvanized)", sel: "Chain link (galvanized)", tot: "$14,241", plf: "$42 / LF",
+      chips: ["43 posts · 10′ o.c.", "376′ fabric + top rail", "Tension wire, ties"],
+      sw: "repeating-conic-gradient(#9aa1a8 0% 25%, #7d848b 0% 50%) 0 0 / 22px 22px" },
+    { nm: "Aluminum<br>ornamental", sel: "Aluminum ornamental", tot: "$37,058", plf: "$109 / LF",
+      chips: ["68 posts · 6′ o.c.", "63 panels + brackets", "124 bags concrete"],
+      sw: "repeating-linear-gradient(90deg,#3a4550 0 5px,#1d242c 5px 18px)" },
+  ];
+  const STEP = 3300, T0 = 3600;
+
+  scene("#s1", 0, 3200, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 56);
+  rise("#s1 .sub", 1150, 1700, 32);
+
+  scene("#s2", 3000, 16600, 300);
+  rise("#s2 .head", 3200, 3800, 38);
+  rise(".sel", 3300, 3900, 30);
+  rise("#card", 3400, 4100, 50);
+  rise(".same", 5200, 5800, 24);
+
+  (function () {
+    const nm = $("#nm"), tot = $("#tot"), plf = $("#plf"), sel = $("#selval");
+    const row = $("#bomrow"), sw = $("#swatch"), card = $("#card");
+    up((ms) => {
+      const i = Math.max(0, Math.min(SYSTEMS.length - 1, Math.floor((ms - T0) / STEP)));
+      const s = SYSTEMS[i];
+      nm.innerHTML = s.nm;
+      sel.textContent = s.sel;
+      tot.textContent = s.tot;
+      plf.textContent = s.plf;
+      sw.style.background = s.sw;
+      row.innerHTML = s.chips.map((c) => `<span class="chip"><span class="tick">✓</span> ${c}</span>`).join("");
+      /* a little slam each swap */
+      const local = (ms - T0) % STEP;
+      const t = ms < T0 ? 1 : eo(clamp(local / 420));
+      card.style.transform = `scale(${0.985 + 0.015 * t})`;
+      card.style.opacity = ms < 3400 ? 0 : 0.6 + 0.4 * t;
+    });
+  })();
+
+  scene("#s3", 16400, 21400, 300);
+  rise("#s3 .head", 16600, 17200, 38);
+  rise("#s3 .plate2", 16700, 17400, 56);
+  fade("#section", 18300, 18900);
+  rise("#s3 .cap", 19100, 19700, 24);
+
+  scene("#s4", 21200, 25600, 300);
+  rise("#s4 .head", 21400, 22000, 38);
+  riseEach("#s4 .g", 22000, 110, 300, 22);
+  rise("#s4 .foot", 24000, 24600, 22);
+
+  scene("#s5", 25400, 30000, 340);
+  rise("#s5 h2", 25600, 26400, 52);
+  pop("#s5 .btn", 26900, 27500);
+  rise("#s5 .site", 27600, 28000, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

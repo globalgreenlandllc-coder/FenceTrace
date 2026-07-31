@@ -1,0 +1,126 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Good / Better / Best (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1350px; }
+  .brand { top: 62px; font-size: 34px; }
+  .brand .sq { width: 13px; height: 13px; }
+  .head { position: absolute; left: 70px; right: 70px; top: 168px; font-size: 60px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 340px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 412px; font-size: 100px; }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 900px; font-size: 36px; line-height: 1.42; font-weight: 500; }
+
+  /* three package cards, priced by the real engine */
+  #s2 .cards { position: absolute; left: 46px; right: 46px; top: 350px; display: flex; gap: 16px; }
+  #s2 .c { flex: 1; border-radius: 26px; padding: 34px 26px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.045); text-align: center; position: relative; }
+  #s2 .c.rec { background: linear-gradient(160deg, rgba(30,115,64,.55), rgba(30,115,64,.18));
+    border-color: var(--a400); box-shadow: 0 30px 70px -24px rgba(63,166,91,.6); }
+  #s2 .c .tag { position: absolute; left: 50%; top: -18px; transform: translateX(-50%);
+    background: var(--a600); border-radius: 999px; padding: 9px 20px; font-family: "Space Mono", monospace;
+    font-size: 17px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+  #s2 .c .k { font-family: "Space Mono", monospace; font-size: 24px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--a300); }
+  #s2 .c .p { font-family: "Space Mono", monospace; font-weight: 700; font-size: 54px; margin-top: 16px; }
+  #s2 .c .lf { font-family: "Space Mono", monospace; font-size: 22px; color: rgba(255,255,255,.55); margin-top: 8px; }
+  #s2 .c .m { font-size: 23px; line-height: 1.4; color: rgba(255,255,255,.75); margin-top: 20px; min-height: 96px; }
+  #s2 .c .w { font-family: "Space Mono", monospace; font-size: 20px; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--a400); margin-top: 6px; }
+  #s2 .same { position: absolute; left: 60px; right: 60px; top: 830px; text-align: center;
+    font-size: 30px; font-weight: 600; }
+  #s2 .same b { color: var(--trace); }
+  #s2 .plate { left: 190px; top: 900px; width: 700px; height: 452px; border-radius: 22px; }
+
+  #s3 h2 { position: absolute; left: 70px; right: 70px; top: 320px; font-size: 92px; }
+  #s3 .list { position: absolute; left: 70px; right: 70px; top: 690px; display: flex; flex-direction: column; gap: 16px; }
+  #s3 .list span { font-size: 30px; font-weight: 600; }
+  #s3 .btn { position: absolute; left: 70px; top: 960px; padding: 36px 52px; font-size: 32px; }
+  #s3 .site { position: absolute; left: 70px; top: 1100px; font-size: 29px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:700px;height:700px;left:-200px;bottom:-240px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Stop being the cheap guy</p>
+  <h1 class="display">One price<br>is a yes<br><span class="hl">or a no.</span></h1>
+  <p class="sub">Three is a conversation — and the middle one usually wins.</p>
+</section>
+
+<!-- 2. the three packages -->
+<section class="scene" id="s2">
+  <h2 class="head display">Same yard.<br><span class="hl">Three ways to buy it.</span></h2>
+  <div class="cards">
+    <div class="c">
+      <p class="k">Good</p>
+      <p class="p">$15,764</p>
+      <p class="lf">$46 / LF</p>
+      <p class="m">Pressure-treated privacy — solid build, best price.</p>
+      <p class="w">1-yr warranty</p>
+    </div>
+    <div class="c rec">
+      <span class="tag">Recommended</span>
+      <p class="k">Better</p>
+      <p class="p">$20,417</p>
+      <p class="lf">$60 / LF</p>
+      <p class="m">Western red cedar, 6′ privacy — the neighborhood standard.</p>
+      <p class="w">3-yr warranty</p>
+    </div>
+    <div class="c">
+      <p class="k">Best</p>
+      <p class="p">$27,595</p>
+      <p class="lf">$81 / LF</p>
+      <p class="m">Cedar, stained and sealed, extended warranty.</p>
+      <p class="w">5-yr warranty</p>
+    </div>
+  </div>
+  <p class="same">Same 341 LF. Same 2 gates. <b>Priced off your rate card.</b></p>
+  <div class="plate" id="pl"><img src="plates/act4-proposal.png" alt=""></div>
+</section>
+
+<!-- 3. CTA -->
+<section class="scene" id="s3">
+  <h2 class="display">Quote the<br>upsell<br><span class="hl">automatically.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Built from the same measured takeoff</span>
+    <span><span class="hl">✓</span> Your materials, your margins, your logo</span>
+    <span><span class="hl">✓</span> Client picks one and signs on their phone</span>
+  </div>
+  <span class="btn">Send a three-tier bid →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* 1. hook (0–3.4) */
+  scene("#s1", 0, 3400, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 56);
+  rise("#s1 .sub", 1150, 1700, 32);
+
+  /* 2. packages (3.2–11.4) */
+  scene("#s2", 3200, 11400, 300);
+  rise("#s2 .head", 3400, 4000, 38);
+  riseEach("#s2 .c", 4100, 400, 480, 44);
+  rise("#s2 .same", 6100, 6700, 24);
+  rise("#pl", 6900, 7700, 60);
+  kenBurns("#pl img", 6900, 11400, 1.0, 1.08);
+
+  /* 3. CTA (11.2–15.0) */
+  scene("#s3", 11200, 15000, 340);
+  rise("#s3 h2", 11400, 12200, 52);
+  riseEach("#s3 .list > span", 12400, 240, 380, 24);
+  pop("#s3 .btn", 13500, 14100);
+  rise("#s3 .site", 14100, 14500, 20);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

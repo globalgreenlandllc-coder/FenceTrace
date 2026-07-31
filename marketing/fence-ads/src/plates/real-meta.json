@@ -1,0 +1,24 @@
+{
+  "address": "12103 202nd St SE, Snohomish, WA 98296, USA",
+  "loc": {
+    "lat": 47.816027,
+    "lng": -122.067075
+  },
+  "zoom": 19,
+  "pxPerFt": 2.13776037654788,
+  "elevSpanFt": 94.4,
+  "intervalFt": 20,
+  "market": {
+    "label": "Washington",
+    "resolution": "state",
+    "labor": 1.15,
+    "cedar": 0.871,
+    "tax": 0.0938,
+    "basis": [
+      "Washington state average (ZIP 98296 has no separate metro calibration).",
+      "Labor +15% vs national — BLS construction/fence-erector wages for Washington.",
+      "Material: cedar −12.9%, treated pine +4%, vinyl +1%, metal +1% — freight index × pnw lumber basis.",
+      "Sales tax 9.38% on materials only — Washington doesn't tax labor on real-property improvements."
+    ]
+  }
+}

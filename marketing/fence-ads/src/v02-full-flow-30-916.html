@@ -1,0 +1,250 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — Address to signed job (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+
+  /* step counter that runs the whole way through */
+  .steps { position: absolute; left: 0; right: 0; top: 186px; z-index: 35;
+    display: flex; justify-content: center; gap: 12px; }
+  .steps span { width: 58px; height: 6px; border-radius: 4px; background: rgba(255,255,255,.16); }
+  .steps span.on { background: var(--trace); }
+
+  .head { position: absolute; left: 84px; right: 84px; top: 350px; font-size: 66px; }
+  .plate { left: 50px; top: 620px; width: 980px; height: 632px; }
+  .scanline { position: absolute; left: 0; right: 0; height: 6px; top: 0;
+    background: linear-gradient(90deg, transparent, var(--trace) 28%, var(--trace) 72%, transparent);
+    box-shadow: 0 0 46px 10px rgba(74,222,128,.5); }
+  .under { position: absolute; left: 50px; right: 50px; top: 1310px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .chip { padding: 19px 28px; font-size: 29px; }
+
+  /* ---------- 1. hook ---------- */
+  #s1 .eyebrow { position: absolute; left: 84px; top: 500px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 580px; font-size: 116px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1120px; font-size: 40px; line-height: 1.42; font-weight: 500; }
+
+  /* ---------- 2. address bar ---------- */
+  #s2 .card { position: absolute; left: 60px; right: 60px; top: 700px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 30px; padding: 52px;
+    box-shadow: 0 0 0 1px rgba(30,115,64,.3), 0 46px 110px -30px rgba(0,0,0,.9); }
+  #s2 .input { margin-top: 34px; background: rgba(255,255,255,.05); border: 2px solid rgba(255,255,255,.2);
+    border-radius: 18px; padding: 32px 34px; font-family: "Space Mono", monospace; font-size: 38px;
+    display: flex; align-items: center; min-height: 116px; }
+  #s2 .caret { display: inline-block; width: 4px; height: 46px; background: var(--trace); margin-left: 8px; }
+  #s2 .go { margin-top: 30px; padding: 34px; font-size: 34px; width: 100%; }
+  #s2 .prog { margin-top: 32px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; }
+  #s2 .prog i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--a600), var(--trace)); }
+  #s2 .plbl { margin-top: 20px; font-size: 26px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgba(255,255,255,.5); text-align: center; }
+
+  /* ---------- 4. measure ---------- */
+  #s4 .big { position: absolute; left: 50px; right: 50px; top: 1300px; text-align: center; }
+  #s4 .big .n { font-size: 168px; color: var(--trace); }
+  #s4 .big .u { font-size: 58px; color: rgba(255,255,255,.72); margin-left: 12px; }
+  #s4 .big .l { margin-top: 4px; font-size: 27px; }
+  #s4 .row { position: absolute; left: 50px; right: 50px; top: 1560px; justify-content: center; }
+
+  /* ---------- 6. price ---------- */
+  #s6 .tiers { position: absolute; left: 50px; right: 50px; top: 1300px; display: flex; gap: 14px; }
+  #s6 .tier { flex: 1; border: 1px solid var(--line); border-radius: 20px; padding: 26px 20px; text-align: center;
+    background: rgba(255,255,255,.04); }
+  #s6 .tier.rec { background: rgba(30,115,64,.3); border-color: var(--a400); }
+  #s6 .tier .k { font-family: "Space Mono", monospace; font-size: 24px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--a300); }
+  #s6 .tier .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 46px; margin-top: 10px; }
+
+  /* ---------- 7. signed ---------- */
+  /* centred with flex, NOT translateX — pop() owns the transform */
+  #s7 .stamp-wrap { position: absolute; left: 0; right: 0; top: 1330px; display: flex; justify-content: center; }
+  #s7 .stamp { background: var(--a600); border-radius: 26px; padding: 34px 52px; text-align: center;
+    white-space: nowrap; box-shadow: 0 30px 90px -18px rgba(63,166,91,.7); }
+  #s7 .stamp .t { font-size: 42px; font-weight: 700; }
+  #s7 .stamp .s { font-size: 28px; color: rgba(255,255,255,.8); margin-top: 8px; }
+
+  /* ---------- 8. CTA ---------- */
+  #s8 h2 { position: absolute; left: 84px; right: 84px; top: 520px; font-size: 112px; }
+  #s8 .list { position: absolute; left: 84px; right: 84px; top: 1010px; display: flex; flex-direction: column; gap: 18px; }
+  #s8 .list span { font-size: 33px; font-weight: 600; }
+  #s8 .btn { position: absolute; left: 84px; top: 1330px; padding: 42px 60px; font-size: 35px; }
+  #s8 .site { position: absolute; left: 84px; top: 1490px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:800px;height:800px;left:-240px;top:-200px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+<div class="steps" id="steps">
+  <span></span><span></span><span></span><span></span><span></span>
+</div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">One job, start to finish</p>
+  <h1 class="display">One address.<br>One minute.<br><span class="hl">One signed job.</span></h1>
+  <p class="sub">Watch the whole thing happen — measured, drawn in 3D, priced, sent and signed.</p>
+</section>
+
+<!-- 2. address -->
+<section class="scene" id="s2">
+  <h2 class="head display">Start with<br><span class="hl">the address.</span></h2>
+  <div class="card">
+    <p class="eyebrow mono" style="font-size:25px">New takeoff</p>
+    <div class="input"><span id="addr"></span><span class="caret" id="caret"></span></div>
+    <span class="btn go">Scan property</span>
+    <div class="prog"><i id="bar2"></i></div>
+    <p class="plbl mono">Pulling aerial + county parcel…</p>
+  </div>
+</section>
+
+<!-- 3. scan -->
+<section class="scene" id="s3">
+  <h2 class="head display">The lot,<br><span class="hl">measured from the sky.</span></h2>
+  <div class="plate" id="p3"><img src="plates/act1-scan.png" alt=""><div class="scanline" id="sweep3"></div></div>
+  <div class="under row">
+    <span class="chip"><span class="tick">✓</span> 0.38 acres</span>
+    <span class="chip"><span class="tick">✓</span> Parcel matched</span>
+    <span class="chip"><span class="tick">✓</span> House footprint</span>
+  </div>
+</section>
+
+<!-- 4. measure -->
+<section class="scene" id="s4">
+  <h2 class="head display">Drive the fence.<br><span class="hl">It counts itself.</span></h2>
+  <div class="plate" id="p4"><img src="plates/act2-trace.png" alt=""></div>
+  <div class="big">
+    <p><span class="stat n" id="lf">0</span><span class="u mono">LF</span></p>
+    <p class="stat-l l">Net fence · 4 corners · 2 gates</p>
+  </div>
+  <div class="row">
+    <span class="chip">48 posts</span>
+    <span class="chip">96 bags concrete</span>
+    <span class="chip">819 pickets</span>
+  </div>
+</section>
+
+<!-- 5. 3D -->
+<section class="scene" id="s5">
+  <h2 class="head display">See it built<br><span class="hl">before you dig.</span></h2>
+  <div class="plate" id="p5"><img src="plates/act3-3d.png" alt=""></div>
+  <div class="under row">
+    <span class="chip"><span class="tick">✓</span> 6′ cedar privacy, to scale</span>
+    <span class="chip"><span class="tick">✓</span> Both gates hung</span>
+  </div>
+</section>
+
+<!-- 6. price -->
+<section class="scene" id="s6">
+  <h2 class="head display">Priced three ways.<br><span class="hl">Your rate card.</span></h2>
+  <div class="plate" id="p6"><img src="plates/act4-proposal.png" alt=""></div>
+  <div class="tiers">
+    <div class="tier"><p class="k">Good</p><p class="v">$15,764</p></div>
+    <div class="tier rec"><p class="k">Better</p><p class="v">$20,417</p></div>
+    <div class="tier"><p class="k">Best</p><p class="v">$27,595</p></div>
+  </div>
+</section>
+
+<!-- 7. signed -->
+<section class="scene" id="s7">
+  <h2 class="head display">Sent, opened,<br><span class="hl">signed on a phone.</span></h2>
+  <div class="plate" id="p7"><img src="plates/act5-signed.png" alt=""></div>
+  <div class="stamp-wrap">
+    <div class="stamp">
+      <p class="t">✓ Signed — Better package</p>
+      <p class="s">$20,417 · $6,125 deposit paid</p>
+    </div>
+  </div>
+</section>
+
+<!-- 8. CTA -->
+<section class="scene" id="s8">
+  <h2 class="display">That's the<br>whole job.<br><span class="hl">One tab.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Measure from the sky — no drive-out</span>
+    <span><span class="hl">✓</span> 3D model your client actually understands</span>
+    <span><span class="hl">✓</span> E-sign, deposit, schedule and crew built in</span>
+  </div>
+  <span class="btn">Scan my first property free →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* ---- 1. hook (0–3.0) ---- */
+  scene("#s1", 0, 3000, 280);
+  rise("#s1 .eyebrow", 120, 560, 24);
+  rise("#s1 h1", 250, 1050, 60);
+  rise("#s1 .sub", 1050, 1600, 34);
+
+  /* ---- 2. address (2.8–6.6) ---- */
+  scene("#s2", 2800, 6600, 280);
+  rise("#s2 .head", 2950, 3500, 40);
+  rise("#s2 .card", 3050, 3700, 60);
+  type("#addr", 3600, 5000, "1425 Maple Ave, Fort Collins CO", "#caret");
+  bar("#bar2", 5200, 6400);
+
+  /* ---- 3. scan (6.4–10.6) ---- */
+  scene("#s3", 6400, 10600, 280);
+  rise("#s3 .head", 6550, 7100, 40);
+  rise("#p3", 6650, 7300, 60);
+  kenBurns("#p3 img", 6650, 10600, 1.02, 1.1);
+  sweep("#sweep3", 7200, 8800, 632);
+  riseEach("#s3 .chip", 8800, 230, 340, 26);
+
+  /* ---- 4. measure (10.4–14.8) ---- */
+  scene("#s4", 10400, 14800, 280);
+  rise("#s4 .head", 10550, 11100, 40);
+  rise("#p4", 10650, 11300, 60);
+  kenBurns("#p4 img", 10650, 14800, 1.02, 1.09);
+  rise("#s4 .big", 11400, 11900, 40);
+  count("#lf", 11500, 13100, 0, 341);
+  riseEach("#s4 .chip", 13100, 210, 340, 24);
+
+  /* ---- 5. 3D (14.6–18.6) ---- */
+  scene("#s5", 14600, 18600, 280);
+  rise("#s5 .head", 14750, 15300, 40);
+  rise("#p5", 14850, 15500, 60);
+  kenBurns("#p5 img", 14850, 18600, 1.0, 1.09);
+  riseEach("#s5 .chip", 16600, 280, 380, 26);
+
+  /* ---- 6. price (18.4–22.6) ---- */
+  scene("#s6", 18400, 22600, 280);
+  rise("#s6 .head", 18550, 19100, 40);
+  rise("#p6", 18650, 19300, 60);
+  kenBurns("#p6 img", 18650, 22600, 1.01, 1.07);
+  riseEach("#s6 .tier", 19800, 280, 380, 34);
+
+  /* ---- 7. signed (22.4–26.4) ---- */
+  scene("#s7", 22400, 26400, 280);
+  rise("#s7 .head", 22550, 23100, 40);
+  rise("#p7", 22650, 23300, 60);
+  kenBurns("#p7 img", 22650, 26400, 1.01, 1.06);
+  pop("#s7 .stamp", 23900, 24600);
+
+  /* ---- 8. CTA (26.2–30.0) ---- */
+  scene("#s8", 26200, 30000, 320);
+  rise("#s8 h2", 26350, 27100, 56);
+  riseEach("#s8 .list > span", 27300, 220, 360, 26);
+  pop("#s8 .btn", 28400, 29000);
+  rise("#s8 .site", 29000, 29400, 20);
+
+  /* ---- the step rail ---- */
+  (function () {
+    const dots = $$("#steps span");
+    const marks = [2800, 6400, 10400, 14600, 18400];
+    up((ms) => {
+      const on = ms >= 26200 ? 5 : marks.filter((m) => ms >= m).length;
+      dots.forEach((d, i) => d.classList.toggle("on", i < on));
+      $("#steps").style.opacity = ms < 2700 || ms > 26200 ? 0 : 1;
+    });
+  })();
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

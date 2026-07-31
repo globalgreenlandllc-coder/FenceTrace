@@ -1,0 +1,174 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Signed from the couch (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+  .head { position: absolute; left: 84px; right: 84px; top: 380px; font-size: 66px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 520px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 118px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1130px; font-size: 40px; line-height: 1.42; font-weight: 500; }
+
+  /* ---------- the client's phone ---------- */
+  .phone { position: absolute; left: 285px; top: 620px; width: 510px; height: 1020px;
+    background: #0b1410; border: 11px solid #1c2a22; border-radius: 60px; overflow: hidden;
+    box-shadow: 0 60px 140px -34px rgba(0,0,0,.95); }
+  .pscreen { position: absolute; inset: 0; background: var(--paper); color: #18181b; padding: 66px 26px 26px; }
+  .ptop { display: flex; align-items: center; justify-content: space-between; }
+  .ptop .co { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; }
+  .ptop .no { font-family: "Space Mono", monospace; font-size: 15px; color: #a1a1aa; }
+  .phero { margin-top: 18px; border-radius: 18px; overflow: hidden; height: 210px; position: relative;
+    box-shadow: 0 10px 30px -14px rgba(0,0,0,.4); }
+  .phero img { position: absolute; width: 200%; left: -50%; top: -22%; }
+  .paddr { margin-top: 18px; font-size: 27px; font-weight: 700; }
+  .pscope { font-size: 18px; color: #52525b; margin-top: 5px; }
+  .ppkg { margin-top: 18px; display: flex; gap: 10px; }
+  .ppkg div { flex: 1; border: 2px solid #e4e4e7; border-radius: 14px; padding: 14px 8px; text-align: center; background: #fff; }
+  .ppkg div.sel { border-color: var(--a600); background: #f0f7f1; }
+  .ppkg .k { font-family: "Space Mono", monospace; font-size: 14px; letter-spacing: .08em;
+    text-transform: uppercase; color: #71717a; }
+  .ppkg .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 22px; margin-top: 7px; }
+  .ppkg div.sel .v { color: var(--a600); }
+  .psign { margin-top: 18px; background: #fff; border: 2px dashed #d4d4d8; border-radius: 14px;
+    height: 128px; position: relative; }
+  .psign .lbl { position: absolute; left: 16px; top: 12px; font-family: "Space Mono", monospace;
+    font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: #a1a1aa; }
+  .psign svg { position: absolute; left: 0; top: 0; }
+  .pbtn { margin-top: 18px; background: var(--a600); color: #fff; border-radius: 15px;
+    padding: 22px; text-align: center; font-weight: 700; font-size: 25px; }
+
+  /* centred with flex, NOT translateX — pop() owns the transform */
+  .stamp-wrap { position: absolute; left: 0; right: 0; top: 1300px; display: flex;
+    justify-content: center; z-index: 30; }
+  .stamp { background: var(--a600); border-radius: 28px; padding: 34px 54px; text-align: center;
+    white-space: nowrap; box-shadow: 0 34px 90px -18px rgba(63,166,91,.75); }
+  .stamp .t { font-size: 42px; font-weight: 700; }
+  .stamp .s { font-size: 28px; color: rgba(255,255,255,.82); margin-top: 8px; }
+
+  #s3 .row { position: absolute; left: 50px; right: 50px; top: 1440px; display: flex;
+    justify-content: center; gap: 14px; flex-wrap: wrap; }
+  #s3 .chip { padding: 19px 28px; font-size: 28px; }
+
+  #s4 h2 { position: absolute; left: 84px; right: 84px; top: 580px; font-size: 110px; }
+  #s4 .btn { position: absolute; left: 84px; top: 1100px; padding: 42px 60px; font-size: 35px; }
+  #s4 .site { position: absolute; left: 84px; top: 1260px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:760px;height:760px;right:-240px;bottom:-200px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">No PDFs. No printer.</p>
+  <h1 class="display">They sign it<br>from<br><span class="hl">the couch.</span></h1>
+  <p class="sub">A link, not an attachment. No login, no app, no "can you resend that?"</p>
+</section>
+
+<!-- 2 + 3. the phone -->
+<section class="scene" id="s2">
+  <h2 class="head display">Pick a package.<br><span class="hl">Sign with a finger.</span></h2>
+  <div class="phone">
+    <div class="pscreen">
+      <div class="ptop"><span class="co">Whitaker Fence Co.</span><span class="no">#FS-2418</span></div>
+      <div class="phero"><img src="plates/act3-3d.png" alt=""></div>
+      <p class="paddr">1425 Maple Ave</p>
+      <p class="pscope">341 LF · 6′ cedar privacy · 4′ walk + 10′ drive gate</p>
+      <div class="ppkg">
+        <div><p class="k">Good</p><p class="v">$15,764</p></div>
+        <div id="pick"><p class="k">Better</p><p class="v">$20,417</p></div>
+        <div><p class="k">Best</p><p class="v">$27,595</p></div>
+      </div>
+      <div class="psign">
+        <span class="lbl">Sign here</span>
+        <svg width="440" height="128" viewBox="0 0 440 128" fill="none">
+          <path id="sig" d="M34 90 C 48 38, 62 28, 72 52 C 82 76, 72 102, 88 98 C 106 94, 108 44, 124 34
+            C 138 26, 138 72, 152 82 C 166 92, 174 54, 190 40 C 206 26, 214 66, 228 84
+            C 242 100, 262 88, 274 62 C 286 36, 306 44, 312 68 C 318 92, 342 94, 366 64
+            C 378 48, 392 54, 406 62"
+            stroke="#0D1B12" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="pbtn" id="pbtn">Accept &amp; sign</div>
+    </div>
+  </div>
+  <div class="stamp-wrap">
+    <div class="stamp" id="stamp">
+      <p class="t">✓ Signed — Better package</p>
+      <p class="s">$20,417 · $6,125 deposit paid</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3. what it triggers -->
+<section class="scene" id="s3">
+  <h2 class="head display">One signature.<br><span class="hl">Four things happen.</span></h2>
+  <div class="plate" style="left:50px;top:640px;width:980px;height:632px" id="p3">
+    <img src="plates/act5-signed.png" alt="">
+  </div>
+  <div class="row">
+    <span class="chip"><span class="tick">✓</span> Deposit charged</span>
+    <span class="chip"><span class="tick">✓</span> Job created</span>
+    <span class="chip"><span class="tick">✓</span> Crew offered</span>
+    <span class="chip"><span class="tick">✓</span> Date on the calendar</span>
+  </div>
+</section>
+
+<!-- 4. CTA -->
+<section class="scene" id="s4">
+  <h2 class="display">Stop chasing<br><span class="hl">signatures.</span></h2>
+  <span class="btn">Send a signable bid →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* 1. hook */
+  scene("#s1", 0, 3200);
+  rise("#s1 .eyebrow", 150, 600, 24);
+  rise("#s1 h1", 280, 1120, 60);
+  rise("#s1 .sub", 1120, 1650, 34);
+
+  /* 2. the phone */
+  scene("#s2", 3000, 9200);
+  rise("#s2 .head", 3200, 3800, 40);
+  rise(".phone", 3300, 4100, 70);
+  /* the client taps Better */
+  (function () {
+    const el = $("#pick");
+    up((ms) => el.classList.toggle("sel", ms > 4900));
+  })();
+  draw("#sig", 5600, 7000);
+  (function () {
+    const b = $("#pbtn");
+    up((ms) => {
+      const done = ms > 7300;
+      b.textContent = done ? "✓ Signed — deposit paid" : "Accept & sign";
+      b.style.background = done ? "#0a2b19" : "var(--a600)";
+    });
+  })();
+  pop("#stamp", 7500, 8200);
+
+  /* 3. what it triggers */
+  scene("#s3", 9000, 12600);
+  rise("#s3 .head", 9200, 9800, 40);
+  rise("#p3", 9300, 10000, 60);
+  kenBurns("#p3 img", 9300, 12600, 1.01, 1.07);
+  riseEach("#s3 .chip", 10300, 220, 340, 24);
+
+  /* 4. CTA */
+  scene("#s4", 12400, 15000, 340);
+  rise("#s4 h2", 12600, 13300, 56);
+  pop("#s4 .btn", 13500, 14100);
+  rise("#s4 .site", 14100, 14500, 20);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

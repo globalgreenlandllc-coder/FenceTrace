@@ -1,0 +1,253 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — Topo to 3D steps (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  /* ---------- TOPO design system: amber contour lines on near-black ---------- */
+  :root { --ink: #0f0d07; --panel: #191507; --trace: #FCD34D; --a400: #fbbf24; --a300: #fde68a; }
+  html, body { width: 1080px; height: 1920px; background: #0f0d07; }
+  .grid-bg { background: none; }
+  .glow { background: #b45309; opacity: .34; }
+  .pickets { background: repeating-linear-gradient(180deg, #92610e 0 34px, transparent 34px 46px); opacity: .6; }
+  .topo-bg { position: absolute; inset: 0; z-index: 0; opacity: .1; }
+  .topo-bg path { fill: none; stroke: #FCD34D; stroke-width: 2.5; }
+  .brand { top: 100px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; background: var(--trace); }
+  .eyebrow { color: #fbbf24; }
+  .eyebrow::before { background: var(--trace); }
+  .btn { background: linear-gradient(135deg, #b45309, #FCD34D); color: #2a1c02;
+    box-shadow: 0 0 0 1px rgba(252,211,77,.4), 0 30px 80px -14px rgba(252,211,77,.4); }
+  .chip .tick { color: var(--trace); }
+  .head { position: absolute; left: 84px; right: 84px; top: 322px; font-size: 60px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 470px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 550px; font-size: 116px; }
+  #s1 .n { color: var(--trace); }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1200px; font-size: 42px;
+    line-height: 1.42; font-weight: 500; }
+
+  /* the product frame: seg control + canvas that flips layout → 3D */
+  #app { position: absolute; left: 50px; bottom: 664px; width: 980px; }
+  .bar { background: #fff; border-radius: 18px 18px 0 0; padding: 15px 18px;
+    display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #E4E4E7; }
+  .seg { display: inline-flex; border-radius: 999px; background: #F4F4F5; padding: 3px; gap: 2px; }
+  .seg span { border-radius: 999px; padding: 10px 18px; font-size: 21px; font-weight: 600; color: #71717A; }
+  .seg span.on { background: #fff; color: #18181B; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .topopill { border-radius: 999px; padding: 10px 17px; font-size: 20px; font-weight: 700;
+    background: #FFFBEB; color: #92400E; box-shadow: inset 0 0 0 1px #FDE68A; }
+  .addr { margin-left: auto; font-size: 20px; font-weight: 600; color: #71717A; white-space: nowrap; }
+  .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+    border-radius: 0 0 18px 18px; background: #26331f;
+    box-shadow: 0 0 0 1px rgba(252,211,77,.3), 0 46px 110px -30px rgba(0,0,0,.95); }
+  .canvas .lay { position: absolute; inset: 0; }
+  .canvas img { position: absolute; inset: 0; width: 100%; height: 100%;
+    transform: scaleX(-1); filter: hue-rotate(-12deg) saturate(.92) brightness(.97); }
+  .canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #threed { opacity: 0; background: #cfe4f2; }
+  .legend { font-size: 10.5px; font-weight: 600; fill: #FDE68A; stroke: #1C1917;
+    stroke-width: 2.6px; paint-order: stroke; font-family: Inter, sans-serif; }
+  /* the real 3D chips */
+  .chips3d { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 10px; opacity: 0; }
+  .chips3d span { background: rgba(255,255,255,.92); border-radius: 999px; padding: 11px 17px;
+    font-size: 18.5px; font-weight: 600; color: #3f3f46; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+  .chips3d .steps { color: #195F36; box-shadow: inset 0 0 0 1.5px #BFDEC7, 0 2px 10px rgba(0,0,0,.25); }
+  .hint3d { position: absolute; right: 14px; top: 14px; background: rgba(9,20,12,0.8); color: #fff;
+    border-radius: 999px; padding: 11px 18px; font-size: 18px; font-weight: 600; opacity: 0; }
+
+  .readout { position: absolute; left: 50px; right: 50px; bottom: 546px; display: flex; gap: 14px;
+    background: #FAFAFA; color: #52525B; border-radius: 16px; padding: 24px 26px;
+    box-shadow: inset 0 0 0 1px #E4E4E7; font-size: 27px; line-height: 1.5; opacity: 0; }
+  .readout .mt { flex: none; color: #1E7340; }
+  .readout b { color: #18181B; }
+  .callout { position: absolute; left: 50px; right: 50px; bottom: 430px; text-align: center;
+    font-size: 33px; font-weight: 700; opacity: 0; }
+  .callout b { color: var(--trace); }
+
+  #s4 h2 { position: absolute; left: 84px; right: 84px; top: 520px; font-size: 102px; }
+  #s4 .list { position: absolute; left: 84px; right: 84px; top: 1000px; display: flex;
+    flex-direction: column; gap: 18px; }
+  #s4 .list > span { font-size: 32px; font-weight: 600; }
+  #s4 .btn { position: absolute; left: 84px; top: 1300px; padding: 42px 60px; font-size: 35px; }
+  #s4 .fine { position: absolute; left: 84px; right: 84px; top: 1460px; font-size: 25px;
+    color: rgba(255,255,255,.45); line-height: 1.45; }
+</style>
+
+<svg class="topo-bg" viewBox="0 0 1080 1920" preserveAspectRatio="none">
+  <path d="M -40 420 C 260 340, 560 470, 860 350 S 1140 300, 1140 300"/>
+  <path d="M -40 700 C 280 600, 580 740, 880 600 S 1140 540, 1140 540"/>
+  <path d="M -40 1000 C 300 880, 600 1030, 900 870 S 1140 800, 1140 800"/>
+  <path d="M -40 1320 C 320 1180, 620 1350, 920 1170 S 1140 1090, 1140 1090"/>
+  <path d="M -40 1660 C 340 1500, 640 1690, 940 1490 S 1140 1400, 1140 1400"/>
+</svg>
+<div class="glow" style="width:820px;height:820px;left:-260px;top:-200px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Hillside jobs, priced from the desk</p>
+  <h1 class="display">The yard drops<br><span class="n" id="drop">0</span> feet.<br><span class="hl">Your bid knows.</span></h1>
+  <p class="sub">Elevation at every post. Steps where the panels can't rack. Watch.</p>
+</section>
+
+<!-- 2 + 3. layout → 3D -->
+<section class="scene" id="s2">
+  <h2 class="head display" id="h2">Topo on the photo.<br><span class="hl">Then stand it up.</span></h2>
+
+  <div id="app">
+    <div class="bar">
+      <div class="seg"><span id="segLay" class="on">Layout</span><span id="seg3d">3D preview</span></div>
+      <span class="topopill" id="topopill">Topo on</span>
+      <span class="addr">812 Ridge Rd · 224 LF · 6′ cedar</span>
+    </div>
+    <div class="canvas">
+      <div class="lay" id="lay">
+        <img src="plates/aerial-clean.svg" alt="">
+        <svg viewBox="0 0 900 580">
+          <polyline fill="none" stroke="#22d3ee" stroke-width="3.5"
+            stroke-linecap="round" stroke-linejoin="round"
+            points="212,120 700,104 712,392 470,404"
+            style="filter:drop-shadow(0 0 4px rgba(34,211,238,0.6))"/>
+          <g id="topo"></g>
+          <text class="legend" x="890" y="24" text-anchor="end">Topo lines every 5′ — feet above the low point</text>
+        </svg>
+      </div>
+      <svg id="threed" viewBox="0 0 900 580"></svg>
+      <div class="chips3d" id="chips3d">
+        <span>6&#8242; Cedar privacy — to scale</span>
+        <span class="steps">⛰ 6 sections step down the slope</span>
+      </div>
+      <div class="hint3d" id="hint3d">↻ Drag to spin · scroll to zoom · click a spot to walk</div>
+    </div>
+  </div>
+
+  <div class="readout" id="readout">
+    <svg class="mt" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+    <span>Grade <b>10.7% avg · 19% max</b>. <b>24 steps</b> down the slope (each ≤ 1′ so the top line stays at code height) — <b>10′ posts</b> there, 8′ elsewhere.</span>
+  </div>
+  <p class="callout" id="callout"></p>
+</section>
+
+<!-- 4. CTA -->
+<section class="scene" id="s4">
+  <h2 class="display">See the hill<br><span class="hl">before the<br>crew does.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Panels rack where the system allows it</span>
+    <span><span class="hl">✓</span> Level, stepped panels where it doesn't</span>
+    <span><span class="hl">✓</span> Steps and terrain priced into the takeoff</span>
+  </div>
+  <span class="btn">Stand a fence on your hill →</span>
+  <p class="fine">Satellite terrain data, not a survey — relief drawn slightly exaggerated so the
+    fence stays readable. Verify on site before digging.</p>
+</section>
+
+<script src="plates/topo.js"></script>
+<script src="steps3d.js"></script>
+<script src="kit.js"></script>
+<script>
+  /* ---------- 1. hook ---------- */
+  scene("#s1", 0, 3800, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1200, 58);
+  count("#drop", 700, 2100, 0, 24);
+  rise("#s1 .sub", 1700, 2300, 34);
+
+  /* ---------- 2+3. layout → 3D ---------- */
+  scene("#s2", 3600, 25400, 300);
+  rise("#h2", 3800, 4400, 38);
+  rise("#app", 3900, 4700, 60);
+
+  (function () {
+    const h = $("#h2");
+    up((ms) => {
+      h.innerHTML =
+        ms < 9600
+          ? "Topo on the photo.<br><span class='hl'>Then stand it up.</span>"
+          : "Every panel level.<br><span class='hl'>Every step counted.</span>";
+    });
+  })();
+
+  /* contours in the layout view */
+  (function () {
+    const g = $("#topo");
+    g.innerHTML = window.TOPO.lines
+      .map(
+        (l) =>
+          l.chains
+            .map(
+              (ch) =>
+                `<polyline fill="none" stroke="#FCD34D" stroke-width="1.3" opacity="0.85" ` +
+                `stroke-linejoin="round" stroke-linecap="round" points="${ch.map((p) => p[0] + "," + p[1]).join(" ")}"/>`,
+            )
+            .join("") +
+          l.labels
+            .map(([x, y]) => `<text class="legend" x="${x}" y="${y}" text-anchor="middle">+${l.levelFt}′</text>`)
+            .join(""),
+      )
+      .join("");
+    const lines = $$("#topo polyline");
+    up((ms) => {
+      lines.forEach((el, i) => (el.style.opacity = 0.85 * eo(p(ms, 4900 + i * 160, 5350 + i * 160))));
+    });
+  })();
+
+  /* the flip: seg control switches, layout crossfades into the 3D scene */
+  const scn = buildSteps3D($("#threed"));
+  (function () {
+    const lay = $("#lay"), td = $("#threed");
+    const sl = $("#segLay"), s3 = $("#seg3d"), pill = $("#topopill");
+    /* start hidden; posts drop in, panels build left→right stepping down */
+    scn.posts.forEach((g) => (g.style.opacity = 0));
+    scn.panels.forEach((g) => (g.style.opacity = 0));
+    scn.dims.forEach((g) => (g.style.opacity = 0));
+    up((ms) => {
+      const flip = eio(p(ms, 9800, 10600));
+      lay.style.opacity = 1 - flip;
+      td.style.opacity = flip;
+      const on3d = ms >= 10100;
+      sl.classList.toggle("on", !on3d);
+      s3.classList.toggle("on", on3d);
+      pill.style.display = on3d ? "none" : "";
+      scn.posts.forEach((g, i) => {
+        const t = eo(p(ms, 10900 + i * 210, 11350 + i * 210));
+        g.style.opacity = t;
+        g.style.transform = `translateY(${(1 - t) * -34}px)`;
+      });
+      scn.panels.forEach((g, i) => {
+        const t = eo(p(ms, 11500 + i * 260, 12050 + i * 260));
+        g.style.opacity = t;
+        g.style.transform = `translateX(${(1 - t) * -18}px)`;
+      });
+      scn.dims.forEach((g, i) => (g.style.opacity = eo(p(ms, 15200 + i * 700, 15700 + i * 700))));
+      $("#chips3d").style.opacity = eo(p(ms, 14200, 14800));
+      $("#hint3d").style.opacity = eo(p(ms, 14600, 15200));
+    });
+  })();
+
+  rise("#readout", 18600, 19300, 34);
+
+  (function () {
+    const c = $("#callout");
+    up((ms) => {
+      let t = "", o = 0;
+      if (ms > 5400 && ms < 9400) { t = "The grade, read from the sky — <b>before anyone drives.</b>"; o = 1; }
+      else if (ms > 11200 && ms < 14000) { t = "Panels <b>step down the slope</b> — the top line stays level."; o = 1; }
+      else if (ms > 15600 && ms < 18200) { t = "Zoomed to the back run — <b>6 of the job's 24 steps.</b>"; o = 1; }
+      else if (ms > 21400 && ms < 24800) { t = "Steps, posts and sloped labor — <b>already in the price.</b>"; o = 1; }
+      if (t) c.innerHTML = t;
+      c.style.opacity = o;
+    });
+  })();
+
+  /* ---------- 4. CTA ---------- */
+  scene("#s4", 25200, 30000, 340);
+  rise("#s4 h2", 25400, 26200, 52);
+  riseEach("#s4 .list > span", 26400, 220, 360, 26);
+  pop("#s4 .btn", 27600, 28200);
+  rise("#s4 .fine", 28300, 28900, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

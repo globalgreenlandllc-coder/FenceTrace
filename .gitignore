@@ -30,6 +30,16 @@ scripts/*.png
 scripts/*.svg
 scripts/*.html
 
+# Meta ad kit: rendered video/stills live under marketing/fence-ads/out/,
+# already covered by the bare `out/` rule above. These are the app-UI
+# plates that capture-plates.mjs re-screenshots from a running dev server
+# — 8 MB of regenerable PNG. The real-property aerials and the computed
+# job/topo data are NOT ignored: those need a Google Maps key and one
+# specific address to reproduce.
+marketing/fence-ads/src/plates/act*.png
+marketing/fence-ads/src/plates/hero-*.png
+marketing/fence-ads/src/plates/section-*.png
+
 # Claude Code session config
 .claude/
 .vercel

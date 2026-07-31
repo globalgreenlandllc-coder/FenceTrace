@@ -1,0 +1,140 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — 3D, true to spec (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1350px; }
+  .brand { top: 62px; font-size: 34px; }
+  .brand .sq { width: 13px; height: 13px; }
+  .head { position: absolute; left: 70px; right: 70px; top: 168px; font-size: 60px; }
+  .plate { left: 50px; top: 388px; width: 980px; height: 632px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 340px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 412px; font-size: 104px; }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 880px; font-size: 36px; line-height: 1.42; font-weight: 500; }
+
+  #s2 .caption { position: absolute; left: 50px; right: 50px; top: 1070px; text-align: center; font-size: 32px; font-weight: 600; }
+  #s2 .caption b { color: var(--trace); }
+
+  /* the catalog rail — every system built out of its own hardware */
+  #s3 .sys { position: absolute; left: 50px; right: 50px; top: 1058px; display: flex; gap: 12px; }
+  #s3 .sys div { flex: 1; border: 1px solid var(--line); border-radius: 16px; padding: 18px 14px; text-align: center;
+    background: rgba(255,255,255,.04); }
+  #s3 .sys .k { font-family: "Space Mono", monospace; font-size: 20px; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--a300); }
+  #s3 .sys .v { font-size: 26px; font-weight: 700; margin-top: 8px; }
+
+  /* the bill of materials */
+  #s4 .bom { position: absolute; left: 60px; right: 60px; top: 300px;
+    background: var(--paper); color: #18181b; border-radius: 24px; padding: 44px 46px;
+    box-shadow: 0 44px 110px -30px rgba(0,0,0,.9); }
+  #s4 .bom h3 { font-family: "Space Mono", monospace; font-size: 24px; letter-spacing: .14em;
+    text-transform: uppercase; color: #71717a; }
+  #s4 .bom .addr { font-size: 40px; font-weight: 700; margin-top: 10px; }
+  #s4 .bom ul { margin-top: 28px; list-style: none; }
+  #s4 .bom li { display: flex; justify-content: space-between; align-items: baseline;
+    padding: 17px 0; border-bottom: 1px solid #e4e4e7; font-size: 32px; }
+  #s4 .bom li:last-child { border-bottom: 0; }
+  #s4 .bom li b { font-family: "Space Mono", monospace; font-size: 34px; color: var(--a600); }
+  #s4 .foot { position: absolute; left: 60px; right: 60px; top: 1218px; text-align: center;
+    font-size: 28px; color: rgba(255,255,255,.6); }
+
+  #s5 h2 { position: absolute; left: 70px; right: 70px; top: 330px; font-size: 98px; }
+  #s5 .btn { position: absolute; left: 70px; top: 800px; padding: 38px 54px; font-size: 33px; }
+  #s5 .site { position: absolute; left: 70px; top: 940px; font-size: 30px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:700px;height:700px;right:-220px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Fence contractors</p>
+  <h1 class="display">Your bid is<br>a number.<br><span class="hl">Theirs is a yard.</span></h1>
+  <p class="sub">Show the fence standing in it — before anyone digs a hole.</p>
+</section>
+
+<!-- 2. the 3D -->
+<section class="scene" id="s2">
+  <h2 class="head display">The takeoff,<br><span class="hl">standing up.</span></h2>
+  <div class="plate" id="p2"><img src="plates/act3-3d.png" alt=""></div>
+  <p class="caption">Drag to orbit — <b>it's the real model, not a picture.</b></p>
+</section>
+
+<!-- 3. true to system -->
+<section class="scene" id="s3">
+  <h2 class="head display">Every system built<br><span class="hl">out of its own parts.</span></h2>
+  <div class="plate" id="p3"><img src="plates/act3-3d-early.png" alt=""></div>
+  <div class="sys">
+    <div><p class="k">Cedar</p><p class="v">8′ o.c. posts</p></div>
+    <div><p class="k">Vinyl</p><p class="v">5×5 routed</p></div>
+    <div><p class="k">Chain link</p><p class="v">Pipe + top rail</p></div>
+    <div><p class="k">Aluminum</p><p class="v">6′ o.c. panels</p></div>
+  </div>
+</section>
+
+<!-- 4. bill of materials -->
+<section class="scene" id="s4">
+  <div class="bom">
+    <h3>Bill of materials — computed, not guessed</h3>
+    <p class="addr">1425 Maple Ave · 341 LF</p>
+    <ul>
+      <li><span>Posts (line, corner, end, gate)</span><b>48</b></li>
+      <li><span>Concrete, 60 lb bags</span><b>96</b></li>
+      <li><span>2×4 cedar rails, 8′</span><b>142</b></li>
+      <li><span>1×6 western red cedar pickets</span><b>819</b></li>
+      <li><span>Gate kits — 4′ walk + 10′ drive</span><b>2</b></li>
+    </ul>
+  </div>
+  <p class="foot">Change the fence type and every line rebuilds itself.</p>
+</section>
+
+<!-- 5. CTA -->
+<section class="scene" id="s5">
+  <h2 class="display">Bid it once.<br><span class="hl">Build it right.</span></h2>
+  <span class="btn">Try a free takeoff →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* 1. hook (0–4.2) */
+  scene("#s1", 0, 4200, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1200, 58);
+  rise("#s1 .sub", 1250, 1850, 32);
+
+  /* 2. 3D (4.0–11.2) */
+  scene("#s2", 4000, 11200, 300);
+  rise("#s2 .head", 4200, 4800, 38);
+  rise("#p2", 4300, 5000, 56);
+  kenBurns("#p2 img", 4300, 11200, 1.0, 1.12);
+  rise("#s2 .caption", 6600, 7200, 26);
+
+  /* 3. systems (11.0–18.4) */
+  scene("#s3", 11000, 18400, 300);
+  rise("#s3 .head", 11200, 11800, 38);
+  rise("#p3", 11300, 12000, 56);
+  kenBurns("#p3 img", 11300, 18400, 1.03, 1.12);
+  riseEach("#s3 .sys div", 13000, 340, 420, 30);
+
+  /* 4. BOM (18.2–25.4) */
+  scene("#s4", 18200, 25400, 300);
+  rise("#s4 .bom", 18400, 19200, 56);
+  riseEach("#s4 .bom li", 19600, 400, 420, 24);
+  rise("#s4 .foot", 23400, 24000, 22);
+
+  /* 5. CTA (25.2–30.0) */
+  scene("#s5", 25200, 30000, 340);
+  rise("#s5 h2", 25400, 26200, 52);
+  pop("#s5 .btn", 26600, 27200);
+  rise("#s5 .site", 27300, 27700, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

@@ -1,0 +1,117 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Don't know what to charge? (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; background: #F7F6F2; }
+  body { color: #0D1B12; }
+  .grid-bg { background:
+      linear-gradient(rgba(13,27,18,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13,27,18,0.05) 1px, transparent 1px);
+    background-size: 44px 44px; }
+  .glow { background: #94C7A3; opacity: .35; }
+  .pickets { background: repeating-linear-gradient(180deg, #BFDEC7 0 34px, transparent 34px 46px); }
+  .brand { top: 100px; font-size: 40px; color: #0D1B12; }
+  .brand .sq { width: 15px; height: 15px; background: #1E7340; }
+  .display .hl { color: #1E7340; }
+  .eyebrow { color: #348D51; }
+  .eyebrow::before { background: #1E7340; }
+  .head { position: absolute; left: 84px; right: 84px; top: 350px; font-size: 62px; }
+
+  #s1 .q { position: absolute; left: 84px; right: 84px; top: 520px; font-size: 96px;
+    font-family: "Archivo Black", sans-serif; text-transform: uppercase; line-height: .98; }
+  #s1 .q .hl { color: #1E7340; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1150px; font-size: 40px;
+    line-height: 1.42; font-weight: 500; color: #3f4a42; }
+
+  /* the market card — the real "Price options" surface */
+  .mkt { position: absolute; left: 60px; right: 60px; top: 560px; background: #fff;
+    border-radius: 24px; padding: 42px 46px; box-shadow: 0 1px 2px rgba(13,27,18,.05),
+    0 24px 60px -18px rgba(13,27,18,.14); }
+  .mkt .toprow { display: flex; align-items: baseline; justify-content: space-between; }
+  .mkt .lbl { font-family: "Space Mono", monospace; font-size: 21px; letter-spacing: .12em;
+    text-transform: uppercase; color: #71717a; }
+  .mkt .pill { font-size: 22px; font-weight: 600; color: #52525B; }
+  .mkt .big { display: flex; align-items: baseline; gap: 20px; margin-top: 26px; }
+  .mkt .tot { font-family: "Space Mono", monospace; font-weight: 700; font-size: 92px; color: #1E7340; }
+  .mkt .plf { font-family: "Space Mono", monospace; font-size: 33px; color: #71717a; }
+  .mkt .spec { font-size: 25px; color: #71717a; margin-top: 8px; }
+  .mkt .how { margin-top: 30px; border-top: 1px solid #f4f4f5; padding-top: 24px; }
+  .mkt .how .h { font-size: 23px; font-weight: 600; color: #52525B; }
+  .mkt .how ul { margin-top: 14px; list-style: none; border-left: 3px solid #E4E4E7;
+    padding-left: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .mkt .how li { font-size: 23px; line-height: 1.42; color: #71717a; }
+  .fair { position: absolute; left: 60px; right: 60px; top: 1420px; text-align: center;
+    font-size: 32px; font-weight: 600; color: #3f4a42; }
+  .fair b { color: #1E7340; }
+
+  #s3 h2 { position: absolute; left: 84px; right: 84px; top: 560px; font-size: 100px; }
+  #s3 .btn { position: absolute; left: 84px; top: 1120px; padding: 42px 60px; font-size: 35px; }
+  #s3 .site { position: absolute; left: 84px; top: 1280px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: #348D51; font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:760px;height:760px;right:-240px;top:-160px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="q">"What do<br>I even<br><span class="hl">charge?"</span></p>
+  <p class="sub">The question that sinks new fence companies. Here's a defensible answer.</p>
+</section>
+
+<!-- 2. the market card -->
+<section class="scene" id="s2">
+  <h2 class="head display">Your ZIP has<br><span class="hl">a going rate.</span></h2>
+  <div class="mkt">
+    <div class="toprow">
+      <span class="lbl">Price options</span>
+      <span class="pill" id="pill">San Jose, CA rates</span>
+    </div>
+    <div class="big"><span class="tot" id="tot">$0</span><span class="plf">$74 / LF</span></div>
+    <p class="spec">341 LF · 6′ cedar privacy · 2 gates · Better package</p>
+    <div class="how">
+      <p class="h">How this market is priced ›</p>
+      <ul>
+        <li>San Jose, CA — metro rates, +16% labor vs the California average.</li>
+        <li>Labor +38% vs national — BLS construction/fence-erector wages for California.</li>
+        <li>Material: cedar +13.5% — freight index × west lumber basis.</li>
+        <li>Sales tax 9.38% on materials only — California doesn't tax labor on real-property improvements.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="fair">Calibrated from <b>published wage and freight indexes</b> for your ZIP — not a guess.</p>
+</section>
+
+<!-- 3. CTA -->
+<section class="scene" id="s3">
+  <h2 class="display">Start with a<br><span class="hl">defensible<br>number.</span></h2>
+  <span class="btn">Price my market free →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  scene("#s1", 0, 3400);
+  rise("#s1 .q", 250, 1150, 60);
+  rise("#s1 .sub", 1200, 1750, 34);
+
+  scene("#s2", 3200, 12400);
+  rise("#s2 .head", 3400, 4000, 40);
+  rise(".mkt", 3500, 4300, 60);
+  count("#tot", 4400, 6000, 0, 25086, (n) => "$" + Math.round(n).toLocaleString("en-US"));
+  riseEach(".mkt .how li", 6200, 340, 400, 20);
+  rise(".fair", 9200, 9800, 24);
+
+  scene("#s3", 12200, 15000, 340);
+  rise("#s3 h2", 12400, 13100, 56);
+  pop("#s3 .btn", 13300, 13900);
+  rise("#s3 .site", 13900, 14300, 20);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

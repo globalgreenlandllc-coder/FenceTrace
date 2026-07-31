@@ -1,0 +1,183 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — The old way vs FenceScan (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+  .head { position: absolute; left: 84px; right: 84px; top: 370px; font-size: 66px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 510px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 590px; font-size: 116px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1120px; font-size: 40px; line-height: 1.42; font-weight: 500; }
+
+  /* ---------- the old way: a day, itemised ---------- */
+  #s2 .day { position: absolute; left: 60px; right: 60px; top: 620px; display: flex; flex-direction: column; gap: 18px; }
+  #s2 .r { display: flex; align-items: center; gap: 26px; border: 1px solid rgba(242,97,122,.32);
+    border-radius: 20px; padding: 26px 30px; background: rgba(242,97,122,.07); position: relative; }
+  #s2 .r .tm { font-family: "Space Mono", monospace; font-weight: 700; font-size: 30px;
+    color: var(--rose); width: 130px; flex: none; }
+  #s2 .r .tx { font-size: 32px; font-weight: 600; }
+  #s2 .tot { position: absolute; left: 60px; right: 60px; top: 1400px; text-align: center; }
+  #s2 .tot .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 92px; color: var(--rose); }
+  #s2 .tot .l { font-size: 30px; color: rgba(255,255,255,.6); margin-top: 8px; }
+
+  /* ---------- the new way ---------- */
+  .plate { left: 50px; top: 630px; width: 980px; height: 632px; }
+  #s3 .steps { position: absolute; left: 60px; right: 60px; top: 1310px; display: flex; flex-direction: column; gap: 16px; }
+  #s3 .r { display: flex; align-items: center; gap: 26px; border: 1px solid rgba(74,222,128,.3);
+    border-radius: 20px; padding: 22px 28px; background: rgba(74,222,128,.07); }
+  #s3 .r .tm { font-family: "Space Mono", monospace; font-weight: 700; font-size: 28px;
+    color: var(--trace); width: 130px; flex: none; }
+  #s3 .r .tx { font-size: 30px; font-weight: 600; }
+
+  /* ---------- the scoreboard ---------- */
+  #s4 .vs { position: absolute; left: 50px; right: 50px; top: 560px; display: flex; gap: 18px; }
+  #s4 .col { flex: 1; border-radius: 28px; padding: 40px 32px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.04); }
+  #s4 .col.good { border-color: var(--a400); background: linear-gradient(160deg, rgba(30,115,64,.5), rgba(30,115,64,.15)); }
+  #s4 .col h3 { font-family: "Space Mono", monospace; font-size: 25px; letter-spacing: .12em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+  #s4 .col.good h3 { color: var(--a300); }
+  #s4 .col .big { font-family: "Space Mono", monospace; font-weight: 700; font-size: 82px; margin-top: 18px; }
+  #s4 .col.bad .big { color: var(--rose); }
+  #s4 .col.good .big { color: var(--trace); }
+  #s4 .col .u { font-size: 26px; color: rgba(255,255,255,.55); margin-top: 6px; }
+  #s4 .col ul { margin-top: 30px; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+  #s4 .col li { font-size: 26px; line-height: 1.34; color: rgba(255,255,255,.8); }
+  #s4 .note { position: absolute; left: 60px; right: 60px; top: 1290px; text-align: center;
+    font-size: 34px; font-weight: 700; line-height: 1.4; }
+  #s4 .note b { color: var(--trace); }
+
+  #s5 h2 { position: absolute; left: 84px; right: 84px; top: 540px; font-size: 112px; }
+  #s5 .list { position: absolute; left: 84px; right: 84px; top: 1020px; display: flex; flex-direction: column; gap: 18px; }
+  #s5 .list span { font-size: 33px; font-weight: 600; }
+  #s5 .btn { position: absolute; left: 84px; top: 1330px; padding: 42px 60px; font-size: 35px; }
+  #s5 .site { position: absolute; left: 84px; top: 1490px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:800px;height:800px;left:-260px;top:-200px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Fence contractors</p>
+  <h1 class="display">Three days<br>to send<br><span class="hl">one bid.</span></h1>
+  <p class="sub">That's how long the old way takes. Here's the whole day, honestly.</p>
+</section>
+
+<!-- 2. the old way -->
+<section class="scene" id="s2">
+  <h2 class="head display" style="color:var(--rose)">The old way.</h2>
+  <div class="day">
+    <div class="r"><span class="tm">40 min</span><span class="tx">Drive out to the property</span></div>
+    <div class="r"><span class="tm">50 min</span><span class="tx">Wheel it, tape it, sketch it</span></div>
+    <div class="r"><span class="tm">40 min</span><span class="tx">Drive back</span></div>
+    <div class="r"><span class="tm">60 min</span><span class="tx">Rebuild it in a spreadsheet</span></div>
+    <div class="r"><span class="tm">2 days</span><span class="tx">…before you actually send it</span></div>
+  </div>
+  <div class="tot">
+    <p class="v" id="hrs">0</p>
+    <p class="l">hours per bid — for a job you might not win</p>
+  </div>
+</section>
+
+<!-- 3. the new way -->
+<section class="scene" id="s3">
+  <h2 class="head display">The FenceScan way.</h2>
+  <div class="plate" id="p3"><img src="plates/act2-trace.png" alt=""></div>
+  <div class="steps">
+    <div class="r"><span class="tm">0:05</span><span class="tx">Type the address</span></div>
+    <div class="r"><span class="tm">0:20</span><span class="tx">Drive the fence, drop the gates</span></div>
+    <div class="r"><span class="tm">0:45</span><span class="tx">3D, materials and three prices</span></div>
+    <div class="r"><span class="tm">1:00</span><span class="tx">Sent — signable on their phone</span></div>
+  </div>
+</section>
+
+<!-- 4. the scoreboard -->
+<section class="scene" id="s4">
+  <h2 class="head display">Same job.<br><span class="hl">Same yard.</span></h2>
+  <div class="vs">
+    <div class="col bad">
+      <h3>Old way</h3>
+      <p class="big">3 hrs</p>
+      <p class="u">per bid</p>
+      <ul>
+        <li>A drive-out per lead</li>
+        <li>One price, take it or leave it</li>
+        <li>Numbers you re-typed by hand</li>
+        <li>Chasing the signature by phone</li>
+      </ul>
+    </div>
+    <div class="col good">
+      <h3>FenceScan</h3>
+      <p class="big">60 sec</p>
+      <p class="u">per bid</p>
+      <ul>
+        <li>Measured from the sky</li>
+        <li>Good · Better · Best, every time</li>
+        <li>Every number computed</li>
+        <li>Signed, scheduled, deposit paid</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">Bid <b>every</b> lead that calls —<br>not just the ones worth the drive.</p>
+</section>
+
+<!-- 5. CTA -->
+<section class="scene" id="s5">
+  <h2 class="display">Quote more.<br>Drive less.<br><span class="hl">Win more.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Free scan on your first property</span>
+    <span><span class="hl">✓</span> No card, no crew, no drive-out</span>
+    <span><span class="hl">✓</span> Works on the phone in your truck</span>
+  </div>
+  <span class="btn">Scan a property free →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* 1. hook (0–3.4) */
+  scene("#s1", 0, 3400, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 58);
+  rise("#s1 .sub", 1150, 1750, 34);
+
+  /* 2. the old way (3.2–10.6) */
+  scene("#s2", 3200, 10600, 300);
+  rise("#s2 .head", 3400, 4000, 38);
+  riseEach("#s2 .r", 4100, 420, 460, 34);
+  rise("#s2 .tot", 6600, 7200, 34);
+  count("#hrs", 6800, 8400, 0, 3.2, (n) => n.toFixed(1));
+
+  /* 3. the new way (10.4–17.4) */
+  scene("#s3", 10400, 17400, 300);
+  rise("#s3 .head", 10600, 11200, 38);
+  rise("#p3", 10700, 11400, 56);
+  kenBurns("#p3 img", 10700, 17400, 1.02, 1.1);
+  riseEach("#s3 .r", 12300, 480, 480, 30);
+
+  /* 4. scoreboard (17.2–24.6) */
+  scene("#s4", 17200, 24600, 300);
+  rise("#s4 .head", 17400, 18000, 38);
+  rise("#s4 .bad", 18100, 18800, 44);
+  rise("#s4 .good", 18500, 19200, 44);
+  rise("#s4 .note", 21600, 22300, 26);
+
+  /* 5. CTA (24.4–30.0) */
+  scene("#s5", 24400, 30000, 340);
+  rise("#s5 h2", 24600, 25400, 56);
+  riseEach("#s5 .list > span", 25800, 240, 380, 26);
+  pop("#s5 .btn", 27200, 27900);
+  rise("#s5 .site", 27900, 28300, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

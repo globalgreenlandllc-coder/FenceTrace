@@ -1,0 +1,151 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Hype reel (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 96px; font-size: 38px; }
+  .brand .sq { width: 14px; height: 14px; }
+
+  /* hard-cut beats: giant word + plate punch-in */
+  .beat { position: absolute; inset: 0; opacity: 0; }
+  .word { position: absolute; left: 70px; right: 70px; top: 380px;
+    font-family: "Archivo Black", sans-serif; text-transform: uppercase;
+    line-height: .94; letter-spacing: -0.015em; font-size: 126px; }
+  .word .hl { color: var(--trace); }
+  .frame { position: absolute; left: 50px; top: 780px; width: 980px; height: 632px;
+    border-radius: 24px; overflow: hidden; border: 1px solid var(--line);
+    box-shadow: 0 0 0 1px rgba(30,115,64,.3), 0 50px 120px -30px rgba(0,0,0,.95); }
+  .frame img { position: absolute; width: 100%; }
+  .tag { position: absolute; left: 50px; right: 50px; top: 1470px; text-align: center;
+    font-family: "Space Mono", monospace; font-weight: 700; font-size: 34px;
+    letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+  .bignum { position: absolute; left: 0; right: 0; top: 700px; text-align: center;
+    font-family: "Space Mono", monospace; font-weight: 700; font-size: 300px;
+    color: var(--trace); line-height: 1; }
+  .bignum small { display: block; font-size: 44px; letter-spacing: .16em;
+    color: rgba(255,255,255,.6); margin-top: 18px; }
+
+  .stamp { position: absolute; left: 0; right: 0; top: 1180px; display: flex; justify-content: center; }
+  .stamp span { background: var(--a600); border-radius: 26px; padding: 32px 50px;
+    font-size: 42px; font-weight: 700; box-shadow: 0 30px 90px -18px rgba(63,166,91,.8); }
+
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 60; pointer-events: none; }
+
+  #end .logo { position: absolute; left: 0; right: 0; top: 640px; text-align: center;
+    font-family: "Archivo Black", sans-serif; font-size: 110px; letter-spacing: .01em; }
+  #end .logo i { font-style: normal; color: var(--trace); }
+  #end .line { position: absolute; left: 0; right: 0; top: 800px; text-align: center;
+    font-size: 40px; font-weight: 600; color: rgba(255,255,255,.8); }
+  #end .btn { position: absolute; left: 50%; top: 980px; transform: translateX(-50%);
+    padding: 42px 64px; font-size: 36px; }
+  #end .site { position: absolute; left: 0; right: 0; top: 1160px; text-align: center;
+    font-size: 33px; letter-spacing: .14em; text-transform: uppercase;
+    color: rgba(255,255,255,.55); font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:820px;height:820px;left:-260px;top:-200px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<section class="beat" id="b1">
+  <p class="word">Bid every<br>lead<br><span class="hl">that calls.</span></p>
+</section>
+
+<section class="beat" id="b2">
+  <p class="word" style="font-size:104px">Type the<br><span class="hl">address.</span></p>
+  <div class="frame"><img src="plates/act1-scan.png" alt="" id="im2"></div>
+  <p class="tag">Aerial + parcel · county records</p>
+</section>
+
+<section class="beat" id="b3">
+  <p class="word" style="font-size:104px">Tap your<br><span class="hl">corners.</span></p>
+  <div class="frame"><img src="plates/act2-trace.png" alt="" id="im3"></div>
+  <p class="tag">4 corners · 2 gates · 48 posts</p>
+</section>
+
+<section class="beat" id="b4">
+  <p class="bignum" id="lf">0<small>Linear feet · measured</small></p>
+</section>
+
+<section class="beat" id="b5">
+  <p class="word" style="font-size:104px">See it<br><span class="hl">built.</span></p>
+  <div class="frame"><img src="plates/act3-3d.png" alt="" id="im5"></div>
+  <p class="tag">To scale · gates hung · walk the yard</p>
+</section>
+
+<section class="beat" id="b6">
+  <p class="word" style="font-size:104px">Priced<br><span class="hl">three ways.</span></p>
+  <div class="frame"><img src="plates/act4-proposal.png" alt="" id="im6"></div>
+  <p class="tag">$15,764 · $20,417 · $27,595</p>
+</section>
+
+<section class="beat" id="b7">
+  <p class="word" style="font-size:104px">Signed on<br><span class="hl">their phone.</span></p>
+  <div class="frame"><img src="plates/act5-signed.png" alt="" id="im7"></div>
+  <div class="stamp"><span>✓ $6,125 deposit paid</span></div>
+</section>
+
+<section class="beat" id="end">
+  <p class="logo">FENCE<i>SCAN</i></p>
+  <p class="line">The platform fence contractors run on.</p>
+  <span class="btn">Scan a property free →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<div id="flash"></div>
+
+<script src="kit.js"></script>
+<script>
+  /* hard cuts with a 3-frame white flash at each edit */
+  const CUTS = [0, 1800, 3800, 5800, 7300, 9300, 11300, 12900, 15000];
+  const BEATS = ["#b1", "#b2", "#b3", "#b4", "#b5", "#b6", "#b7", "#end"];
+  BEATS.forEach((sel, i) => {
+    const el = $(sel);
+    up((ms) => (el.style.opacity = ms >= CUTS[i] && ms < CUTS[i + 1] ? 1 : 0));
+  });
+  (function () {
+    const f = $("#flash");
+    up((ms) => {
+      let o = 0;
+      for (const c of CUTS.slice(1, -1)) {
+        if (ms >= c - 30 && ms < c + 70) o = 0.85 * (1 - Math.abs(ms - c) / 90);
+      }
+      f.style.opacity = o;
+    });
+  })();
+
+  /* punch-ins on every plate */
+  [["#im2", 1800], ["#im3", 3800], ["#im5", 7300], ["#im6", 9300], ["#im7", 11300]].forEach(
+    ([sel, t0]) => kenBurns(sel, t0, t0 + 2200, 1.12, 1.02),
+  );
+  /* words slam in */
+  [["#b1 .word", 0], ["#b2 .word", 1800], ["#b3 .word", 3800], ["#b5 .word", 7300],
+   ["#b6 .word", 9300], ["#b7 .word", 11300]].forEach(([sel, t0]) => {
+    const el = $(sel);
+    up((ms) => {
+      const t = eo(p(ms, t0, t0 + 340));
+      el.style.opacity = t;
+      el.style.transform = `scale(${lerp(1.14, 1, t)})`;
+    });
+  });
+  count("#lf", 5800, 7100, 0, 341);
+  pop("#b7 .stamp span", 12100, 12600);
+  (function () {
+    const el = $("#end");
+    up((ms) => {
+      const t = eo(p(ms, 12900, 13400));
+      $("#end .logo").style.transform = `scale(${lerp(1.2, 1, t)})`;
+      $("#end .logo").style.opacity = t;
+    });
+  })();
+  rise("#end .line", 13300, 13700, 22);
+  pop("#end .btn", 13600, 14100);
+  rise("#end .site", 14000, 14400, 18);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

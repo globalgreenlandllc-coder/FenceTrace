@@ -1,0 +1,286 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — The slope is already in the number (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+  .head { position: absolute; left: 84px; right: 84px; top: 330px; font-size: 62px; }
+
+  /* ---------- 1. the objection, in their words ---------- */
+  #s1 .eyebrow { position: absolute; left: 84px; top: 470px; font-size: 27px; }
+  #s1 .quote { position: absolute; left: 84px; right: 84px; top: 560px; font-size: 62px;
+    font-weight: 600; line-height: 1.32; color: rgba(255,255,255,.92); }
+  #s1 .quote::before { content: "\201C"; }
+  #s1 .quote::after { content: "\201D"; }
+  #s1 .ans { position: absolute; left: 84px; right: 84px; top: 1080px; font-size: 46px; }
+
+  /* ---------- the canvas ---------- */
+  #app { position: absolute; left: 50px; bottom: 700px; width: 980px; }
+  .bar { background: #fff; border-radius: 20px 20px 0 0; padding: 15px 18px;
+    display: flex; flex-wrap: wrap; row-gap: 10px; align-items: center; gap: 12px;
+    border-bottom: 1px solid #E4E4E7; }
+  .seg { display: inline-flex; border-radius: 999px; background: #F4F4F5; padding: 3px; gap: 2px; }
+  .seg span { border-radius: 999px; padding: 10px 16px; font-size: 20px; font-weight: 600; color: #71717A; }
+  .seg span.on { background: #fff; color: #18181B; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .topopill { border-radius: 999px; padding: 10px 17px; font-size: 20px; font-weight: 700;
+    background: #FFFBEB; color: #92400E; box-shadow: inset 0 0 0 1px #FDE68A; }
+  .addr { margin-left: auto; font-size: 20px; font-weight: 600; color: #71717A; white-space: nowrap; }
+
+  .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+    border-radius: 0 0 20px 20px; background: #26331f;
+    box-shadow: 0 46px 110px -30px rgba(0,0,0,.95); }
+  /* mirrored + warmed so this reads as a different lot from the flat
+     demo property used elsewhere in the set */
+  .canvas img { position: absolute; inset: 0; width: 100%; height: 100%;
+    transform: scaleX(-1); filter: hue-rotate(-12deg) saturate(.92) brightness(.97); }
+  .canvas svg.ov { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .legend { font-size: 10.5px; font-weight: 600; fill: #FDE68A; stroke: #1C1917;
+    stroke-width: 2.6px; paint-order: stroke; font-family: Inter, sans-serif; }
+
+  /* ---------- the grade readout, as the sidebar renders it ---------- */
+  .readout { position: absolute; left: 50px; right: 50px; bottom: 556px; display: flex; gap: 14px;
+    background: #FAFAFA; color: #52525B; border-radius: 16px; padding: 24px 26px;
+    box-shadow: inset 0 0 0 1px #E4E4E7; font-size: 27px; line-height: 1.5; opacity: 0; }
+  .readout .mt { flex: none; color: #1E7340; }
+  .readout b { color: #18181B; }
+
+  .callout { position: absolute; left: 50px; right: 50px; bottom: 420px; text-align: center;
+    font-size: 32px; font-weight: 700; opacity: 0; }
+  .callout b { color: var(--trace); }
+
+  /* ---------- the money ---------- */
+  #s3 .cols { position: absolute; left: 50px; right: 50px; top: 560px; display: flex; gap: 18px; }
+  #s3 .c { flex: 1; border-radius: 28px; padding: 38px 32px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.04); }
+  #s3 .c.win { border-color: var(--a400);
+    background: linear-gradient(160deg, rgba(30,115,64,.5), rgba(30,115,64,.15)); }
+  #s3 .c h3 { font-family: "Space Mono", monospace; font-size: 23px; letter-spacing: .12em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+  #s3 .c.win h3 { color: var(--a300); }
+  #s3 .c .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 74px; margin-top: 16px; }
+  #s3 .c.bad .v { color: var(--rose); }
+  #s3 .c.win .v { color: var(--trace); }
+  #s3 .c ul { margin-top: 26px; list-style: none; display: flex; flex-direction: column; gap: 14px; }
+  #s3 .c li { font-size: 25px; line-height: 1.34; color: rgba(255,255,255,.8); }
+  #s3 .gap { position: absolute; left: 50px; right: 50px; top: 1180px; text-align: center; }
+  #s3 .gap .n { font-family: "Space Mono", monospace; font-weight: 700; font-size: 108px; color: var(--trace); }
+  #s3 .gap .l { font-size: 31px; color: rgba(255,255,255,.72); margin-top: 10px; line-height: 1.4; }
+
+  /* ---------- CTA ---------- */
+  #s4 h2 { position: absolute; left: 84px; right: 84px; top: 500px; font-size: 100px; }
+  #s4 .list { position: absolute; left: 84px; right: 84px; top: 980px; display: flex;
+    flex-direction: column; gap: 18px; }
+  #s4 .list span { font-size: 32px; font-weight: 600; }
+  #s4 .btn { position: absolute; left: 84px; top: 1290px; padding: 42px 60px; font-size: 35px; }
+  #s4 .fine { position: absolute; left: 84px; right: 84px; top: 1450px; font-size: 25px;
+    color: rgba(255,255,255,.45); line-height: 1.45; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:780px;height:780px;right:-240px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- ================= 1. the objection ================= -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Every contractor asks this</p>
+  <p class="quote">Sure — but what if<br>the yard slopes?<br>I still have to go<br>and look.</p>
+  <p class="ans display">Look. <span class="hl">After you've<br>already sent the bid.</span></p>
+</section>
+
+<!-- ================= 2. topo + the readout ================= -->
+<section class="scene" id="s2">
+  <h2 class="head display" id="h2">It read the grade<br><span class="hl">before you drove out.</span></h2>
+
+  <div id="app">
+    <div class="bar">
+      <div class="seg"><span class="on">Layout</span><span>3D preview</span></div>
+      <span class="topopill" id="topopill">Topo on</span>
+      <span class="addr">812 Ridge Rd · 224 LF · 6′ cedar</span>
+    </div>
+    <div class="canvas">
+      <img src="plates/aerial-clean.svg" alt="">
+      <svg class="ov" viewBox="0 0 900 580">
+        <!-- the fence run, already drawn -->
+        <polyline id="run" fill="none" stroke="#22d3ee" stroke-width="3.5"
+          stroke-linecap="round" stroke-linejoin="round"
+          points="212,120 700,104 712,392 470,404"
+          style="filter:drop-shadow(0 0 4px rgba(34,211,238,0.6))"/>
+        <!-- contour lines, built by the app's own marching-squares code -->
+        <g id="topo" style="opacity:0"></g>
+        <!-- one elevation sample per post position, 8 ft apart -->
+        <g id="samples"></g>
+        <g id="legend" style="opacity:0">
+          <text class="legend" x="890" y="24" text-anchor="end">Topo lines every 5′ — feet above the low point</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <div class="readout" id="readout">
+    <svg class="mt" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+    <span>Grade <b>10.7% avg · 19% max</b>. <b>24 steps</b> down the slope (each ≤ 1′ so the top line stays at code height) — <b>10′ posts</b> there, 8′ elsewhere.</span>
+  </div>
+  <p class="callout" id="callout"></p>
+</section>
+
+<!-- ================= 3. the money ================= -->
+<section class="scene" id="s3">
+  <h2 class="head display">Same 224 feet.<br><span class="hl">Two very different bids.</span></h2>
+  <div class="cols">
+    <div class="c bad">
+      <h3>Guessed "flat"</h3>
+      <p class="v">$13,309</p>
+      <ul>
+        <li>Flat labor rate</li>
+        <li>No stepped sections</li>
+        <li>87 crew hours</li>
+      </ul>
+    </div>
+    <div class="c win">
+      <h3>Measured</h3>
+      <p class="v">$15,005</p>
+      <ul>
+        <li>Terrain auto-set to <b>sloped</b></li>
+        <li>24 step posts in the takeoff</li>
+        <li>112 crew hours</li>
+      </ul>
+    </div>
+  </div>
+  <div class="gap">
+    <p><span class="n" id="delta">$0</span></p>
+    <p class="l">left on the table by one job you called flat —<br>because you hadn't stood in the yard yet.</p>
+  </div>
+</section>
+
+<!-- ================= 4. CTA ================= -->
+<section class="scene" id="s4">
+  <h2 class="display">Go look.<br><span class="hl">Just bid it first.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Elevation read at every post position</span>
+    <span><span class="hl">✓</span> Steps counted, post length called out</span>
+    <span><span class="hl">✓</span> Labor rate moves flat → sloped → steep on its own</span>
+    <span><span class="hl">✓</span> A sheer drop gets flagged and asks you about it</span>
+  </div>
+  <span class="btn">Read a yard's grade free →</span>
+  <p class="fine">Satellite terrain data, not a survey — it prices the grade, it doesn't
+    replace the dig check. FenceScan says it on the screen too: verify on site before digging.</p>
+</section>
+
+<script src="plates/topo.js"></script>
+<script src="kit.js"></script>
+<script>
+  /* ---------- 1. the objection ---------- */
+  scene("#s1", 0, 4200, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 .quote", 350, 1250, 50);
+  rise("#s1 .ans", 2100, 2900, 44);
+
+  /* ---------- 2. topo ---------- */
+  scene("#s2", 4000, 17400, 300);
+  rise("#h2", 4200, 4800, 38);
+  rise("#app", 4300, 5100, 60);
+
+  /* contour chains draw themselves on, level by level */
+  (function () {
+    const g = $("#topo");
+    const T = window.TOPO;
+    g.innerHTML = T.lines
+      .map(
+        (l, i) =>
+          `<g class="lvl" data-i="${i}" style="opacity:0">` +
+          l.chains
+            .map(
+              (ch) =>
+                `<polyline fill="none" stroke="#FCD34D" stroke-width="1.3" opacity="0.85" ` +
+                `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" ` +
+                `points="${ch.map((p) => p[0] + "," + p[1]).join(" ")}"/>`,
+            )
+            .join("") +
+          l.labels
+            .map(
+              ([x, y]) =>
+                `<text class="legend" x="${x}" y="${y}" text-anchor="middle">+${l.levelFt}′</text>`,
+            )
+            .join("") +
+          `</g>`,
+      )
+      .join("");
+    const lv = $$("#topo .lvl");
+    up((ms) => {
+      $("#topo").style.opacity = ms > 5900 ? 1 : 0;
+      lv.forEach((el, i) => (el.style.opacity = eo(p(ms, 6000 + i * 260, 6500 + i * 260))));
+    });
+    fade("#legend", 6400, 6900);
+    /* the Topo pill flips on with the overlay */
+    const pill = $("#topopill");
+    up((ms) => {
+      const on = ms > 5900;
+      pill.textContent = "Topo " + (on ? "on" : "off");
+      pill.style.background = on ? "#FFFBEB" : "#fff";
+      pill.style.color = on ? "#92400E" : "#71717A";
+      pill.style.boxShadow = "inset 0 0 0 1px " + (on ? "#FDE68A" : "#E4E4E7");
+    });
+  })();
+
+  /* one elevation sample per post position — 8 ft apart on cedar */
+  (function () {
+    const RUN = [[212,120],[700,104],[712,392],[470,404]];
+    const PX_PER_FT = 3.6, SPACING = 8 * PX_PER_FT;
+    const pts = [];
+    for (let i = 1; i < RUN.length; i++) {
+      const a = RUN[i - 1], b = RUN[i];
+      const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const n = Math.ceil(d / SPACING);
+      for (let k = 0; k < n; k++) pts.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n]);
+    }
+    pts.push(RUN[RUN.length - 1]);
+    const g = $("#samples");
+    g.innerHTML = pts
+      .map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="2.6" fill="#FDE68A" stroke="#1C1917" stroke-width="0.8" style="opacity:0"/>`)
+      .join("");
+    const dots = [...g.children];
+    up((ms) => {
+      const t = p(ms, 9200, 11600);
+      const n = Math.round(t * dots.length);
+      dots.forEach((d, i) => (d.style.opacity = i < n ? 0.95 : 0));
+    });
+  })();
+
+  rise("#readout", 12200, 12900, 34);
+
+  (function () {
+    const c = $("#callout");
+    up((ms) => {
+      let t = "", o = 0;
+      if (ms > 7200 && ms < 9000) { t = "216 elevation samples across the lot."; o = 1; }
+      else if (ms > 11000 && ms < 12100) { t = "Then <b>one reading per post position</b> — 8 ft apart."; o = 1; }
+      else if (ms > 14400 && ms < 17200) { t = "You didn't type any of that."; o = 1; }
+      if (t) c.innerHTML = t;
+      c.style.opacity = o;
+    });
+  })();
+
+  /* ---------- 3. the money ---------- */
+  scene("#s3", 17200, 24600, 300);
+  rise("#s3 .head", 17400, 18000, 38);
+  rise("#s3 .bad", 18100, 18800, 44);
+  rise("#s3 .win", 18500, 19200, 44);
+  rise("#s3 .gap", 20400, 21100, 40);
+  count("#delta", 20600, 22400, 0, 1696, (n) => "$" + Math.round(n).toLocaleString("en-US"));
+
+  /* ---------- 4. CTA ---------- */
+  scene("#s4", 24400, 30000, 340);
+  rise("#s4 h2", 24600, 25400, 52);
+  riseEach("#s4 .list > span", 25700, 220, 360, 26);
+  pop("#s4 .btn", 27000, 27600);
+  rise("#s4 .fine", 27700, 28300, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

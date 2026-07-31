@@ -1,0 +1,192 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — Set your prices once (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  /* ---------- DAYLIGHT design system: the product's own paper ---------- */
+  html, body { width: 1080px; height: 1350px; background: #F7F6F2; }
+  body { color: #0D1B12; }
+  .grid-bg { background:
+      linear-gradient(rgba(13,27,18,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13,27,18,0.05) 1px, transparent 1px);
+    background-size: 44px 44px; }
+  .glow { background: #94C7A3; opacity: .35; }
+  .pickets { background: repeating-linear-gradient(180deg, #BFDEC7 0 34px, transparent 34px 46px); }
+  .brand { top: 62px; font-size: 34px; color: #0D1B12; }
+  .brand .sq { width: 13px; height: 13px; background: #1E7340; }
+  .display .hl { color: #1E7340; }
+  .eyebrow { color: #348D51; }
+  .eyebrow::before { background: #1E7340; }
+  .head { position: absolute; left: 70px; right: 70px; top: 168px; font-size: 58px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 330px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 402px; font-size: 102px; }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 880px; font-size: 36px;
+    line-height: 1.42; font-weight: 500; color: #3f4a42; }
+
+  /* the settings card, as /dashboard/settings renders it */
+  .set { position: absolute; left: 60px; right: 60px; top: 330px; background: #fff;
+    border-radius: 24px; padding: 40px 44px; box-shadow: 0 1px 2px rgba(13,27,18,.05),
+    0 24px 60px -18px rgba(13,27,18,.14); }
+  .micro { font-family: "Space Mono", monospace; font-size: 19px; letter-spacing: .14em;
+    text-transform: uppercase; color: #71717a; }
+  .set h3 { font-size: 40px; font-weight: 700; letter-spacing: -0.01em; margin-top: 8px; }
+  .set .subt { font-size: 25px; color: #71717a; margin-top: 8px; line-height: 1.45; }
+  .badge { position: absolute; right: 44px; top: 44px; border-radius: 999px; padding: 12px 20px;
+    font-size: 21px; font-weight: 700; background: #ECFDF5; color: #065F46;
+    box-shadow: inset 0 0 0 1.5px #A7F3D0; }
+  .rowhead { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 14px; margin-top: 34px;
+    font-family: "Space Mono", monospace; font-size: 18px; letter-spacing: .1em;
+    text-transform: uppercase; color: #a1a1aa; }
+  .rrow { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 14px; align-items: center;
+    padding: 18px 0; border-bottom: 1px solid #f4f4f5; }
+  .rrow .nm { font-size: 28px; font-weight: 600; }
+  .cell { position: relative; }
+  .inp { width: 100%; border: 2px solid #e4e4e7; border-radius: 12px; padding: 14px 16px;
+    font-family: "Space Mono", monospace; font-size: 26px; font-weight: 700; background: #fff; }
+  .inp.hot { border-color: #1E7340; background: #F0F7F1; }
+  .std { position: absolute; left: 4px; bottom: -24px; font-size: 17px; color: #a1a1aa; }
+  .save { margin-top: 44px; display: inline-flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, #1E7340, #3FA65B); color: #fff; border-radius: 14px;
+    padding: 20px 34px; font-size: 26px; font-weight: 700; }
+
+  /* the payoff: every takeoff prices from the book */
+  #s3 .stack { position: absolute; left: 60px; right: 60px; top: 360px; display: flex;
+    flex-direction: column; gap: 18px; }
+  #s3 .est { background: #fff; border-radius: 20px; padding: 30px 36px; display: flex;
+    align-items: center; gap: 20px; box-shadow: 0 1px 2px rgba(13,27,18,.05),
+    0 16px 40px -12px rgba(13,27,18,.10); }
+  #s3 .est .a { font-size: 30px; font-weight: 700; }
+  #s3 .est .d { font-size: 23px; color: #71717a; margin-top: 4px; }
+  #s3 .est .t { margin-left: auto; text-align: right; }
+  #s3 .est .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 38px; color: #1E7340; }
+  #s3 .est .b { font-size: 19px; color: #a1a1aa; margin-top: 2px; }
+  #s3 .note { position: absolute; left: 60px; right: 60px; top: 1010px; background: #FAFAFA;
+    border-radius: 16px; padding: 26px 30px; font-size: 25px; line-height: 1.5; color: #52525B;
+    box-shadow: inset 0 0 0 1px #E4E4E7; }
+
+  #s4 h2 { position: absolute; left: 70px; right: 70px; top: 340px; font-size: 90px; }
+  #s4 .btn { position: absolute; left: 70px; top: 820px; padding: 38px 54px; font-size: 33px; }
+  #s4 .site { position: absolute; left: 70px; top: 960px; font-size: 30px; letter-spacing: .14em;
+    text-transform: uppercase; color: #348D51; font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:700px;height:700px;left:-220px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Your price book</p>
+  <h1 class="display">Set your<br>prices<br><span class="hl">once.</span></h1>
+  <p class="sub">Material, labor and gates — per fence type. Every estimate after that prices itself.</p>
+</section>
+
+<!-- 2. the settings card -->
+<section class="scene" id="s2">
+  <div class="set">
+    <p class="micro">Pricing</p>
+    <h3>Your fence prices</h3>
+    <p class="subt">What you charge per fence type. Every type starts on our standard
+      rate — change only the ones you price differently.</p>
+    <span class="badge" id="badge">All standard rates</span>
+    <div class="rowhead"><span></span><span>Material / LF</span><span>Labor / LF</span><span>Walk gate</span></div>
+    <div class="rrow">
+      <span class="nm">Cedar privacy</span>
+      <span class="cell"><input class="inp" id="i1" value="$22"><span class="std">standard $22</span></span>
+      <span class="cell"><input class="inp" id="i2" value="$14"><span class="std">standard $14</span></span>
+      <span class="cell"><input class="inp" id="i3" value="$385"><span class="std">standard $385</span></span>
+    </div>
+    <div class="rrow">
+      <span class="nm">Vinyl privacy</span>
+      <span class="cell"><input class="inp" value="$30"><span class="std">standard $30</span></span>
+      <span class="cell"><input class="inp" value="$13"><span class="std">standard $13</span></span>
+      <span class="cell"><input class="inp" value="$465"><span class="std">standard $465</span></span>
+    </div>
+    <div class="rrow" style="border-bottom:0">
+      <span class="nm">Chain link (galvanized)</span>
+      <span class="cell"><input class="inp" value="$9"><span class="std">standard $9</span></span>
+      <span class="cell"><input class="inp" value="$8"><span class="std">standard $8</span></span>
+      <span class="cell"><input class="inp" value="$265"><span class="std">standard $265</span></span>
+    </div>
+    <span class="save" id="save">Save prices</span>
+  </div>
+</section>
+
+<!-- 3. the payoff -->
+<section class="scene" id="s3">
+  <h2 class="head display">Every takeoff<br><span class="hl">prices from your book.</span></h2>
+  <div class="stack">
+    <div class="est">
+      <div><p class="a">1425 Maple Ave</p><p class="d">341 LF · 6′ cedar privacy · 2 gates</p></div>
+      <div class="t"><p class="v">$23,991</p><p class="b">your rates · was $20,417 standard</p></div>
+    </div>
+    <div class="est">
+      <div><p class="a">1988 Birch Ct</p><p class="d">210 LF · vinyl privacy · 1 gate</p></div>
+      <div class="t"><p class="v">Priced ✓</p><p class="b">from your book</p></div>
+    </div>
+    <div class="est">
+      <div><p class="a">440 Willow Dr</p><p class="d">168 LF · chain link · 1 gate</p></div>
+      <div class="t"><p class="v">Priced ✓</p><p class="b">from your book</p></div>
+    </div>
+  </div>
+  <p class="note">“These are your base rates. A job still adjusts them for local market, fence
+    height, terrain and slope. Quotes freeze your prices when they're built, so editing here
+    never changes a proposal a client already has.” — straight from the settings page.</p>
+</section>
+
+<!-- 4. CTA -->
+<section class="scene" id="s4">
+  <h2 class="display">Your numbers.<br><span class="hl">Every bid.<br>Automatically.</span></h2>
+  <span class="btn">Load your price book →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  scene("#s1", 0, 3400, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 56);
+  rise("#s1 .sub", 1150, 1700, 32);
+
+  scene("#s2", 3200, 15400, 300);
+  rise(".set", 3400, 4200, 56);
+
+  /* type the cedar overrides in, like a contractor would */
+  (function () {
+    const i1 = $("#i1"), i2 = $("#i2"), i3 = $("#i3");
+    const badge = $("#badge"), save = $("#save");
+    up((ms) => {
+      const e1 = ms > 5200, e2 = ms > 6900, e3 = ms > 8600;
+      i1.value = e1 ? (ms < 5900 ? "$2" : "$26") : "$22";
+      i2.value = e2 ? (ms < 7500 ? "$1" : "$17") : "$14";
+      i3.value = e3 ? (ms < 9300 ? "$4" : "$420") : "$385";
+      i1.classList.toggle("hot", e1);
+      i2.classList.toggle("hot", e2);
+      i3.classList.toggle("hot", e3);
+      badge.textContent = e1 ? "1 of 14 priced your way" : "All standard rates";
+      badge.style.background = e1 ? "#F0F7F1" : "#ECFDF5";
+      badge.style.boxShadow = "inset 0 0 0 1.5px " + (e1 ? "#94C7A3" : "#A7F3D0");
+      badge.style.color = e1 ? "#154E2D" : "#065F46";
+      const saved = ms > 11400;
+      save.textContent = saved ? "✓ Saved" : "Save prices";
+      save.style.transform = ms > 11200 && ms < 11500 ? "scale(0.96)" : "scale(1)";
+    });
+  })();
+
+  scene("#s3", 15200, 24800, 300);
+  rise("#s3 .head", 15400, 16000, 38);
+  riseEach("#s3 .est", 16200, 420, 460, 34);
+  rise("#s3 .note", 19600, 20300, 26);
+
+  scene("#s4", 24600, 30000, 340);
+  rise("#s4 h2", 24800, 25600, 52);
+  pop("#s4 .btn", 26400, 27000);
+  rise("#s4 .site", 27100, 27500, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

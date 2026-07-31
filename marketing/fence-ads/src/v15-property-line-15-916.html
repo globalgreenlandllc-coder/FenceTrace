@@ -1,0 +1,176 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — The fence draws itself (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  :root { --ink: #071320; --panel: #0b1d2e; --trace: #22d3ee; --a400: #67e8f9; --a300: #a5f3fc; }
+  html, body { width: 1080px; height: 1920px; background: #071320; }
+  .grid-bg { background:
+      linear-gradient(rgba(34,211,238,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.055) 1px, transparent 1px);
+    background-size: 54px 54px; }
+  .glow { background: #0e7490; }
+  .pickets { background: repeating-linear-gradient(180deg, #155e75 0 34px, transparent 34px 46px); }
+  .brand { top: 100px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; background: var(--trace); }
+  .eyebrow { color: #67e8f9; }
+  .eyebrow::before { background: var(--trace); }
+  .btn { background: linear-gradient(135deg, #0e7490, #22d3ee); color: #062a33;
+    box-shadow: 0 0 0 1px rgba(34,211,238,.4), 0 30px 80px -14px rgba(34,211,238,.45); }
+  .head { position: absolute; left: 84px; right: 84px; top: 350px; font-size: 64px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 520px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 116px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1130px; font-size: 40px;
+    line-height: 1.42; font-weight: 500; }
+
+  #app { position: absolute; left: 50px; top: 620px; width: 980px; }
+  .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+    border-radius: 20px; background: #26331f;
+    box-shadow: 0 0 0 1px rgba(34,211,238,.35), 0 46px 110px -30px rgba(0,0,0,.95); }
+  .canvas img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .canvas svg.ov { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* the real "Use property line" pill — accent-50 bg, accent-800 text, wand */
+  .wand { position: absolute; left: 18px; top: 18px; display: inline-flex; align-items: center;
+    gap: 10px; border-radius: 999px; padding: 14px 22px; font-size: 22px; font-weight: 600;
+    background: #F0F7F1; color: #154E2D; box-shadow: inset 0 0 0 1.5px #94C7A3, 0 4px 14px rgba(0,0,0,.35); }
+  .cur { position: absolute; z-index: 40; width: 40px; height: 40px; opacity: 0; margin: -4px 0 0 -6px; }
+  .cur svg { filter: drop-shadow(0 4px 10px rgba(0,0,0,.65)); }
+  .lfbadge { position: absolute; right: 18px; top: 18px; background: #1E7340; color: #fff;
+    border-radius: 999px; padding: 12px 22px; font-size: 22px; font-weight: 700; }
+
+  .row { position: absolute; left: 50px; right: 50px; top: 1310px; display: flex;
+    justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .chip { padding: 19px 28px; font-size: 28px; }
+  .alt { position: absolute; left: 50px; right: 50px; top: 1440px; text-align: center;
+    font-size: 32px; font-weight: 600; color: rgba(255,255,255,.75); }
+  .alt b { color: var(--trace); }
+
+  #s3 h2 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 108px; }
+  #s3 .btn { position: absolute; left: 84px; top: 1120px; padding: 42px 60px; font-size: 35px; }
+  #s3 .site { position: absolute; left: 84px; top: 1280px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(165,243,252,.55); font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:760px;height:760px;right:-240px;top:-160px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">For the ones in a hurry</p>
+  <h1 class="display">Or don't<br>draw it<br><span class="hl">at all.</span></h1>
+  <p class="sub">The county already drew the boundary. One tap puts the fence on it.</p>
+</section>
+
+<!-- 2. one click -->
+<section class="scene" id="s2">
+  <h2 class="head display">Tap <span class="hl">"Use property line."</span><br>Done.</h2>
+  <div id="app">
+    <div class="canvas">
+      <img src="plates/aerial-clean.svg" alt="">
+      <svg class="ov" viewBox="0 0 900 580">
+        <polygon id="parcel" points="196,88 704,78 716,500 206,508"
+          fill="rgba(74,222,128,0.06)" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <polyline id="fill" fill="none" stroke="#22d3ee" stroke-width="3.5"
+          stroke-linecap="round" stroke-linejoin="round"
+          points="196,88 704,78 716,500 206,508 196,88"
+          style="filter:drop-shadow(0 0 4px rgba(34,211,238,0.6))"/>
+        <g id="verts"></g>
+        <g id="runchip" style="opacity:0">
+          <rect width="52" height="18" rx="5" fill="rgba(9,20,12,0.85)"/>
+          <text x="26" y="13" text-anchor="middle" font-size="11" font-weight="700"
+            fill="#a7f3d0" font-family="Inter, sans-serif">517 ft</text>
+        </g>
+      </svg>
+      <span class="wand" id="wand">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>
+        Use property line
+      </span>
+      <span class="lfbadge" id="lf">0 LF · 0 gates</span>
+      <div class="cur" id="cur">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="#fff" stroke="#0D1B12" stroke-width="1.4">
+          <path d="M4 2 L20 12 L13 13.5 L16.5 20.5 L13.5 22 L10 15 L4 19 Z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <span class="chip"><span class="tick">✓</span> One tap</span>
+    <span class="chip"><span class="tick">✓</span> Whole boundary fenced</span>
+    <span class="chip"><span class="tick">✓</span> Takeoff built</span>
+  </div>
+  <p class="alt">Then drag any post — <b>it's your drawing now.</b></p>
+</section>
+
+<!-- 3. CTA -->
+<section class="scene" id="s3">
+  <h2 class="display">Fastest bid<br>in the<br><span class="hl">county.</span></h2>
+  <span class="btn">Scan a property free →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  const CORNERS = [[196,88],[704,78],[716,500],[206,508]];
+
+  scene("#s1", 0, 3200);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 60);
+  rise("#s1 .sub", 1150, 1700, 34);
+
+  scene("#s2", 3000, 12400);
+  rise("#s2 .head", 3200, 3800, 40);
+  rise("#app", 3300, 4100, 60);
+  rise(".wand", 4100, 4500, 14);
+
+  /* cursor flies to the wand, clicks, fence snaps around the parcel */
+  cursor("#cur", [
+    [4600, 700, 420],
+    [5600, 150, 46],
+    [6200, 150, 46],
+  ]);
+  (function () {
+    const wand = $("#wand");
+    up((ms) => {
+      const pressed = ms > 5700 && ms < 6050;
+      wand.style.transform = pressed ? "scale(0.95)" : "scale(1)";
+      wand.style.background = ms > 5700 ? "#DFEEE2" : "#F0F7F1";
+    });
+  })();
+  /* the run draws itself fast around the ring */
+  draw("#fill", 6050, 7100);
+  (function () {
+    const el = $("#fill");
+    up((ms) => (el.style.opacity = ms > 6050 ? 1 : 0));
+  })();
+  (function () {
+    const g = $("#verts"), chip = $("#runchip");
+    up((ms) => {
+      const t = p(ms, 6050, 7100);
+      const n = Math.round(t * CORNERS.length);
+      g.innerHTML = CORNERS.slice(0, n)
+        .map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="3" fill="#fff" stroke="#0891b2" stroke-width="1.4"/>`)
+        .join("");
+      chip.style.opacity = ms > 7200 ? 1 : 0;
+      chip.setAttribute("transform", "translate(430,268)");
+    });
+  })();
+  (function () {
+    const lf = $("#lf");
+    up((ms) => (lf.textContent = ms > 7100 ? "517 LF · 0 gates" : "0 LF · 0 gates"));
+  })();
+  riseEach("#s2 .chip", 7600, 260, 380, 26);
+  rise(".alt", 9200, 9800, 24);
+
+  scene("#s3", 12200, 15000, 340);
+  rise("#s3 h2", 12400, 13100, 56);
+  pop("#s3 .btn", 13300, 13900);
+  rise("#s3 .site", 13900, 14300, 20);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

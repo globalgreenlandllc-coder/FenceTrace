@@ -1,0 +1,143 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Steps down the slope (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  :root { --ink: #0f0d07; --panel: #191507; --trace: #FCD34D; --a400: #fbbf24; --a300: #fde68a; }
+  html, body { width: 1080px; height: 1350px; background: #0f0d07; }
+  .grid-bg { background: none; }
+  .glow { background: #b45309; opacity: .34; }
+  .pickets { background: repeating-linear-gradient(180deg, #92610e 0 34px, transparent 34px 46px); opacity: .6; }
+  .topo-bg { position: absolute; inset: 0; z-index: 0; opacity: .1; }
+  .topo-bg path { fill: none; stroke: #FCD34D; stroke-width: 2.5; }
+  .brand { top: 62px; font-size: 34px; }
+  .brand .sq { width: 13px; height: 13px; background: var(--trace); }
+  .eyebrow { color: #fbbf24; }
+  .eyebrow::before { background: var(--trace); }
+  .btn { background: linear-gradient(135deg, #b45309, #FCD34D); color: #2a1c02;
+    box-shadow: 0 0 0 1px rgba(252,211,77,.4), 0 30px 80px -14px rgba(252,211,77,.4); }
+  .head { position: absolute; left: 70px; right: 70px; top: 158px; font-size: 56px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 330px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 402px; font-size: 100px; }
+  #s1 h1 .n { color: var(--trace); }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 900px; font-size: 36px;
+    line-height: 1.42; font-weight: 500; }
+
+  #app { position: absolute; left: 50px; top: 370px; width: 980px; }
+  .bar { background: #fff; border-radius: 18px 18px 0 0; padding: 14px 18px;
+    display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #E4E4E7; }
+  .seg { display: inline-flex; border-radius: 999px; background: #F4F4F5; padding: 3px; gap: 2px; }
+  .seg span { border-radius: 999px; padding: 10px 18px; font-size: 21px; font-weight: 600; color: #71717A; }
+  .seg span.on { background: #fff; color: #18181B; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .addr { margin-left: auto; font-size: 20px; font-weight: 600; color: #71717A; white-space: nowrap; }
+  .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+    border-radius: 0 0 18px 18px; background: #cfe4f2;
+    box-shadow: 0 0 0 1px rgba(252,211,77,.3), 0 46px 110px -30px rgba(0,0,0,.95); }
+  .canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .chips3d { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 10px; opacity: 0; }
+  .chips3d span { background: rgba(255,255,255,.92); border-radius: 999px; padding: 11px 17px;
+    font-size: 18.5px; font-weight: 600; color: #3f3f46; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+  .chips3d .steps { color: #195F36; box-shadow: inset 0 0 0 1.5px #BFDEC7, 0 2px 10px rgba(0,0,0,.25); }
+
+  .readout { position: absolute; left: 50px; right: 50px; top: 1064px; display: flex; gap: 14px;
+    background: #FAFAFA; color: #52525B; border-radius: 16px; padding: 22px 26px;
+    box-shadow: inset 0 0 0 1px #E4E4E7; font-size: 25px; line-height: 1.5; opacity: 0; }
+  .readout .mt { flex: none; color: #1E7340; }
+  .readout b { color: #18181B; }
+
+  #s3 h2 { position: absolute; left: 70px; right: 70px; top: 340px; font-size: 90px; }
+  #s3 .btn { position: absolute; left: 70px; top: 830px; padding: 38px 54px; font-size: 33px; }
+  #s3 .fine { position: absolute; left: 70px; right: 70px; top: 990px; font-size: 24px;
+    color: rgba(255,255,255,.45); line-height: 1.45; }
+</style>
+
+<svg class="topo-bg" viewBox="0 0 1080 1350" preserveAspectRatio="none">
+  <path d="M -40 300 C 260 240, 560 330, 860 250 S 1140 210, 1140 210"/>
+  <path d="M -40 560 C 280 480, 580 590, 880 480 S 1140 430, 1140 430"/>
+  <path d="M -40 830 C 300 730, 600 855, 900 720 S 1140 660, 1140 660"/>
+  <path d="M -40 1110 C 320 990, 620 1135, 920 980 S 1140 910, 1140 910"/>
+</svg>
+<div class="glow" style="width:740px;height:740px;left:-240px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">"But my yards have slopes"</p>
+  <h1 class="display">So does<br><span class="n">this one.</span><br><span class="hl">Watch.</span></h1>
+  <p class="sub">Elevation read at every post — then the fence steps down the hill in 3D.</p>
+</section>
+
+<!-- 2. the 3D build -->
+<section class="scene" id="s2">
+  <h2 class="head display">Every panel level.<br><span class="hl">Every step counted.</span></h2>
+  <div id="app">
+    <div class="bar">
+      <div class="seg"><span>Layout</span><span class="on">3D preview</span></div>
+      <span class="addr">812 Ridge Rd · 224 LF · 6′ cedar</span>
+    </div>
+    <div class="canvas">
+      <svg id="threed" viewBox="0 0 900 580"></svg>
+      <div class="chips3d" id="chips3d">
+        <span>6&#8242; Cedar privacy — to scale</span>
+        <span class="steps">⛰ 6 sections step down the slope</span>
+      </div>
+    </div>
+  </div>
+  <div class="readout" id="readout">
+    <svg class="mt" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+    <span>Grade <b>10.7% avg · 19% max</b>. <b>24 steps</b> down the slope — <b>10′ posts</b> there, 8′ elsewhere. Priced automatically.</span>
+  </div>
+</section>
+
+<!-- 3. CTA -->
+<section class="scene" id="s3">
+  <h2 class="display">Bid the hill<br><span class="hl">from your desk.</span></h2>
+  <span class="btn">Stand a fence on a slope →</span>
+  <p class="fine">Satellite terrain data, not a survey — relief drawn slightly exaggerated so the
+    fence stays readable. Verify on site before digging.</p>
+</section>
+
+<script src="steps3d.js"></script>
+<script src="kit.js"></script>
+<script>
+  scene("#s1", 0, 3000, 280);
+  rise("#s1 .eyebrow", 150, 600, 24);
+  rise("#s1 h1", 280, 1050, 54);
+  rise("#s1 .sub", 1100, 1650, 32);
+
+  scene("#s2", 2800, 12400, 280);
+  rise("#s2 .head", 3000, 3600, 36);
+  rise("#app", 3100, 3800, 56);
+
+  const scn = buildSteps3D($("#threed"));
+  scn.posts.forEach((g) => (g.style.opacity = 0));
+  scn.panels.forEach((g) => (g.style.opacity = 0));
+  scn.dims.forEach((g) => (g.style.opacity = 0));
+  up((ms) => {
+    scn.posts.forEach((g, i) => {
+      const t = eo(p(ms, 4000 + i * 150, 4400 + i * 150));
+      g.style.opacity = t;
+      g.style.transform = `translateY(${(1 - t) * -34}px)`;
+    });
+    scn.panels.forEach((g, i) => {
+      const t = eo(p(ms, 4500 + i * 200, 4980 + i * 200));
+      g.style.opacity = t;
+      g.style.transform = `translateX(${(1 - t) * -18}px)`;
+    });
+    scn.dims.forEach((g, i) => (g.style.opacity = eo(p(ms, 7000 + i * 500, 7500 + i * 500))));
+    $("#chips3d").style.opacity = eo(p(ms, 6600, 7200));
+  });
+  rise("#readout", 8600, 9300, 30);
+
+  scene("#s3", 12200, 15000, 320);
+  rise("#s3 h2", 12400, 13100, 52);
+  pop("#s3 .btn", 13300, 13900);
+  rise("#s3 .fine", 13900, 14400, 18);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

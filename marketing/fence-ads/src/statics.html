@@ -1,0 +1,438 @@
+<meta charset="utf-8">
+<title>FenceScan — 10 static ads</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  /* Each ad is one fixed-size block the renderer screenshots by id.
+     Children position against the block, not the page. */
+  html, body { overflow: visible; background: #222; }
+  .ad { position: relative; overflow: hidden; background: var(--ink); margin: 40px auto; }
+  .f45 { width: 1080px; height: 1350px; }
+  .f11 { width: 1080px; height: 1080px; }
+  .f916 { width: 1080px; height: 1920px; }
+  .ad .grid-bg, .ad .glow, .ad .pickets { position: absolute; }
+  .ad .brand { position: absolute; }
+
+  /* shared type scale inside the blocks */
+  .ad .eyebrow { position: absolute; }
+  .ad h1 { position: absolute; }
+  .ad .plate { position: absolute; }
+  .ad .btn { position: absolute; }
+  .ad .site { position: absolute; font-family: "Space Mono", monospace; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+
+  /* ---------- 01 hook ---------- */
+  #st01 .brand { top: 62px; font-size: 34px; }
+  #st01 .eyebrow { left: 70px; top: 330px; font-size: 26px; }
+  #st01 h1 { left: 70px; right: 70px; top: 404px; font-size: 106px; }
+  #st01 .sub { position: absolute; left: 70px; right: 100px; top: 880px; font-size: 38px;
+    line-height: 1.42; font-weight: 500; }
+  #st01 .strike { position: absolute; left: 70px; top: 1060px; font-size: 34px; font-weight: 600; }
+  #st01 .strike i { width: 100%; height: 5px; }
+  #st01 .site { left: 70px; top: 1200px; font-size: 30px; }
+
+  /* ---------- 02 measure ---------- */
+  #st02 .brand { top: 58px; font-size: 32px; }
+  #st02 h1 { left: 60px; right: 60px; top: 150px; font-size: 74px; }
+  #st02 .plate { left: 50px; top: 400px; width: 980px; height: 632px; }
+  #st02 .big { position: absolute; left: 50px; right: 50px; top: 1070px; display: flex;
+    align-items: baseline; justify-content: center; gap: 16px; }
+  #st02 .big .n { font-family: "Space Mono", monospace; font-weight: 700; font-size: 132px; color: var(--trace); }
+  #st02 .big .u { font-family: "Space Mono", monospace; font-size: 46px; color: rgba(255,255,255,.7); }
+  #st02 .row { position: absolute; left: 50px; right: 50px; top: 1230px; display: flex;
+    justify-content: center; gap: 14px; }
+  #st02 .chip { padding: 17px 26px; font-size: 26px; }
+
+  /* ---------- 03 3D ---------- */
+  #st03 .brand { top: 58px; font-size: 32px; }
+  #st03 h1 { left: 60px; right: 60px; top: 148px; font-size: 72px; }
+  #st03 .plate { left: 50px; top: 396px; width: 980px; height: 632px; }
+  #st03 .cap { position: absolute; left: 60px; right: 60px; top: 1080px; text-align: center;
+    font-size: 36px; font-weight: 700; }
+  #st03 .cap b { color: var(--trace); }
+  #st03 .row { position: absolute; left: 50px; right: 50px; top: 1180px; display: flex;
+    justify-content: center; gap: 14px; }
+  #st03 .chip { padding: 17px 26px; font-size: 26px; }
+
+  /* ---------- 04 tiers ---------- */
+  #st04 .brand { top: 58px; font-size: 32px; }
+  #st04 h1 { left: 60px; right: 60px; top: 148px; font-size: 70px; }
+  #st04 .cards { position: absolute; left: 46px; right: 46px; top: 400px; display: flex; gap: 16px; }
+  #st04 .c { flex: 1; border-radius: 26px; padding: 36px 24px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.045); text-align: center; position: relative; }
+  #st04 .c.rec { background: linear-gradient(160deg, rgba(30,115,64,.55), rgba(30,115,64,.18));
+    border-color: var(--a400); box-shadow: 0 30px 70px -24px rgba(63,166,91,.6); }
+  #st04 .c .tag { position: absolute; left: 50%; top: -18px; transform: translateX(-50%);
+    background: var(--a600); border-radius: 999px; padding: 9px 20px; font-family: "Space Mono", monospace;
+    font-size: 17px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+  #st04 .c .k { font-family: "Space Mono", monospace; font-size: 23px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--a300); }
+  #st04 .c .p { font-family: "Space Mono", monospace; font-weight: 700; font-size: 52px; margin-top: 16px; }
+  #st04 .c .lf { font-family: "Space Mono", monospace; font-size: 21px; color: rgba(255,255,255,.55); margin-top: 8px; }
+  #st04 .c .m { font-size: 22px; line-height: 1.4; color: rgba(255,255,255,.75); margin-top: 20px; }
+  #st04 .same { position: absolute; left: 60px; right: 60px; top: 880px; text-align: center;
+    font-size: 32px; font-weight: 600; }
+  #st04 .same b { color: var(--trace); }
+  #st04 .plate { left: 190px; top: 960px; width: 700px; height: 452px; border-radius: 22px; }
+
+  /* ---------- 05 materials ---------- */
+  #st05 .brand { top: 58px; font-size: 32px; }
+  #st05 h1 { left: 60px; right: 60px; top: 148px; font-size: 68px; }
+  #st05 .quad { position: absolute; left: 50px; right: 50px; top: 390px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  #st05 .q { border: 1px solid var(--line); border-radius: 26px; padding: 38px 32px;
+    background: rgba(255,255,255,.045); }
+  #st05 .q .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 92px;
+    color: var(--trace); line-height: 1; }
+  #st05 .q .l { font-size: 26px; color: rgba(255,255,255,.72); margin-top: 14px; line-height: 1.34; }
+  #st05 .foot { position: absolute; left: 60px; right: 60px; top: 990px; text-align: center;
+    font-size: 33px; font-weight: 700; line-height: 1.4; }
+  #st05 .foot b { color: var(--trace); }
+  #st05 .site { left: 0; right: 0; top: 1200px; text-align: center; font-size: 28px; }
+
+  /* ---------- 06 schedule ---------- */
+  #st06 .brand { top: 58px; font-size: 32px; }
+  #st06 h1 { left: 60px; right: 60px; top: 148px; font-size: 70px; }
+  #st06 .cal { position: absolute; left: 50px; top: 400px; width: 980px; }
+  #st06 .cal-head { padding: 22px 26px; }
+  #st06 .cal-head .wk { font-size: 30px; font-weight: 700; }
+  #st06 .cal-head .mo { font-family: "Space Mono", monospace; font-size: 20px; letter-spacing: .12em;
+    text-transform: uppercase; color: #a1a1aa; }
+  #st06 .cal-grid { grid-template-columns: repeat(4, 1fr); }
+  #st06 .cal-col { padding: 16px 12px; min-height: 400px; }
+  #st06 .cal-day { font-size: 19px; }
+  #st06 .cal-day em { display: block; font-style: normal; font-size: 32px; color: #18181b;
+    margin-top: 5px; font-family: "Inter", sans-serif; letter-spacing: -0.02em; }
+  #st06 .ev { padding: 14px 13px; margin-top: 13px; border-radius: 12px; }
+  #st06 .ev .t { font-size: 21px; line-height: 1.25; }
+  #st06 .ev .s { font-size: 17px; margin-top: 4px; }
+  #st06 .pill { font-size: 14px; padding: 6px 11px; margin-top: 10px; }
+  #st06 .cap { position: absolute; left: 60px; right: 60px; top: 1015px; text-align: center;
+    font-size: 32px; font-weight: 600; }
+  #st06 .cap b { color: var(--trace); }
+  #st06 .row { position: absolute; left: 50px; right: 50px; top: 1125px; display: flex;
+    justify-content: center; gap: 14px; }
+  #st06 .chip { padding: 17px 26px; font-size: 26px; }
+  #st06 .site { left: 0; right: 0; top: 1245px; text-align: center; font-size: 28px; }
+
+  /* ---------- 07 e-sign (story) ---------- */
+  #st07 .brand { top: 104px; font-size: 40px; }
+  #st07 h1 { left: 84px; right: 84px; top: 300px; font-size: 96px; }
+  #st07 .phone { position: absolute; left: 285px; top: 700px; width: 510px; height: 900px;
+    background: #0b1410; border: 11px solid #1c2a22; border-radius: 60px; overflow: hidden;
+    box-shadow: 0 60px 140px -34px rgba(0,0,0,.95); }
+  #st07 .pscreen { position: absolute; inset: 0; background: var(--paper); color: #18181b; padding: 62px 26px 26px; }
+  #st07 .ptop { display: flex; align-items: center; justify-content: space-between; }
+  #st07 .ptop .co { font-size: 22px; font-weight: 800; }
+  #st07 .ptop .no { font-family: "Space Mono", monospace; font-size: 15px; color: #a1a1aa; }
+  #st07 .phero { margin-top: 16px; border-radius: 18px; overflow: hidden; height: 200px; position: relative; }
+  #st07 .phero img { position: absolute; width: 200%; left: -50%; top: -22%; }
+  #st07 .paddr { margin-top: 16px; font-size: 27px; font-weight: 700; }
+  #st07 .pscope { font-size: 18px; color: #52525b; margin-top: 5px; }
+  #st07 .ppkg { margin-top: 16px; display: flex; gap: 10px; }
+  #st07 .ppkg div { flex: 1; border: 2px solid #e4e4e7; border-radius: 14px; padding: 13px 8px;
+    text-align: center; background: #fff; }
+  #st07 .ppkg div.sel { border-color: var(--a600); background: #f0f7f1; }
+  #st07 .ppkg .k { font-family: "Space Mono", monospace; font-size: 13px; letter-spacing: .08em;
+    text-transform: uppercase; color: #71717a; }
+  #st07 .ppkg .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 21px; margin-top: 6px; }
+  #st07 .ppkg div.sel .v { color: var(--a600); }
+  #st07 .psign { margin-top: 16px; background: #fff; border: 2px solid #e4e4e7; border-radius: 14px;
+    height: 132px; position: relative; overflow: hidden; }
+  #st07 .psign .lbl { position: absolute; left: 15px; bottom: 10px; font-family: "Space Mono", monospace;
+    font-size: 13px; letter-spacing: .04em; color: #a1a1aa; }
+  #st07 .psign svg { position: absolute; left: 6px; top: -6px; }
+  #st07 .pbtn { margin-top: 16px; background: #0a2b19; color: #fff; border-radius: 15px;
+    padding: 21px; text-align: center; font-weight: 700; font-size: 24px; }
+  #st07 .stamp { position: absolute; left: 50%; top: 1490px; transform: translateX(-50%);
+    background: var(--a600); border-radius: 28px; padding: 32px 50px; text-align: center; white-space: nowrap;
+    box-shadow: 0 34px 90px -18px rgba(63,166,91,.75); z-index: 30; }
+  #st07 .stamp .t { font-size: 40px; font-weight: 700; }
+  #st07 .stamp .s { font-size: 27px; color: rgba(255,255,255,.82); margin-top: 8px; }
+  #st07 .site { left: 0; right: 0; top: 1700px; text-align: center; font-size: 32px; }
+
+  /* ---------- 08 speed (square) ---------- */
+  #st08 .brand { top: 62px; font-size: 34px; }
+  #st08 .n { position: absolute; left: 0; right: 0; top: 250px; text-align: center;
+    font-family: "Space Mono", monospace; font-weight: 700; font-size: 300px; color: var(--trace); line-height: 1; }
+  #st08 .u { position: absolute; left: 0; right: 0; top: 560px; text-align: center;
+    font-family: "Space Mono", monospace; font-size: 44px; letter-spacing: .16em;
+    text-transform: uppercase; color: rgba(255,255,255,.6); }
+  #st08 h1 { left: 70px; right: 70px; top: 680px; font-size: 66px; text-align: center; }
+  #st08 .row { position: absolute; left: 50px; right: 50px; top: 900px; display: flex;
+    justify-content: center; gap: 14px; }
+  #st08 .chip { padding: 17px 26px; font-size: 26px; }
+
+  /* ---------- 09 old vs new ---------- */
+  #st09 .brand { top: 58px; font-size: 32px; }
+  #st09 h1 { left: 60px; right: 60px; top: 148px; font-size: 70px; }
+  #st09 .vs { position: absolute; left: 46px; right: 46px; top: 400px; display: flex; gap: 18px; }
+  #st09 .col { flex: 1; border-radius: 28px; padding: 38px 30px; border: 1px solid var(--line);
+    background: rgba(255,255,255,.04); }
+  #st09 .col.good { border-color: var(--a400);
+    background: linear-gradient(160deg, rgba(30,115,64,.5), rgba(30,115,64,.15)); }
+  #st09 .col h3 { font-family: "Space Mono", monospace; font-size: 24px; letter-spacing: .12em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+  #st09 .col.good h3 { color: var(--a300); }
+  #st09 .col .big { font-family: "Space Mono", monospace; font-weight: 700; font-size: 78px; margin-top: 16px; }
+  #st09 .col.bad .big { color: var(--rose); }
+  #st09 .col.good .big { color: var(--trace); }
+  #st09 .col .u { font-size: 25px; color: rgba(255,255,255,.55); margin-top: 6px; }
+  #st09 .col ul { margin-top: 28px; list-style: none; display: flex; flex-direction: column; gap: 15px; }
+  #st09 .col li { font-size: 25px; line-height: 1.34; color: rgba(255,255,255,.8); }
+  #st09 .note { position: absolute; left: 60px; right: 60px; top: 1170px; text-align: center;
+    font-size: 34px; font-weight: 700; line-height: 1.4; }
+  #st09 .note b { color: var(--trace); }
+
+  /* ---------- 10 CTA (story) ---------- */
+  #st10 .brand { top: 104px; font-size: 40px; }
+  #st10 .eyebrow { left: 84px; top: 480px; font-size: 27px; }
+  #st10 h1 { left: 84px; right: 84px; top: 560px; font-size: 122px; }
+  #st10 .list { position: absolute; left: 84px; right: 84px; top: 1060px;
+    display: flex; flex-direction: column; gap: 20px; }
+  #st10 .list span { font-size: 35px; font-weight: 600; }
+  #st10 .btn { left: 84px; top: 1360px; padding: 42px 60px; font-size: 35px; }
+  #st10 .site { left: 84px; top: 1520px; font-size: 33px; }
+</style>
+
+<!-- ══════════════ 01 · hook · 4:5 ══════════════ -->
+<div class="ad f45" id="st01">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:700px;height:700px;left:-220px;top:-180px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:13px;height:13px"></span></div>
+  <p class="eyebrow mono">Fence contractors</p>
+  <h1 class="display">Stop driving<br>out just<br><span class="hl">to measure.</span></h1>
+  <p class="sub">Type the address. FenceScan pulls the aerial and the county parcel line, and hands you a priced, three-tier bid.</p>
+  <p class="strike">Tape measure · wheel · graph paper<i></i></p>
+  <p class="site">fencescan.com</p>
+</div>
+
+<!-- ══════════════ 02 · measured from the sky · 4:5 ══════════════ -->
+<div class="ad f45" id="st02">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:620px;height:620px;right:-200px;top:-160px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">One address in.<br><span class="hl">Every foot out.</span></h1>
+  <div class="plate"><img src="plates/act2-trace.png" alt=""></div>
+  <div class="big"><span class="n">341</span><span class="u">LF</span></div>
+  <div class="row">
+    <span class="chip">4 corners</span>
+    <span class="chip">2 gates</span>
+    <span class="chip">48 posts</span>
+    <span class="chip">0.38 acres</span>
+  </div>
+</div>
+
+<!-- ══════════════ 03 · 3D · 4:5 ══════════════ -->
+<div class="ad f45" id="st03">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:620px;height:620px;left:-200px;bottom:-200px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">Show them the fence<br><span class="hl">before you build it.</span></h1>
+  <div class="plate"><img src="plates/act3-3d.png" alt=""></div>
+  <p class="cap">It's the real model — <b>not a picture.</b></p>
+  <div class="row">
+    <span class="chip">6′ cedar, to scale</span>
+    <span class="chip">Both gates hung</span>
+    <span class="chip">Walk the yard</span>
+  </div>
+</div>
+
+<!-- ══════════════ 04 · three tiers · 4:5 ══════════════ -->
+<div class="ad f45" id="st04">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:640px;height:640px;right:-200px;bottom:-220px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">Same yard.<br><span class="hl">Three ways to buy it.</span></h1>
+  <div class="cards">
+    <div class="c">
+      <p class="k">Good</p><p class="p">$15,764</p><p class="lf">$46 / LF</p>
+      <p class="m">Pressure-treated privacy, paint or stain ready.</p>
+    </div>
+    <div class="c rec">
+      <span class="tag">Recommended</span>
+      <p class="k">Better</p><p class="p">$20,417</p><p class="lf">$60 / LF</p>
+      <p class="m">Western red cedar — the neighborhood standard.</p>
+    </div>
+    <div class="c">
+      <p class="k">Best</p><p class="p">$27,595</p><p class="lf">$81 / LF</p>
+      <p class="m">Cedar, stained and sealed, 5-yr warranty.</p>
+    </div>
+  </div>
+  <p class="same">Same 341 LF, same 2 gates — <b>priced off your rate card.</b></p>
+  <div class="plate"><img src="plates/act4-proposal.png" alt=""></div>
+</div>
+
+<!-- ══════════════ 05 · materials · 4:5 ══════════════ -->
+<div class="ad f45" id="st05">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:620px;height:620px;left:-200px;top:-160px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">341 feet of fence.<br><span class="hl">Here's what it eats.</span></h1>
+  <div class="quad">
+    <div class="q"><p class="v">48</p><p class="l">posts — line, corner, end and gate</p></div>
+    <div class="q"><p class="v">96</p><p class="l">60 lb bags of concrete</p></div>
+    <div class="q"><p class="v">142</p><p class="l">2×4 cedar rails, 8 foot</p></div>
+    <div class="q"><p class="v">819</p><p class="l">1×6 western red cedar pickets</p></div>
+  </div>
+  <p class="foot">Posts every 8′, one at every corner,<br>two at every gate. <b>Counted, not guessed.</b></p>
+  <p class="site">fencescan.com</p>
+</div>
+
+<!-- ══════════════ 06 · scheduling · 4:5 ══════════════ -->
+<div class="ad f45" id="st06">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:620px;height:620px;right:-200px;top:-160px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">Signed at 9.<br><span class="hl">On the board by 9:01.</span></h1>
+  <div class="cal">
+    <div class="cal-head">
+      <p class="wk">Week of Aug 4</p>
+      <p class="mo">Installs &amp; site visits</p>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-col">
+        <p class="cal-day">Mon<em>4</em></p>
+        <div class="ev ev-visit"><p class="t">Site visit — Cedar Ln</p><p class="s">8:00 · 45 min</p></div>
+        <div class="ev ev-visit"><p class="t">Site visit — Oak Row</p><p class="s">1:30 · 45 min</p></div>
+      </div>
+      <div class="cal-col">
+        <p class="cal-day">Tue<em>5</em></p>
+        <div class="ev ev-install"><p class="t">Install — Birch Ct</p><p class="s">7:00 · 210 LF vinyl</p>
+          <span class="pill pill-progress">in progress</span></div>
+      </div>
+      <div class="cal-col">
+        <p class="cal-day">Wed<em>6</em></p>
+        <div class="ev ev-install"><p class="t">Install — 1425 Maple Ave</p><p class="s">7:00 · 341 LF cedar</p>
+          <span class="pill pill-accepted">accepted</span></div>
+        <div class="ev ev-visit"><p class="t">Site visit — Willow Dr</p><p class="s">3:00 · 45 min</p></div>
+      </div>
+      <div class="cal-col">
+        <p class="cal-day">Thu<em>7</em></p>
+        <div class="ev ev-install"><p class="t">Maple — day 2</p><p class="s">7:00 · gates + caps</p>
+          <span class="pill pill-offered">offered</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">Drag it onto a day — <b>the crew and the client both find out.</b></p>
+  <div class="row">
+    <span class="chip">Crew portal</span>
+    <span class="chip">Live job status</span>
+    <span class="chip">Your margin stays private</span>
+  </div>
+  <p class="site">fencescan.com</p>
+</div>
+
+<!-- ══════════════ 07 · e-sign · 9:16 story ══════════════ -->
+<div class="ad f916" id="st07">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:760px;height:760px;right:-240px;bottom:-200px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:15px;height:15px"></span></div>
+  <h1 class="display">They sign it<br><span class="hl">from the couch.</span></h1>
+  <div class="phone">
+    <div class="pscreen">
+      <div class="ptop"><span class="co">Whitaker Fence Co.</span><span class="no">#FS-2418</span></div>
+      <div class="phero"><img src="plates/act3-3d.png" alt=""></div>
+      <p class="paddr">1425 Maple Ave</p>
+      <p class="pscope">341 LF · 6′ cedar privacy · 4′ walk + 10′ drive gate</p>
+      <div class="ppkg">
+        <div><p class="k">Good</p><p class="v">$15,764</p></div>
+        <div class="sel"><p class="k">Better</p><p class="v">$20,417</p></div>
+        <div><p class="k">Best</p><p class="v">$27,595</p></div>
+      </div>
+      <div class="psign">
+        <span class="lbl">Signed — Dana Whitfield · Aug 4, 2026</span>
+        <svg width="440" height="120" viewBox="0 0 440 120" fill="none">
+          <path d="M34 86 C 48 34, 62 24, 72 48 C 82 72, 72 98, 88 94 C 106 90, 108 40, 124 30
+            C 138 22, 138 68, 152 78 C 166 88, 174 50, 190 36 C 206 22, 214 62, 228 80
+            C 242 96, 262 84, 274 58 C 286 32, 306 40, 312 64 C 318 88, 342 90, 366 60
+            C 378 44, 392 50, 406 58"
+            stroke="#0D1B12" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="pbtn">✓ Signed — deposit paid</div>
+    </div>
+  </div>
+  <div class="stamp">
+    <p class="t">✓ Signed — Better package</p>
+    <p class="s">$20,417 · $6,125 deposit paid</p>
+  </div>
+  <p class="site">fencescan.com</p>
+</div>
+
+<!-- ══════════════ 08 · speed · 1:1 ══════════════ -->
+<div class="ad f11" id="st08">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:640px;height:640px;left:-180px;top:-200px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:13px;height:13px"></span></div>
+  <p class="n">60</p>
+  <p class="u">seconds</p>
+  <h1 class="display">From an address<br><span class="hl">to a signed bid.</span></h1>
+  <div class="row">
+    <span class="chip">Measured</span>
+    <span class="chip">Built in 3D</span>
+    <span class="chip">Priced ×3</span>
+    <span class="chip">Sent</span>
+  </div>
+</div>
+
+<!-- ══════════════ 09 · old vs new · 4:5 ══════════════ -->
+<div class="ad f45" id="st09">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:640px;height:640px;left:-220px;top:-180px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:12px;height:12px"></span></div>
+  <h1 class="display">Same job.<br><span class="hl">Same yard.</span></h1>
+  <div class="vs">
+    <div class="col bad">
+      <h3>Old way</h3>
+      <p class="big">3 hrs</p>
+      <p class="u">per bid</p>
+      <ul>
+        <li>A drive-out per lead</li>
+        <li>One price, take it or leave it</li>
+        <li>Numbers re-typed by hand</li>
+        <li>Chasing the signature by phone</li>
+      </ul>
+    </div>
+    <div class="col good">
+      <h3>FenceScan</h3>
+      <p class="big">60 sec</p>
+      <p class="u">per bid</p>
+      <ul>
+        <li>Measured from the sky</li>
+        <li>Good · Better · Best, every time</li>
+        <li>Every number computed</li>
+        <li>Signed, scheduled, deposit paid</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">Bid <b>every</b> lead that calls —<br>not just the ones worth the drive.</p>
+</div>
+
+<!-- ══════════════ 10 · CTA · 9:16 story ══════════════ -->
+<div class="ad f916" id="st10">
+  <div class="grid-bg"></div>
+  <div class="glow" style="width:820px;height:820px;left:-260px;top:-220px"></div>
+  <div class="pickets"></div>
+  <div class="brand">FENCESCAN <span class="sq" style="width:15px;height:15px"></span></div>
+  <p class="eyebrow mono">Free on your first property</p>
+  <h1 class="display">Quote more.<br>Drive less.<br><span class="hl">Win more.</span></h1>
+  <div class="list">
+    <span><span class="hl">✓</span> Measured off satellite — no drive-out</span>
+    <span><span class="hl">✓</span> 3D model your client actually understands</span>
+    <span><span class="hl">✓</span> E-sign, deposits, calendar and crew built in</span>
+  </div>
+  <span class="btn">Scan my property free →</span>
+  <p class="site">fencescan.com</p>
+</div>

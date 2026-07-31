@@ -1,0 +1,303 @@
+/* ------------------------------------------------------------------ *
+ * FenceScan ad kit — the shared look for every video and static.
+ *
+ * Colors are lifted straight out of tailwind.config.ts so the ads and
+ * the product read as one brand: accent green on ink, paper for
+ * anything that's meant to look like a document, and the same trace
+ * green / gate pink the canvas uses.
+ * ------------------------------------------------------------------ */
+:root {
+  --ink: #0d1b12;
+  --ink-2: #0a1610;
+  --panel: #12271a;
+  --paper: #f7f6f2;
+
+  --a950: #0a2b19;
+  --a700: #195f36;
+  --a600: #1e7340;
+  --a500: #348d51;
+  --a400: #5ca974;
+  --a300: #94c7a3;
+  --a50: #f0f7f1;
+
+  --trace: #4ade80;
+  --gate: #f472b6;
+  --amber: #e8a13b;
+  --rose: #f2617a;
+
+  --line: rgba(255, 255, 255, 0.12);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  overflow: hidden;
+  background: var(--ink);
+}
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  color: #fff;
+  position: relative;
+  -webkit-font-smoothing: antialiased;
+}
+img {
+  display: block;
+}
+
+.mono {
+  font-family: "Space Mono", ui-monospace, monospace;
+}
+.display {
+  font-family: "Archivo Black", sans-serif;
+  text-transform: uppercase;
+  line-height: 0.94;
+  letter-spacing: -0.015em;
+}
+.hl {
+  color: var(--trace);
+}
+.hl-a {
+  color: var(--a400);
+}
+.dim {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* --- backdrop ----------------------------------------------------- */
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+}
+.glow {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.5;
+  background: var(--a600);
+}
+/* the picket rail — a fence, drawn as furniture, down one edge */
+.pickets {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  z-index: 40;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--a600) 0 34px,
+    transparent 34px 46px
+  );
+  opacity: 0.75;
+}
+
+/* --- brand -------------------------------------------------------- */
+.brand {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  font-family: "Archivo Black", sans-serif;
+  letter-spacing: 0.03em;
+}
+.brand .sq {
+  background: var(--trace);
+}
+
+/* --- scenes ------------------------------------------------------- */
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  opacity: 0;
+}
+
+/* --- reusable pieces ---------------------------------------------- */
+.eyebrow {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--a400);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.eyebrow::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  background: var(--trace);
+  flex: none;
+}
+
+/* a captured product plate, framed like a device */
+.plate {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 26px;
+  border: 1px solid var(--line);
+  background: #0b1410;
+  box-shadow:
+    0 0 0 1px rgba(30, 115, 64, 0.28),
+    0 50px 120px -30px rgba(0, 0, 0, 0.95);
+}
+.plate img {
+  position: absolute;
+  width: 100%;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip.solid {
+  background: var(--a600);
+  border-color: transparent;
+}
+.chip .tick {
+  color: var(--trace);
+  font-weight: 700;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: linear-gradient(135deg, #1e7340, #3fa65b);
+  border-radius: 20px;
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  box-shadow:
+    0 0 0 1px rgba(30, 115, 64, 0.4),
+    0 30px 80px -14px rgba(63, 166, 91, 0.55);
+}
+
+.stat {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stat-l {
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* a strike-through "old way" row */
+.strike {
+  position: relative;
+  color: rgba(255, 255, 255, 0.45);
+}
+.strike i {
+  position: absolute;
+  left: 0;
+  top: 52%;
+  height: 4px;
+  width: 0;
+  background: var(--rose);
+  border-radius: 3px;
+}
+
+/* --- the scheduling board (FenceScan calendar's own language) ------ */
+.cal {
+  background: #fff;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 50px 120px -30px rgba(0, 0, 0, 0.95);
+  color: #18181b;
+}
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e4e4e7;
+  padding: 22px 26px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+}
+.cal-col {
+  border-right: 1px solid #f4f4f5;
+  padding: 14px 12px;
+}
+.cal-col:last-child {
+  border-right: 0;
+}
+.cal-day {
+  font-family: "Space Mono", monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #a1a1aa;
+}
+.ev {
+  border-radius: 14px;
+  padding: 14px 15px;
+  margin-top: 12px;
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+.ev .t {
+  font-weight: 700;
+  color: #18181b;
+}
+.ev .s {
+  color: #52525b;
+  margin-top: 4px;
+}
+.ev-install {
+  background: #ecfdf5;
+  color: #6ee7b7;
+}
+.ev-visit {
+  background: #f0f9ff;
+  color: #7dd3fc;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.pill-accepted {
+  background: #d1fae5;
+  color: #065f46;
+}
+.pill-progress {
+  background: #e0f2fe;
+  color: #075985;
+}
+.pill-offered {
+  background: #fef3c7;
+  color: #92400e;
+}

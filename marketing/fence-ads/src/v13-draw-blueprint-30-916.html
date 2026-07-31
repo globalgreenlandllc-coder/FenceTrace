@@ -1,0 +1,361 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — Draw it, blueprint cut (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  /* ---------- BLUEPRINT design system ---------- */
+  :root { --ink: #071320; --panel: #0b1d2e; --trace: #22d3ee; --a400: #67e8f9; --a300: #a5f3fc; }
+  html, body { width: 1080px; height: 1920px; background: #071320; }
+  .grid-bg { background:
+      linear-gradient(rgba(34,211,238,.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,211,238,.055) 1px, transparent 1px);
+    background-size: 54px 54px; }
+  .glow { background: #0e7490; }
+  .pickets { background: repeating-linear-gradient(180deg, #155e75 0 34px, transparent 34px 46px); }
+  .brand { top: 100px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; background: var(--trace); }
+  .eyebrow { color: #67e8f9; }
+  .eyebrow::before { background: var(--trace); }
+  .btn { background: linear-gradient(135deg, #0e7490, #22d3ee); color: #062a33;
+    box-shadow: 0 0 0 1px rgba(34,211,238,.4), 0 30px 80px -14px rgba(34,211,238,.45); }
+
+  /* HUD readouts around the canvas */
+  .hud { position: absolute; font-family: "Space Mono", monospace; font-size: 21px;
+    letter-spacing: .1em; color: rgba(165,243,252,.6); text-transform: uppercase; }
+  .hud b { color: #a5f3fc; }
+  .corner { position: absolute; width: 46px; height: 46px; border: 3px solid rgba(34,211,238,.7); }
+  .c-tl { border-right: 0; border-bottom: 0; } .c-tr { border-left: 0; border-bottom: 0; }
+  .c-bl { border-right: 0; border-top: 0; }  .c-br { border-left: 0; border-top: 0; }
+
+  .head { position: absolute; left: 84px; right: 84px; top: 322px; font-size: 60px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 500px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 580px; font-size: 118px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1210px; font-size: 40px;
+    line-height: 1.42; font-weight: 500; }
+
+  /* the product frame — toolbar + canvas, same truth as the app */
+  #app { position: absolute; left: 50px; bottom: 664px; width: 980px; }
+  .bar { background: #fff; border-radius: 18px 18px 0 0; padding: 15px 18px;
+    display: flex; flex-wrap: wrap; row-gap: 10px; align-items: center; gap: 12px;
+    border-bottom: 1px solid #E4E4E7; }
+  .pills { display: inline-flex; border-radius: 999px; background: #F4F4F5; padding: 3px; gap: 2px; }
+  .pill-t { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px;
+    padding: 11px 16px; font-size: 21px; font-weight: 600; color: #71717A; white-space: nowrap; }
+  .pill-t.on { background: #fff; color: #18181B; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .pill-t svg { width: 20px; height: 20px; }
+  .lf { margin-left: auto; background: #1E7340; color: #fff; border-radius: 999px;
+    padding: 10px 20px; font-size: 21px; font-weight: 700; white-space: nowrap; }
+  .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+    border-radius: 0 0 18px 18px; background: #26331f;
+    box-shadow: 0 0 0 1px rgba(34,211,238,.35), 0 46px 110px -30px rgba(0,0,0,.95); }
+  .canvas img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .canvas svg.ov { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .cur { position: absolute; z-index: 40; width: 40px; height: 40px; opacity: 0;
+    margin: -4px 0 0 -6px; }
+  .cur svg { filter: drop-shadow(0 4px 10px rgba(0,0,0,.65)); }
+
+  .callout { position: absolute; left: 50px; right: 50px; bottom: 480px; text-align: center;
+    font-size: 34px; font-weight: 700; opacity: 0; }
+  .callout b { color: var(--trace); }
+
+  #s3 h2 { position: absolute; left: 84px; right: 84px; top: 560px; font-size: 104px; }
+  #s3 .list { position: absolute; left: 84px; right: 84px; top: 1030px; display: flex;
+    flex-direction: column; gap: 18px; }
+  #s3 .list > span { font-size: 33px; font-weight: 600; }
+  #s3 .list .hl { color: var(--trace); }
+  #s3 .btn { position: absolute; left: 84px; top: 1320px; padding: 42px 60px; font-size: 35px; }
+  #s3 .site { position: absolute; left: 84px; top: 1480px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(165,243,252,.55); font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:780px;height:780px;left:-240px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Precision without the wheel</p>
+  <h1 class="display">Trace the<br>yard like a<br><span class="hl">blueprint.</span></h1>
+  <p class="sub">The parcel drops in. You put the posts where the fence really goes.</p>
+</section>
+
+<!-- 2. the tool -->
+<section class="scene" id="s2">
+  <h2 class="head display" id="h2">Boundary on.<br><span class="hl">Tool. Corners.</span></h2>
+
+  <p class="hud" style="left:84px;top:508px">Parcel <b>8703142-05-018</b></p>
+  <p class="hud" style="right:84px;top:508px">Scale <b>3.6 px/ft</b></p>
+
+  <div id="app">
+    <div class="bar">
+      <div class="pills">
+        <span class="pill-t on" id="tSelect">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/><path d="M13 13l6 6"/></svg>
+          Select
+        </span>
+        <span class="pill-t" id="tDraw">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Draw fence
+        </span>
+        <span class="pill-t" id="tGate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h3a2 2 0 0 1 2 2v14"/><path d="M2 20h3"/><path d="M13 20h9"/><path d="M13 4.8v14.4a.6.6 0 0 1-.7.6l-4-.6a.6.6 0 0 1-.5-.6V5.4a.6.6 0 0 1 .5-.6l4-.6a.6.6 0 0 1 .7.6z"/></svg>
+          Add gate
+        </span>
+        <span class="pill-t">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+          Section
+        </span>
+        <span class="pill-t">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          House
+        </span>
+      </div>
+      <span class="lf" id="lf">0 LF · 0 gates</span>
+    </div>
+
+    <div class="canvas">
+      <img src="plates/aerial-clean.svg" alt="">
+      <svg class="ov" viewBox="0 0 900 580">
+        <polygon points="196,88 704,78 716,500 206,508"
+          fill="rgba(74,222,128,0.06)" stroke="#4ade80" stroke-width="1.5" stroke-dasharray="6 4"/>
+        <polyline id="committed" fill="none" stroke="#22d3ee" stroke-width="3.5"
+          stroke-linecap="round" stroke-linejoin="round" points=""
+          style="filter:drop-shadow(0 0 4px rgba(34,211,238,0.6));opacity:0"/>
+        <g id="cverts"></g>
+        <g id="runchip" style="opacity:0">
+          <rect width="48" height="18" rx="5" fill="rgba(9,20,12,0.85)"/>
+          <text x="24" y="13" text-anchor="middle" font-size="11" font-weight="700"
+            fill="#a7f3d0" font-family="Inter, sans-serif">355 ft</text>
+        </g>
+        <g id="gates"></g>
+        <polyline id="draft" fill="none" stroke="#fbbf24" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round" points=""/>
+        <line id="rubber" stroke="#fbbf24" stroke-width="3" stroke-dasharray="7 5"
+          stroke-linecap="round" style="opacity:0"/>
+        <g id="dverts"></g>
+        <g id="snap" style="opacity:0">
+          <circle r="8" fill="none" stroke="#22C55E" stroke-width="2.5"/>
+          <circle r="2.2" fill="#22C55E"/>
+        </g>
+        <g id="chip" style="opacity:0">
+          <rect width="10" height="20" rx="6" fill="rgba(9,20,12,0.9)"/>
+          <text x="8" y="14" font-size="11" font-weight="700" fill="#fde68a"
+            font-family="Inter, sans-serif">40 ft</text>
+        </g>
+      </svg>
+      <div class="cur" id="cur">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="#fff" stroke="#0D1B12" stroke-width="1.4">
+          <path d="M4 2 L20 12 L13 13.5 L16.5 20.5 L13.5 22 L10 15 L4 19 Z"/>
+        </svg>
+      </div>
+    </div>
+    <div class="corner c-tl" style="left:-14px;top:-14px"></div>
+    <div class="corner c-tr" style="right:-14px;top:-14px"></div>
+    <div class="corner c-bl" style="left:-14px;bottom:-14px"></div>
+    <div class="corner c-br" style="right:-14px;bottom:-14px"></div>
+  </div>
+
+  <p class="hud" style="left:84px;bottom:598px">Snap <b>parcel corners</b> · runs · house</p>
+  <p class="hud" style="right:84px;bottom:598px">Mode <b id="hudmode">SELECT</b></p>
+  <p class="callout" id="callout"></p>
+</section>
+
+<!-- 3. CTA -->
+<section class="scene" id="s3">
+  <h2 class="display">Drafted like<br>a pro.<br><span class="hl">Priced like one.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Posts snap to the recorded boundary</span>
+    <span><span class="hl">✓</span> Live footage on the cursor as you pull</span>
+    <span><span class="hl">✓</span> Finish the run — the takeoff builds itself</span>
+  </div>
+  <span class="btn">Trace your first yard free →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  const PX_PER_FT = 3.6;
+  const PARCEL = [[196,88],[704,78],[716,500],[206,508]];
+  const RUN = [[346,348],[210,348],[204,96],[696,87],[705,402],[622,402]];
+  const GATES = [
+    { x: 282, y: 348, w: 4,  dir: [1,0] },
+    { x: 663, y: 402, w: 10, dir: [1,0] },
+  ];
+  const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const ptsAttr = (a) => a.map((p) => p[0] + "," + p[1]).join(" ");
+
+  const PLACE = [10600, 12000, 13500, 15100, 16600, 17900];
+  const FINISH = 18800;
+
+  scene("#s1", 0, 3000, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 58);
+  rise("#s1 .sub", 1150, 1720, 34);
+
+  scene("#s2", 2800, 26200, 300);
+  rise("#h2", 3000, 3600, 38);
+  rise("#app", 3100, 3900, 60);
+  riseEach("#s2 .hud", 3800, 180, 340, 16);
+
+  (function () {
+    const h = $("#h2");
+    up((ms) => {
+      h.innerHTML =
+        ms < 8600
+          ? "Boundary on.<br><span class='hl'>Tool. Corners.</span>"
+          : ms < 19400
+            ? "Tap. Tap. Tap.<br><span class='hl'>Measured.</span>"
+            : "Gates drop<br><span class='hl'>onto the line.</span>";
+    });
+  })();
+
+  (function () {
+    const c = $("#callout");
+    up((ms) => {
+      let t = "", o = 0;
+      if (ms > 4600 && ms < 8200) { t = "The recorded property line — <b>already on the photo.</b>"; o = 1; }
+      else if (ms > 8800 && ms < 10500) { t = "One click on <b>Draw fence</b>."; o = 1; }
+      else if (ms > 19400 && ms < 23000) { t = "<b>355 LF</b> committed to the takeoff."; o = 1; }
+      if (t) c.innerHTML = t;
+      c.style.opacity = o;
+    });
+  })();
+
+  (function () {
+    const sel = $("#tSelect"), draw = $("#tDraw"), gate = $("#tGate"), hud = $("#hudmode");
+    up((ms) => {
+      const mode = ms < 9800 ? "select" : ms < 19600 ? "draw" : "gate";
+      sel.classList.toggle("on", mode === "select");
+      draw.classList.toggle("on", mode === "draw");
+      gate.classList.toggle("on", mode === "gate");
+      hud.textContent = mode.toUpperCase() + (mode === "draw" ? " · CLICK TO PLACE" : "");
+    });
+  })();
+
+  (function () {
+    const lf = $("#lf");
+    up((ms) => {
+      if (ms < FINISH) { lf.textContent = "0 LF · 0 gates"; return; }
+      const g = ms > 23600 ? 2 : ms > 21800 ? 1 : 0;
+      lf.textContent = `355 LF · ${g} ${g === 1 ? "gate" : "gates"}`;
+    });
+  })();
+
+  (function () {
+    const draft = $("#draft"), rubber = $("#rubber"), dverts = $("#dverts");
+    const committed = $("#committed"), cverts = $("#cverts"), runchip = $("#runchip");
+    const chip = $("#chip"), chipRect = $("#chip rect"), chipText = $("#chip text");
+    const snap = $("#snap"), cur = $("#cur");
+    const CVX = 50, CVY = 0; // cursor positions computed against canvas box
+
+    up((ms) => {
+      let n = 0;
+      for (const t of PLACE) if (ms >= t) n++;
+      const placed = RUN.slice(0, n);
+
+      let cursor = null;
+      if (ms >= 9800 && ms < FINISH) {
+        if (n === 0) {
+          const t = eio(p(ms, 10000, PLACE[0]));
+          cursor = [lerp(470, RUN[0][0], t), lerp(250, RUN[0][1], t)];
+        } else if (n < RUN.length) {
+          const t = eio(p(ms, PLACE[n - 1], PLACE[n]));
+          cursor = [lerp(RUN[n - 1][0], RUN[n][0], t), lerp(RUN[n - 1][1], RUN[n][1], t)];
+        } else cursor = RUN[RUN.length - 1].slice();
+      }
+
+      draft.setAttribute("points", n > 1 ? ptsAttr(placed) : "");
+      dverts.innerHTML = placed
+        .map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="3.5" fill="#fbbf24"/>`).join("");
+
+      if (cursor && n > 0 && ms < FINISH) {
+        rubber.setAttribute("x1", placed[n - 1][0]);
+        rubber.setAttribute("y1", placed[n - 1][1]);
+        rubber.setAttribute("x2", cursor[0]);
+        rubber.setAttribute("y2", cursor[1]);
+        rubber.style.opacity = 1;
+        const segFt = Math.round(dist(placed[n - 1], cursor) / PX_PER_FT);
+        let total = 0;
+        for (let i = 1; i < placed.length; i++) total += dist(placed[i - 1], placed[i]);
+        total += dist(placed[n - 1], cursor);
+        const totalFt = Math.round(total / PX_PER_FT);
+        const label = placed.length > 1 ? `+${segFt} ft · ${totalFt} ft total` : `${segFt} ft`;
+        chipText.textContent = label;
+        chipRect.setAttribute("width", label.length * 6.2 + 14);
+        chip.setAttribute("transform", `translate(${cursor[0] + 14},${cursor[1] - 16})`);
+        chip.style.opacity = 1;
+      } else { rubber.style.opacity = 0; chip.style.opacity = 0; }
+
+      let lock = null;
+      if (cursor) for (const c of PARCEL) if (dist(c, cursor) < 24) lock = c;
+      if (lock) {
+        snap.setAttribute("transform", `translate(${lock[0]},${lock[1]})`);
+        snap.style.opacity = 1;
+      } else snap.style.opacity = 0;
+
+      /* cursor element lives inside .canvas — position in canvas px */
+      if (cursor) {
+        cur.style.opacity = 1;
+        cur.style.left = (cursor[0] / 900) * 980 + "px";
+        cur.style.top = (cursor[1] / 580) * 632 + "px";
+      } else if (ms > 8800 && ms < 10000) {
+        const t = eio(p(ms, 8800, 9700));
+        cur.style.opacity = 1;
+        cur.style.left = lerp(430, 205, t) + "px";
+        cur.style.top = lerp(140, -36, t) + "px";
+      } else if (ms > 19600 && ms < 25200) {
+        const g = ms < 21800 ? GATES[0] : GATES[1];
+        const t = eio(p(ms, ms < 21800 ? 19800 : 22200, ms < 21800 ? 21600 : 23400));
+        const from = ms < 21800 ? [520, 300] : [400, 360];
+        cur.style.opacity = 1;
+        cur.style.left = ((lerp(from[0], g.x, t)) / 900) * 980 + "px";
+        cur.style.top = ((lerp(from[1], g.y, t)) / 580) * 632 + "px";
+      } else cur.style.opacity = 0;
+
+      const done = ms >= FINISH;
+      committed.style.opacity = done ? 1 : 0;
+      committed.setAttribute("points", done ? ptsAttr(RUN) : "");
+      cverts.innerHTML = done
+        ? RUN.map((q) => `<circle cx="${q[0]}" cy="${q[1]}" r="3" fill="#fff" stroke="#0891b2" stroke-width="1.4"/>`).join("")
+        : "";
+      if (done) {
+        const mid = RUN[Math.floor(RUN.length / 2)];
+        runchip.setAttribute("transform", `translate(${mid[0] - 24},${mid[1] - 30})`);
+        runchip.style.opacity = 1;
+        draft.setAttribute("points", "");
+        dverts.innerHTML = "";
+      } else runchip.style.opacity = 0;
+
+      const gs = [];
+      if (ms > 21800) gs.push(GATES[0]);
+      if (ms > 23600) gs.push(GATES[1]);
+      $("#gates").innerHTML = gs
+        .map((g) => {
+          const half = (g.w * PX_PER_FT) / 2;
+          const x1 = g.x - g.dir[0] * half, y1 = g.y - g.dir[1] * half;
+          const x2 = g.x + g.dir[0] * half, y2 = g.y + g.dir[1] * half;
+          return (
+            `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#0b1210" stroke-width="7" opacity="0.55"/>` +
+            `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#f472b6" stroke-width="4" stroke-dasharray="6 4"/>` +
+            `<circle cx="${x1}" cy="${y1}" r="3.5" fill="#fff" stroke="#f472b6" stroke-width="1.4"/>` +
+            `<circle cx="${x2}" cy="${y2}" r="3.5" fill="#fff" stroke="#f472b6" stroke-width="1.4"/>` +
+            `<rect x="${g.x - 17}" y="${g.y - 26}" width="34" height="16" rx="8" fill="#f472b6"/>` +
+            `<text x="${g.x}" y="${g.y - 15}" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" font-family="Inter, sans-serif">${g.w}'</text>`
+          );
+        }).join("");
+    });
+  })();
+
+  scene("#s3", 26000, 30000, 340);
+  rise("#s3 h2", 26200, 27000, 56);
+  riseEach("#s3 .list > span", 27200, 220, 360, 26);
+  pop("#s3 .btn", 28400, 29000);
+  rise("#s3 .site", 29000, 29400, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

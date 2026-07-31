@@ -1,0 +1,134 @@
+/* ------------------------------------------------------------------ *
+ * real-ad.css — shared structure for the five Snohomish real-property
+ * ads (v23–v27). All color comes from CSS vars each video sets:
+ *   --bg --fg --dim --acc --acc2 --grid --rail --ring
+ *   --card-bg --card-fg --card-dim --btn-bg --btn-fg
+ * ------------------------------------------------------------------ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); }
+body { font-family: "Inter", system-ui, sans-serif; color: var(--fg);
+  position: relative; -webkit-font-smoothing: antialiased; }
+img { display: block; }
+
+.mono { font-family: "Space Mono", ui-monospace, monospace; }
+.display { font-family: "Archivo Black", sans-serif; text-transform: uppercase;
+  line-height: .95; letter-spacing: -0.015em; }
+.hl { color: var(--acc); }
+
+.grid-bg { position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 54px 54px; }
+.rail { position: absolute; top: 0; bottom: 0; right: 0; width: 18px; z-index: 40;
+  background: repeating-linear-gradient(180deg, var(--rail) 0 34px, transparent 34px 46px);
+  opacity: .7; }
+.brand { position: absolute; left: 0; right: 0; top: 98px; z-index: 30; display: flex;
+  justify-content: center; align-items: center; gap: 14px;
+  font-family: "Archivo Black", sans-serif; letter-spacing: .03em; font-size: 40px; }
+.brand .sq { width: 15px; height: 15px; background: var(--acc); }
+
+.scene { position: absolute; inset: 0; z-index: 10; opacity: 0; }
+.head { position: absolute; left: 84px; right: 84px; top: 300px; font-size: 58px; }
+
+/* s1 hook */
+#s1 .eyebrow { position: absolute; left: 84px; top: 430px; font-size: 27px;
+  font-family: "Space Mono", monospace; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .16em; color: var(--acc2); display: flex; align-items: center; gap: 14px; }
+#s1 .eyebrow::before { content: ""; width: 13px; height: 13px; background: var(--acc); }
+#s1 h1 { position: absolute; left: 84px; right: 84px; top: 512px; font-size: 108px; }
+#s1 .addr { position: absolute; left: 60px; right: 60px; top: 1120px;
+  background: var(--card-bg); color: var(--card-fg); border-radius: 22px; padding: 34px 38px;
+  box-shadow: 0 30px 80px -24px rgba(0,0,0,.55); }
+#s1 .addr .lbl { font-family: "Space Mono", monospace; font-size: 20px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--card-dim); }
+#s1 .addr .inp { margin-top: 18px; border: 2px solid rgba(127,127,127,.3); border-radius: 14px;
+  padding: 22px 24px; font-family: "Space Mono", monospace; font-size: 30px; min-height: 78px;
+  display: flex; align-items: center; }
+#s1 .addr .caret { display: inline-block; width: 3.5px; height: 36px; background: var(--acc);
+  margin-left: 7px; }
+
+/* the product frame */
+#frame { position: absolute; left: 50px; top: 560px; width: 980px; z-index: 12; opacity: 0; }
+#frame .bar { background: #fff; border-radius: 18px 18px 0 0; padding: 14px 18px;
+  display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #E4E4E7; color: #18181b; }
+#frame .seg { display: inline-flex; border-radius: 999px; background: #F4F4F5; padding: 3px; gap: 2px; }
+#frame .seg span { border-radius: 999px; padding: 9px 16px; font-size: 20px; font-weight: 600; color: #71717A; }
+#frame .seg span.on { background: #fff; color: #18181B; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+#frame .topopill { border-radius: 999px; padding: 9px 16px; font-size: 19px; font-weight: 700;
+  background: #fff; color: #71717A; box-shadow: inset 0 0 0 1px #E4E4E7; }
+#frame .topopill.on { background: #FFFBEB; color: #92400E; box-shadow: inset 0 0 0 1px #FDE68A; }
+#frame .lf { margin-left: auto; background: #1E7340; color: #fff; border-radius: 999px;
+  padding: 9px 18px; font-size: 20px; font-weight: 700; white-space: nowrap; }
+#frame .canvas { position: relative; width: 980px; height: 632px; overflow: hidden;
+  border-radius: 0 0 18px 18px; background: #1c2418;
+  box-shadow: 0 0 0 1px var(--ring), 0 46px 110px -30px rgba(0,0,0,.9); }
+#frame .canvas > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+#frame .canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#frame .scanline { position: absolute; left: 0; right: 0; height: 6px; top: 0; opacity: 0;
+  background: linear-gradient(90deg, transparent, var(--acc) 28%, var(--acc) 72%, transparent);
+  box-shadow: 0 0 44px 10px var(--ring); }
+.cur { position: absolute; z-index: 40; width: 40px; height: 40px; opacity: 0; margin: -4px 0 0 -6px; }
+.cur svg { filter: drop-shadow(0 4px 10px rgba(0,0,0,.65)); }
+.legend { font-size: 10.5px; font-weight: 600; fill: #FDE68A; stroke: #1C1917;
+  stroke-width: 2.6px; paint-order: stroke; font-family: Inter, sans-serif; }
+.chips3d { position: absolute; left: 14px; bottom: 14px; display: flex; gap: 10px; opacity: 0; }
+.chips3d span { background: rgba(255,255,255,.92); border-radius: 999px; padding: 10px 16px;
+  font-size: 18px; font-weight: 600; color: #3f3f46; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+.chips3d .steps { color: #195F36; box-shadow: inset 0 0 0 1.5px #BFDEC7, 0 2px 10px rgba(0,0,0,.3); }
+
+/* under-frame strip: chips + callout */
+#under { position: absolute; left: 50px; right: 50px; top: 1320px; z-index: 12; }
+#under .row { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+#under .chip { display: inline-flex; align-items: center; gap: 12px; border-radius: 999px;
+  padding: 17px 26px; font-size: 27px; font-weight: 600; background: var(--chip-bg);
+  color: var(--chip-fg); box-shadow: inset 0 0 0 1px var(--ring); opacity: 0; }
+#under .chip .tick { color: var(--acc); font-weight: 700; }
+#callout { position: absolute; left: 50px; right: 50px; top: 1460px; text-align: center;
+  font-size: 34px; font-weight: 700; opacity: 0; z-index: 12; }
+#callout b { color: var(--acc); }
+
+/* the proposal card */
+#prop { position: absolute; left: 60px; top: 560px; width: 960px; z-index: 14; opacity: 0;
+  background: #fff; border-radius: 24px; overflow: hidden; color: #18181b;
+  box-shadow: 0 0 0 1px var(--ring), 0 46px 120px -30px rgba(0,0,0,.9); }
+#prop .ph { background: #0A2B19; color: #fff; padding: 30px 38px; display: flex;
+  justify-content: space-between; align-items: baseline; }
+#prop .ph .a { font-size: 32px; font-weight: 700; }
+#prop .ph .a small { display: block; font-size: 20px; font-weight: 400; color: rgba(255,255,255,.65); margin-top: 4px; }
+#prop .ph .s { text-align: right; font-family: "Space Mono", monospace; }
+#prop .ph .s b { font-size: 34px; }
+#prop .ph .s small { display: block; font-size: 18px; color: rgba(255,255,255,.65); margin-top: 4px; }
+#prop .tiers { padding: 26px 32px 10px; display: flex; gap: 14px; }
+#prop .tier { flex: 1; border: 1.5px solid #E4E4E7; border-radius: 16px; padding: 22px 20px;
+  text-align: center; position: relative; }
+#prop .tier.rec { border-color: #94C7A3; background: #F0F7F1; }
+#prop .tier .tag { position: absolute; left: 50%; top: -14px; transform: translateX(-50%);
+  background: #1E7340; color: #fff; border-radius: 999px; padding: 6px 14px;
+  font-family: "Space Mono", monospace; font-size: 13px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+#prop .tier .k { font-size: 23px; font-weight: 700; }
+#prop .tier .sp { font-size: 17px; color: #71717a; margin-top: 3px; }
+#prop .tier .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 36px; margin-top: 12px; }
+#prop .tier .lf2 { font-family: "Space Mono", monospace; font-size: 17px; color: #a1a1aa; margin-top: 4px; }
+#prop .pf { display: flex; justify-content: space-between; padding: 16px 32px 26px;
+  font-size: 19px; color: #71717a; }
+#prop .pf b { color: #18181b; }
+
+/* CTA */
+#s8 h2 { position: absolute; left: 84px; right: 84px; top: 560px; font-size: 104px; }
+#s8 .btn { position: absolute; left: 84px; top: 1120px; display: inline-flex; align-items: center;
+  gap: 18px; background: var(--btn-bg); color: var(--btn-fg); border-radius: 20px;
+  padding: 42px 60px; font-family: "Space Mono", monospace; font-weight: 700; font-size: 35px;
+  letter-spacing: .06em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 0 0 0 1px var(--ring), 0 30px 80px -14px var(--ring); }
+#s8 .site { position: absolute; left: 84px; top: 1290px; font-size: 32px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); font-family: "Space Mono", monospace; }
+#s8 .fine { position: absolute; left: 84px; right: 84px; top: 1400px; font-size: 24px;
+  color: var(--dim); line-height: 1.45; }
+
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 60; pointer-events: none; }
+.hud-corner { position: absolute; width: 44px; height: 44px; border: 3px solid var(--ring); z-index: 13; opacity: 0; }
+.topo-flourish { position: absolute; inset: 0; z-index: 0; opacity: .09; }
+.topo-flourish path { fill: none; stroke: var(--acc); stroke-width: 2.5; }
+.hazard { position: absolute; left: 0; right: 0; height: 16px; z-index: 40; opacity: .8;
+  background: repeating-linear-gradient(-45deg, var(--acc) 0 22px, #14100b 22px 44px); }

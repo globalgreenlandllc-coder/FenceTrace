@@ -1,0 +1,169 @@
+<meta charset="utf-8">
+<title>FenceScan — 30s — Your price vs the market's (4:5)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1350px; background: #F7F6F2; }
+  body { color: #0D1B12; }
+  .grid-bg { background:
+      linear-gradient(rgba(13,27,18,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(13,27,18,0.05) 1px, transparent 1px);
+    background-size: 44px 44px; }
+  .glow { background: #94C7A3; opacity: .35; }
+  .pickets { background: repeating-linear-gradient(180deg, #BFDEC7 0 34px, transparent 34px 46px); }
+  .brand { top: 62px; font-size: 34px; color: #0D1B12; }
+  .brand .sq { width: 13px; height: 13px; background: #1E7340; }
+  .display .hl { color: #1E7340; }
+  .eyebrow { color: #348D51; }
+  .eyebrow::before { background: #1E7340; }
+  .head { position: absolute; left: 70px; right: 70px; top: 168px; font-size: 56px; }
+
+  #s1 .eyebrow { position: absolute; left: 70px; top: 330px; font-size: 25px; }
+  #s1 h1 { position: absolute; left: 70px; right: 70px; top: 402px; font-size: 92px; }
+  #s1 .sub { position: absolute; left: 70px; right: 90px; top: 950px; font-size: 36px;
+    line-height: 1.42; font-weight: 500; color: #3f4a42; }
+
+  /* four cities, one fence */
+  #s2 .cities { position: absolute; left: 60px; right: 60px; top: 370px; display: grid;
+    grid-template-columns: 1fr 1fr; gap: 18px; }
+  #s2 .c { background: #fff; border-radius: 22px; padding: 34px 36px;
+    box-shadow: 0 1px 2px rgba(13,27,18,.05), 0 16px 40px -12px rgba(13,27,18,.10); }
+  #s2 .c .n { font-size: 29px; font-weight: 700; }
+  #s2 .c .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 66px;
+    color: #1E7340; margin-top: 10px; }
+  #s2 .c .v small { font-size: 30px; color: #a1a1aa; font-weight: 400; }
+  #s2 .c .w { font-size: 21px; color: #71717a; margin-top: 6px; }
+  #s2 .foot { position: absolute; left: 60px; right: 60px; top: 1080px; text-align: center;
+    font-size: 32px; font-weight: 600; color: #3f4a42; }
+  #s2 .foot b { color: #1E7340; }
+
+  /* the switch — the proposal builder's "Your price / AI market price" control */
+  .card { position: absolute; left: 60px; right: 60px; top: 360px; background: #fff;
+    border-radius: 24px; padding: 42px 46px; box-shadow: 0 1px 2px rgba(13,27,18,.05),
+    0 24px 60px -18px rgba(13,27,18,.14); }
+  .seg2 { display: inline-flex; border-radius: 14px; background: #F4F4F5; padding: 4px; gap: 3px; }
+  .seg2 span { border-radius: 11px; padding: 15px 24px; font-size: 25px; font-weight: 600;
+    color: #71717A; display: inline-flex; align-items: center; gap: 10px; }
+  .seg2 span.on { background: #fff; color: #18181B; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+  .tiers { margin-top: 34px; display: flex; flex-direction: column; gap: 14px; }
+  .tier { display: flex; align-items: center; justify-content: space-between; border: 1.5px solid #E4E4E7;
+    border-radius: 16px; padding: 22px 26px; background: #fff; }
+  .tier.rec { border-color: #94C7A3; background: #F0F7F1; }
+  .tier .nm { font-size: 28px; font-weight: 700; }
+  .tier .tg { font-size: 21px; color: #71717a; margin-top: 3px; }
+  .tier .v { font-family: "Space Mono", monospace; font-weight: 700; font-size: 34px; }
+  .hint { margin-top: 26px; font-size: 24px; color: #71717a; line-height: 1.5; }
+  .hint b { color: #1E7340; }
+
+  #s4 h2 { position: absolute; left: 70px; right: 70px; top: 330px; font-size: 84px; }
+  #s4 .list { position: absolute; left: 70px; right: 70px; top: 700px; display: flex;
+    flex-direction: column; gap: 16px; }
+  #s4 .list > span { font-size: 30px; font-weight: 600; color: #1f2b23; }
+  #s4 .list .hl { color: #1E7340; }
+  #s4 .btn { position: absolute; left: 70px; top: 980px; padding: 36px 52px; font-size: 32px; }
+  #s4 .site { position: absolute; left: 70px; top: 1120px; font-size: 29px; letter-spacing: .14em;
+    text-transform: uppercase; color: #348D51; font-family: "Space Mono", monospace; }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:700px;height:700px;left:-220px;bottom:-220px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Regional market calibration</p>
+  <h1 class="display">The same fence<br>doesn't cost the<br><span class="hl">same everywhere.</span></h1>
+  <p class="sub">341 feet of 6′ cedar, priced in four ZIP codes. Watch the number move.</p>
+</section>
+
+<!-- 2. four cities -->
+<section class="scene" id="s2">
+  <h2 class="head display">One yard.<br><span class="hl">Four markets.</span></h2>
+  <div class="cities">
+    <div class="c"><p class="n">Jackson, MS</p><p class="v">$<em id="c1">57</em><small>/LF</small></p><p class="w">labor −20% vs national</p></div>
+    <div class="c"><p class="n">Fort Collins, CO</p><p class="v">$<em id="c2">60</em><small>/LF</small></p><p class="w">cedar +2% freight</p></div>
+    <div class="c"><p class="n">Austin, TX</p><p class="v">$<em id="c3">62</em><small>/LF</small></p><p class="w">metro +8% over state labor</p></div>
+    <div class="c"><p class="n">San Jose, CA</p><p class="v">$<em id="c4">74</em><small>/LF</small></p><p class="w">labor +38% vs national</p></div>
+  </div>
+  <p class="foot">From <b>BLS fence-crew wages + freight indexes</b>, resolved per state and ZIP.</p>
+</section>
+
+<!-- 3. the switch -->
+<section class="scene" id="s3">
+  <h2 class="head display">Your rates or the<br><span class="hl">market's — you pick.</span></h2>
+  <div class="card">
+    <div class="seg2">
+      <span id="sgA" class="on">Your price</span>
+      <span id="sgB">✦ AI market price</span>
+    </div>
+    <div class="tiers">
+      <div class="tier"><div><p class="nm">Good</p><p class="tg">Pressure-treated privacy</p></div><p class="v" id="t1">$15,764</p></div>
+      <div class="tier rec"><div><p class="nm">Better</p><p class="tg">Cedar privacy — recommended</p></div><p class="v" id="t2">$20,417</p></div>
+      <div class="tier"><div><p class="nm">Best</p><p class="tg">Cedar, stained &amp; sealed</p></div><p class="v" id="t3">$27,595</p></div>
+    </div>
+    <p class="hint" id="hint">Priced from <b>your rate card</b> — the book you set once in Settings.</p>
+  </div>
+</section>
+
+<!-- 4. CTA -->
+<section class="scene" id="s4">
+  <h2 class="display">Charge what your<br>market charges.<br><span class="hl">Or beat it on purpose.</span></h2>
+  <div class="list">
+    <span><span class="hl">✓</span> Local rates resolved from the scanned address</span>
+    <span><span class="hl">✓</span> One tap prices the whole Good · Better · Best ladder</span>
+    <span><span class="hl">✓</span> Flip back to your own book any time</span>
+  </div>
+  <span class="btn">See my market's rates →</span>
+  <p class="site">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  scene("#s1", 0, 3600, 300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1200, 54);
+  rise("#s1 .sub", 1250, 1800, 32);
+
+  scene("#s2", 3400, 12600, 300);
+  rise("#s2 .head", 3600, 4200, 38);
+  riseEach("#s2 .c", 4300, 380, 440, 36);
+  count("#c1", 4500, 5600, 0, 57);
+  count("#c2", 4900, 6000, 0, 60);
+  count("#c3", 5300, 6400, 0, 62);
+  count("#c4", 5700, 7000, 0, 74);
+  rise("#s2 .foot", 8600, 9200, 24);
+
+  scene("#s3", 12400, 24600, 300);
+  rise("#s3 .head", 12600, 13200, 38);
+  rise(".card", 12700, 13400, 56);
+
+  /* the toggle flips to AI market price; the ladder re-lands together */
+  (function () {
+    const A = $("#sgA"), B = $("#sgB"), hint = $("#hint");
+    const t2 = $("#t2");
+    up((ms) => {
+      const ai = ms > 17400;
+      A.classList.toggle("on", !ai);
+      B.classList.toggle("on", ai);
+      const t = eo(p(ms, 17400, 18600));
+      t2.textContent = "$" + Math.round(lerp(20417, 21430, ai ? t : 0)).toLocaleString("en-US");
+      $("#t1").textContent = "$" + Math.round(lerp(15764, 16550, ai ? t : 0)).toLocaleString("en-US");
+      $("#t3").textContent = "$" + Math.round(lerp(27595, 28970, ai ? t : 0)).toLocaleString("en-US");
+      hint.innerHTML = ai
+        ? "One AI call prices <b>all three tiers together</b> — apply it, or flip straight back to your book."
+        : "Priced from <b>your rate card</b> — the book you set once in Settings.";
+    });
+  })();
+
+  scene("#s4", 24400, 30000, 340);
+  rise("#s4 h2", 24600, 25400, 50);
+  riseEach("#s4 .list > span", 25600, 220, 360, 24);
+  pop("#s4 .btn", 26900, 27500);
+  rise("#s4 .site", 27600, 28000, 20);
+
+  window.TOTAL_MS = 30000;
+  window.seek(0);
+</script>

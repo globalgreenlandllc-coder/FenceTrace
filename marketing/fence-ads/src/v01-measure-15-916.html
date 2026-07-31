@@ -1,0 +1,136 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — Easy measuring (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+
+  /* ---------- scene 1 — the hook ---------- */
+  #s1 .eyebrow { position: absolute; left: 84px; top: 520px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 122px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1090px; font-size: 40px; line-height: 1.42; font-weight: 500; }
+  #s1 .tape { position: absolute; left: 84px; top: 1300px; font-size: 34px; font-weight: 600; }
+  #s1 .tape i { height: 5px; }
+
+  /* ---------- shared plate ---------- */
+  .plate { left: 50px; top: 640px; width: 980px; height: 632px; }
+  .scanline { position: absolute; left: 0; right: 0; height: 6px; top: 0;
+    background: linear-gradient(90deg, transparent, var(--trace) 28%, var(--trace) 72%, transparent);
+    box-shadow: 0 0 46px 10px rgba(74,222,128,.5); }
+
+  .head { position: absolute; left: 84px; right: 84px; top: 400px; font-size: 68px; }
+
+  /* ---------- scene 2 — the scan ---------- */
+  #s2 .lbl { position: absolute; left: 50px; top: 1330px; font-size: 30px; }
+  #s2 .row { position: absolute; left: 50px; right: 50px; top: 1400px; display: flex; gap: 16px; flex-wrap: wrap; }
+  #s2 .chip { padding: 20px 30px; font-size: 30px; }
+
+  /* ---------- scene 3 — the number ---------- */
+  #s3 .big { position: absolute; left: 50px; right: 50px; top: 1310px; text-align: center; }
+  #s3 .big .n { font-size: 176px; color: var(--trace); }
+  #s3 .big .u { font-size: 62px; color: rgba(255,255,255,.75); margin-left: 14px; }
+  #s3 .big .l { margin-top: 6px; font-size: 28px; }
+  #s3 .row { position: absolute; left: 50px; right: 50px; top: 1590px; display: flex; justify-content: center; gap: 14px; }
+  #s3 .chip { padding: 18px 26px; font-size: 27px; }
+
+  /* ---------- scene 4 — CTA ---------- */
+  #s4 h2 { position: absolute; left: 84px; right: 84px; top: 620px; font-size: 118px; }
+  #s4 .btn { position: absolute; left: 84px; top: 1140px; padding: 42px 62px; font-size: 36px; }
+  #s4 .site { position: absolute; left: 84px; top: 1300px; font-size: 33px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.55); }
+  #s4 .free { position: absolute; left: 84px; top: 1380px; font-size: 28px; color: var(--a400); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:760px;height:760px;left:-220px;top:-180px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- ================= 1. hook ================= -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Fence contractors</p>
+  <h1 class="display">Stop<br>driving out<br><span class="hl">to measure.</span></h1>
+  <p class="sub">Type the address. FenceScan pulls the aerial and the county parcel line.</p>
+  <p class="tape strike">Tape measure<i></i></p>
+</section>
+
+<!-- ================= 2. the scan ================= -->
+<section class="scene" id="s2">
+  <h2 class="head display">The lot,<br><span class="hl">measured from the sky.</span></h2>
+  <div class="plate" id="p2">
+    <img src="plates/act1-scan.png" alt="">
+    <div class="scanline" id="sweep2"></div>
+  </div>
+  <p class="lbl mono" style="color:var(--a400);letter-spacing:.14em;text-transform:uppercase">Parcel 8703142-05-018</p>
+  <div class="row">
+    <span class="chip"><span class="tick">✓</span> 0.38 acres</span>
+    <span class="chip"><span class="tick">✓</span> 16,542 sq ft</span>
+    <span class="chip"><span class="tick">✓</span> County records</span>
+  </div>
+</section>
+
+<!-- ================= 3. the number ================= -->
+<section class="scene" id="s3">
+  <h2 class="head display">Drive the fence.<br><span class="hl">It counts itself.</span></h2>
+  <div class="plate" id="p3"><img src="plates/act2-trace.png" alt=""></div>
+  <div class="big">
+    <p><span class="stat n" id="lf">0</span><span class="u mono">LF</span></p>
+    <p class="stat-l l">Net fence · gate openings removed</p>
+  </div>
+  <div class="row">
+    <span class="chip">4 corners</span>
+    <span class="chip">2 gates</span>
+    <span class="chip">48 posts</span>
+  </div>
+</section>
+
+<!-- ================= 4. CTA ================= -->
+<section class="scene" id="s4">
+  <h2 class="display">341 feet.<br>No tape.<br><span class="hl">60 seconds.</span></h2>
+  <span class="btn">Scan my property →</span>
+  <p class="site mono">fencescan.com</p>
+  <p class="free">Free scan — no card, no crew, no drive.</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* ---- 1. hook (0–3.4s) ---- */
+  scene("#s1", 0, 3500);
+  rise("#s1 .eyebrow", 200, 700, 24);
+  rise("#s1 h1", 350, 1150, 60);
+  rise("#s1 .sub", 1100, 1700, 34);
+  rise("#s1 .tape", 1700, 2100, 20);
+  strike("#s1 .tape i", 2150, 2700);
+
+  /* ---- 2. scan (3.3–7.6s) ---- */
+  scene("#s2", 3300, 7700);
+  rise("#s2 .head", 3500, 4100, 40);
+  rise("#p2", 3600, 4300, 60);
+  kenBurns("#p2 img", 3600, 7700, 1.02, 1.1);
+  sweep("#sweep2", 4200, 5900, 632);
+  rise("#s2 .lbl", 5500, 5900, 20);
+  riseEach("#s2 .chip", 5900, 260, 380, 26);
+
+  /* ---- 3. measure (7.5–11.7s) ---- */
+  scene("#s3", 7500, 11800);
+  rise("#s3 .head", 7700, 8300, 40);
+  rise("#p3", 7800, 8500, 60);
+  kenBurns("#p3 img", 7800, 11800, 1.02, 1.09);
+  rise("#s3 .big", 8700, 9200, 40);
+  count("#lf", 8800, 10600, 0, 341);
+  riseEach("#s3 .chip", 10300, 220, 360, 24);
+
+  /* ---- 4. CTA (11.6–15s) ---- */
+  scene("#s4", 11600, 15000, 380);
+  rise("#s4 h2", 11800, 12600, 56);
+  pop("#s4 .btn", 12700, 13300);
+  rise("#s4 .site", 13200, 13600, 20);
+  rise("#s4 .free", 13500, 13900, 18);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>

@@ -1,0 +1,132 @@
+<meta charset="utf-8">
+<title>FenceScan — 15s — 3D fence (9:16)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css">
+<style>
+  html, body { width: 1080px; height: 1920px; }
+  .brand { top: 104px; font-size: 40px; }
+  .brand .sq { width: 15px; height: 15px; }
+  .head { position: absolute; left: 84px; right: 84px; top: 380px; font-size: 68px; }
+  .plate { left: 50px; top: 640px; width: 980px; height: 632px; }
+
+  #s1 .eyebrow { position: absolute; left: 84px; top: 520px; font-size: 27px; }
+  #s1 h1 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 118px; }
+  #s1 .sub { position: absolute; left: 84px; right: 110px; top: 1130px; font-size: 40px; line-height: 1.42; font-weight: 500; }
+
+  /* the flip: flat plan on one side, built fence on the other */
+  #s2 .caption { position: absolute; left: 50px; right: 50px; top: 1320px; text-align: center; font-size: 34px; font-weight: 600; }
+  #s2 .caption b { color: var(--trace); }
+  #s2 .row2 { position: absolute; left: 50px; right: 50px; top: 1420px; display: flex; justify-content: center; gap: 14px; }
+  #s2 .row2 .chip { padding: 18px 26px; font-size: 27px; }
+
+  #s3 .row { position: absolute; left: 50px; right: 50px; top: 1320px; display: flex; flex-direction: column; gap: 16px; }
+  #s3 .chip { padding: 22px 30px; font-size: 30px; justify-content: flex-start; }
+
+  /* a cursor that drags the model */
+  .cur { position: absolute; left: 0; top: 0; z-index: 25; width: 46px; height: 46px; opacity: 0; }
+  .cur svg { filter: drop-shadow(0 6px 14px rgba(0,0,0,.6)); }
+
+  #s4 h2 { position: absolute; left: 84px; right: 84px; top: 600px; font-size: 108px; }
+  #s4 .btn { position: absolute; left: 84px; top: 1120px; padding: 42px 60px; font-size: 35px; }
+  #s4 .site { position: absolute; left: 84px; top: 1280px; font-size: 32px; letter-spacing: .14em;
+    text-transform: uppercase; color: rgba(255,255,255,.55); }
+</style>
+
+<div class="grid-bg"></div>
+<div class="glow" style="width:760px;height:760px;right:-240px;top:-160px"></div>
+<div class="pickets"></div>
+<div class="brand">FENCESCAN <span class="sq"></span></div>
+
+<!-- 1. hook -->
+<section class="scene" id="s1">
+  <p class="eyebrow mono">Close more bids</p>
+  <h1 class="display">Homeowners<br>can't read<br><span class="hl">a flat drawing.</span></h1>
+  <p class="sub">So show them the fence standing in their own yard.</p>
+</section>
+
+<!-- 2. the reveal: plan → 3D -->
+<section class="scene" id="s2">
+  <h2 class="head display">Same yard.<br><span class="hl">Now it's built.</span></h2>
+  <div class="plate" id="pFlat"><img src="plates/act2-trace.png" alt=""></div>
+  <div class="plate" id="p3d"><img src="plates/act3-3d.png" alt=""></div>
+  <div class="cur" id="cur">
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="#fff" stroke="#0D1B12" stroke-width="1.4">
+      <path d="M4 2 L20 12 L13 13.5 L16.5 20.5 L13.5 22 L10 15 L4 19 Z"/>
+    </svg>
+  </div>
+  <p class="caption">Spin it. Zoom it. <b>Walk through the gate.</b></p>
+  <div class="row2" id="row2">
+    <span class="chip">Orbit</span>
+    <span class="chip">Walk the yard</span>
+    <span class="chip">Print into the bid</span>
+  </div>
+</section>
+
+<!-- 3. true to spec -->
+<section class="scene" id="s3">
+  <h2 class="head display">Built out of<br><span class="hl">what it's made of.</span></h2>
+  <div class="plate" id="p3b"><img src="plates/act3-3d-early.png" alt=""></div>
+  <div class="row">
+    <span class="chip"><span class="tick">✓</span> 6′ cedar privacy — to scale, not a stock photo</span>
+    <span class="chip"><span class="tick">✓</span> Both gates framed, hung and swinging</span>
+    <span class="chip"><span class="tick">✓</span> Chain link gets pipe. Vinyl gets 5×5. No borrowing.</span>
+  </div>
+</section>
+
+<!-- 4. CTA -->
+<section class="scene" id="s4">
+  <h2 class="display">They see it.<br><span class="hl">They sign it.</span></h2>
+  <span class="btn">Build a fence in 3D →</span>
+  <p class="site mono">fencescan.com</p>
+</section>
+
+<script src="kit.js"></script>
+<script>
+  /* 1. hook */
+  scene("#s1", 0, 3300);
+  rise("#s1 .eyebrow", 150, 620, 24);
+  rise("#s1 h1", 300, 1150, 60);
+  rise("#s1 .sub", 1150, 1700, 34);
+
+  /* 2. plan → 3D wipe */
+  scene("#s2", 3100, 8600);
+  rise("#s2 .head", 3300, 3900, 40);
+  rise("#pFlat", 3400, 4100, 60);
+  /* the 3D plate wipes in over the flat one, left to right */
+  (function () {
+    const el = $("#p3d");
+    el.style.opacity = 1;
+    up((ms) => {
+      const t = eio(p(ms, 4600, 6000));
+      el.style.clipPath = `inset(0 ${(1 - t) * 100}% 0 0)`;
+      el.style.opacity = ms < 4300 ? 0 : 1;
+    });
+  })();
+  kenBurns("#p3d img", 6000, 8600, 1.0, 1.07);
+  cursor("#cur", [
+    [5200, 700, 900],
+    [6100, 380, 1010],
+    [6900, 760, 960],
+    [7600, 540, 1020],
+  ]);
+  rise("#s2 .caption", 6600, 7100, 26);
+  riseEach("#s2 .row2 .chip", 7200, 220, 340, 24);
+
+  /* 3. true to spec */
+  scene("#s3", 8400, 12400);
+  rise("#s3 .head", 8600, 9200, 40);
+  rise("#p3b", 8700, 9400, 60);
+  kenBurns("#p3b img", 8700, 12400, 1.02, 1.1);
+  riseEach("#s3 .chip", 9700, 380, 420, 26);
+
+  /* 4. CTA */
+  scene("#s4", 12200, 15000, 340);
+  rise("#s4 h2", 12400, 13100, 56);
+  pop("#s4 .btn", 13300, 13900);
+  rise("#s4 .site", 13900, 14300, 20);
+
+  window.TOTAL_MS = 15000;
+  window.seek(0);
+</script>
