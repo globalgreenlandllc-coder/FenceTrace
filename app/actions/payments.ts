@@ -17,6 +17,7 @@ import {
 import { checkUserEmailBudget, checkPortalWrite } from "@/lib/abuse/guards";
 import { POLICIES } from "@/lib/abuse/policies";
 import { getMe } from "./me";
+import { ensureScheduleForProposal } from "@/lib/payment-schedule";
 
 /* ------------------------------------------------------------------ */
 /*  Shared DTOs                                                        */
@@ -187,160 +188,12 @@ function toChangeOrderDto(c: {
 
 /* ------------------------------------------------------------------ */
 /*  Schedule bootstrap + money-state sync                              */
+/*                                                                     */
+/*  ensureScheduleForProposal / createDefaultSchedule live in           */
+/*  lib/payment-schedule.ts — as exports of this "use server" file      */
+/*  they were unauthenticated public RPC endpoints that could rewrite   */
+/*  any tenant's contract money. Callers here resolve ownership first.  */
 /* ------------------------------------------------------------------ */
-
-type ProposalRowForSchedule = {
-  id: string;
-  status: string;
-  totalCents: number;
-  paidCents: number;
-  selectedPackageId: string | null;
-  acceptedAt: Date | null;
-  updatedAt: Date;
-  data: unknown;
-};
-
-/**
- * Creates the default installment schedule for an ACCEPTED proposal that
- * doesn't have one yet (accepted before this feature shipped, or created
- * through a path that skipped it). Honors the homeowner's recorded
- * payment choice (deposit vs full) and preserves any legacy paidCents by
- * booking it as an already-PAID "Previously collected" installment.
- */
-export async function ensureScheduleForProposal(
-  proposalId: string,
-): Promise<void> {
-  const row = await db.proposal.findUnique({
-    where: { id: proposalId },
-    select: {
-      id: true,
-      status: true,
-      totalCents: true,
-      paidCents: true,
-      selectedPackageId: true,
-      acceptedAt: true,
-      updatedAt: true,
-      data: true,
-      _count: { select: { installments: true } },
-    },
-  });
-  if (!row || row.status !== "ACCEPTED" || row._count.installments > 0) return;
-
-  const acceptEvent = await db.proposalEvent.findFirst({
-    where: { proposalId: row.id, kind: "ACCEPTED" },
-    orderBy: { createdAt: "desc" },
-    select: { payload: true },
-  });
-  const paymentChoice =
-    ((acceptEvent?.payload as { paymentChoice?: string } | null)
-      ?.paymentChoice as "deposit" | "full" | undefined) ?? "deposit";
-
-  await createDefaultSchedule({
-    row,
-    paymentChoice,
-  });
-}
-
-/**
- * Shared with acceptProposalByToken: builds the installment rows for a
- * freshly accepted proposal and stamps the contract total.
- */
-export async function createDefaultSchedule(args: {
-  row: ProposalRowForSchedule;
-  paymentChoice: "deposit" | "full";
-}): Promise<void> {
-  const { row, paymentChoice } = args;
-
-  // Guard against double-creation (e.g. accept retries).
-  const existingCount = await db.paymentInstallment.count({
-    where: { proposalId: row.id },
-  });
-  if (existingCount > 0) return;
-
-  const blob = row.data as Partial<ProposalBlob> | null;
-  const contract = deriveTotalCentsFromData(
-    row.data,
-    row.totalCents,
-    row.selectedPackageId,
-  );
-  if (contract <= 0) return;
-
-  const depositPct = Math.max(
-    0,
-    Math.min(100, Math.round(blob?.depositPct ?? 30)),
-  );
-  const acceptedAt = row.acceptedAt ?? new Date();
-
-  const rows: Prisma.PaymentInstallmentCreateManyInput[] = [];
-
-  // Legacy rows may already carry collected money — preserve it.
-  const legacyPaid = Math.min(row.paidCents, contract);
-  if (legacyPaid > 0) {
-    rows.push({
-      proposalId: row.id,
-      label: "Previously collected",
-      sortOrder: 0,
-      amountCents: legacyPaid,
-      dueAt: acceptedAt,
-      status: "PAID",
-      paidAt: row.updatedAt,
-      method: "OTHER",
-      note: "Recorded before payment tracking was enabled",
-    });
-  }
-
-  const remainingContract = contract - legacyPaid;
-  if (remainingContract > 0) {
-    if (paymentChoice === "full") {
-      rows.push({
-        proposalId: row.id,
-        label: "Full payment",
-        sortOrder: 1,
-        amountCents: remainingContract,
-        dueAt: acceptedAt,
-        status: "PENDING",
-      });
-    } else {
-      const depositTarget = Math.round((contract * depositPct) / 100);
-      const deposit = Math.max(0, Math.min(depositTarget - legacyPaid, remainingContract));
-      const final = remainingContract - deposit;
-      if (deposit > 0) {
-        rows.push({
-          proposalId: row.id,
-          label: `Deposit (${depositPct}%)`,
-          sortOrder: 1,
-          amountCents: deposit,
-          dueAt: acceptedAt,
-          status: "PENDING",
-        });
-      }
-      if (final > 0) {
-        rows.push({
-          proposalId: row.id,
-          label: "Final payment",
-          sortOrder: 2,
-          amountCents: final,
-          dueAt: null, // due on completion
-          status: "PENDING",
-        });
-      }
-    }
-  }
-
-  await db.$transaction(async (tx) => {
-    if (rows.length > 0) {
-      await tx.paymentInstallment.createMany({ data: rows });
-    }
-    await tx.proposal.update({
-      where: { id: row.id },
-      data: {
-        totalCents: contract,
-        paidCents: legacyPaid,
-        completedAt: legacyPaid >= contract ? new Date() : null,
-      },
-    });
-  });
-}
 
 /**
  * Recomputes paidCents + completedAt from the installment rows (the

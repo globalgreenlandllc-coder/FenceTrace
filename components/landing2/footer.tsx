@@ -87,19 +87,19 @@ export function Footer() {
           <p>&copy; 2026 FenceScan Inc. All rights reserved.</p>
           <div className="flex items-center gap-5">
             <Link
-              href="/sign-in"
+              href="/"
               className="ring-focus rounded-sm transition hover:text-zinc-900"
             >
               Service Status
             </Link>
             <Link
-              href="/sign-in"
+              href="/privacy"
               className="ring-focus rounded-sm transition hover:text-zinc-900"
             >
               Security
             </Link>
             <Link
-              href="/sign-in"
+              href="/"
               aria-label="LinkedIn"
               className="ring-focus flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-900"
             >

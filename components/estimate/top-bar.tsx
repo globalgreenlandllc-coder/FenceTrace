@@ -228,6 +228,7 @@ export function TopBar({
               onClick={onReanalyze}
               disabled={reanalyzing}
               title="Re-run the measuring pipeline with the latest engine"
+              aria-label="Re-analyze"
             >
               {reanalyzing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -266,7 +267,7 @@ export function TopBar({
                   : "Save draft"}
             </span>
           </Button>
-          <Button size="sm" onClick={handoffAndGo}>
+          <Button size="sm" onClick={handoffAndGo} aria-label="Send proposal">
             <Send className="h-4 w-4" />
             <span className="hidden sm:inline">Send proposal</span>
           </Button>

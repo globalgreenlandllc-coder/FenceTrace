@@ -38,6 +38,11 @@ export default async function WhoAmIPage() {
     ? adminList.includes(primaryEmail.trim().toLowerCase())
     : false;
 
+  // Diagnostic page for the platform owner ONLY — it prints the
+  // ADMIN_EMAILS allowlist, which is exactly the target list an
+  // attacker would want. Everyone else bounces to their dashboard.
+  if (!matched) redirect("/dashboard");
+
   const dbUser = await db.user.findFirst({
     where: { OR: [{ clerkId }, ...(primaryEmail ? [{ email: primaryEmail }] : [])] },
     select: {

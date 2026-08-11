@@ -230,7 +230,7 @@ function ProfileCard() {
 
       <div className="flex justify-end">
         <Link
-          href="/sign-in"
+          href="/demo/satellite"
           className="ring-focus-dark inline-flex h-10 items-center rounded-lg bg-accent-500 px-5 text-[13px] font-semibold text-white transition hover:bg-accent-400 active:scale-[0.98] motion-reduce:transform-none"
         >
           Explore the Engine

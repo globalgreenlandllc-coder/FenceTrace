@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
+import { db } from "@/lib/db";
 import {
   deriveTotalCentsFromData,
   type Proposal as ProposalBlob,
@@ -8,13 +8,12 @@ import {
 /**
  * payment-schedule.ts — installment-schedule bootstrap.
  *
- * SECURITY: this is a plain server module, NOT a "use server" file, on
- * purpose. These functions write contract money (totalCents, paidCents,
- * completedAt, PAID installment rows) from a caller-supplied row and do
- * no auth of their own — as exported server actions they were publicly
- * invokable RPC endpoints that let anyone rewrite any tenant's proposal
- * money. Every caller must resolve ownership (session userId or portal
- * token) BEFORE calling in.
+ * SECURITY: this module must stay a PLAIN import (no "use server").
+ * These functions write contract money (totalCents/paidCents/
+ * completedAt) from a caller-supplied row with no auth of their own —
+ * every caller is responsible for resolving ownership (owner session or
+ * portal token) BEFORE calling. When they lived as exports of a
+ * "use server" file they were public RPC endpoints anyone could POST.
  */
 
 export type ProposalRowForSchedule = {
@@ -34,6 +33,9 @@ export type ProposalRowForSchedule = {
  * through a path that skipped it). Honors the homeowner's recorded
  * payment choice (deposit vs full) and preserves any legacy paidCents by
  * booking it as an already-PAID "Previously collected" installment.
+ *
+ * Caller contract: verify the proposal belongs to the authenticated
+ * owner or the presented portal token before calling.
  */
 export async function ensureScheduleForProposal(
   proposalId: string,
@@ -72,6 +74,9 @@ export async function ensureScheduleForProposal(
 /**
  * Shared with acceptProposalByToken: builds the installment rows for a
  * freshly accepted proposal and stamps the contract total.
+ *
+ * Caller contract: `row` must be a server-fetched proposal the caller
+ * has already authorized — never client input.
  */
 export async function createDefaultSchedule(args: {
   row: ProposalRowForSchedule;

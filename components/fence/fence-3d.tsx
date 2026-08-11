@@ -2679,12 +2679,12 @@ export function Fence3D({
       </svg>
 
       {/* mode controls */}
-      <div className="absolute right-3 top-3 flex items-center gap-1.5">
+      <div className="absolute inset-x-3 top-3 flex flex-wrap items-center justify-end gap-1.5">
         {walking ? (
           <button
             type="button"
             onClick={() => setMode("orbit")}
-            className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+            className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
           >
             ✕ Exit walk (Esc)
           </button>
@@ -2701,7 +2701,7 @@ export function Fence3D({
                     zoomRef.current.k > 1 ? zoomRef.current : null,
                   )
                 }
-                className="transition-smooth ring-focus rounded-full bg-accent-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm ring-1 ring-accent-500 hover:bg-accent-700"
+                className="transition-smooth ring-focus rounded-full bg-accent-600 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-white shadow-sm ring-1 ring-accent-500 hover:bg-accent-700"
               >
                 📌 Save this angle
               </button>
@@ -2715,7 +2715,7 @@ export function Fence3D({
                   setZoomCam({ k: 1, tx: 0, ty: 0 });
                   onViewChange?.(v);
                 }}
-                className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+                className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
               >
                 Reset view
               </button>
@@ -2724,7 +2724,7 @@ export function Fence3D({
               <button
                 type="button"
                 onClick={() => enterWalk()}
-                className="transition-smooth ring-focus rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
+                className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
               >
                 🚶 Walk the yard
               </button>
@@ -2763,7 +2763,7 @@ export function Fence3D({
                 onClick={() => selectShot(s)}
                 aria-pressed={active}
                 className={cn(
-                  "transition-smooth ring-focus rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-sm ring-1",
+                  "transition-smooth ring-focus rounded-full px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold shadow-sm ring-1",
                   active
                     ? "bg-accent-600 text-white ring-accent-500"
                     : "bg-white/90 text-zinc-700 ring-zinc-200 hover:bg-white",
@@ -2779,31 +2779,31 @@ export function Fence3D({
       {/* client-readable summary chips */}
       <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">
         {walking ? (
-          <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+          <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
             W A S D / arrows to walk · Shift to hurry · drag to look around
           </span>
         ) : (
           <>
-            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+            <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
               {label} — to scale
             </span>
             {gateCount > 0 && (
-              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
+              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
                 {gateCount} {gateCount === 1 ? "gate" : "gates"}
               </span>
             )}
             {steppedCount > 0 && (
-              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
+              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
                 ⛰ {steppedCount} sections step down the slope
               </span>
             )}
             {wallCount > 0 && (
-              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
+              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
                 🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
               </span>
             )}
             {hasSurface && contourIntervalFt > 0 && (
-              <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
                 ⛰ {reliefFt}′ of rise · contour lines every {contourIntervalFt}′
                 {reliefFt >= heightFt * 5 ? " · hill softened to keep the fence readable" : ""}
               </span>

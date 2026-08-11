@@ -25,7 +25,7 @@ import { POLICIES } from "@/lib/abuse/policies";
 import { FREE_PROPOSALS_PER_MONTH } from "@/lib/stripe";
 import { captureTakeoffCorrection } from "@/lib/ai/takeoff-corrections";
 import { getMe } from "./me";
-import { createDefaultSchedule } from "./payments";
+import { createDefaultSchedule } from "@/lib/payment-schedule";
 
 export type SendProposalResult =
   | {
@@ -113,34 +113,51 @@ export async function sendProposal(args: {
     }
   }
 
-  const row = existing
-    ? await db.proposal.update({
-        where: { id: existing.id },
-        data: {
-          address: proposal.address,
-          clientName: proposal.client.name,
-          clientEmail: proposal.client.email,
-          data,
-          contractorSnap,
-          status: "SENT",
-          sentAt: new Date(),
-          expiresAt: addDays(new Date(), proposal.validDays || 30),
-        },
-      })
-    : await db.proposal.create({
-        data: {
-          userId: me.user.id,
-          publicToken: proposal.token,
-          address: proposal.address,
-          clientName: proposal.client.name,
-          clientEmail: proposal.client.email,
-          status: "SENT",
-          data,
-          contractorSnap,
-          sentAt: new Date(),
-          expiresAt: addDays(new Date(), proposal.validDays || 30),
-        },
+  // The portal token IS the auth for the client page, so a first-create
+  // never trusts a weak client-minted one — and a collision with another
+  // tenant's token must regenerate, not 500 on the unique constraint.
+  const clientToken = (proposal.token ?? "").trim();
+  const strongToken = /^[A-Za-z0-9_-]{16,64}$/.test(clientToken)
+    ? clientToken
+    : randomBytes(12).toString("hex");
+  const createData = {
+    userId: me.user.id,
+    address: proposal.address,
+    clientName: proposal.client.name,
+    clientEmail: proposal.client.email,
+    status: "SENT" as const,
+    data,
+    contractorSnap,
+    sentAt: new Date(),
+    expiresAt: addDays(new Date(), proposal.validDays || 30),
+  };
+  let row;
+  if (existing) {
+    row = await db.proposal.update({
+      where: { id: existing.id },
+      data: {
+        address: proposal.address,
+        clientName: proposal.client.name,
+        clientEmail: proposal.client.email,
+        data,
+        contractorSnap,
+        status: "SENT",
+        sentAt: new Date(),
+        expiresAt: addDays(new Date(), proposal.validDays || 30),
+      },
+    });
+  } else {
+    try {
+      row = await db.proposal.create({
+        data: { ...createData, publicToken: strongToken },
       });
+    } catch (e) {
+      if ((e as { code?: string }).code !== "P2002") throw e;
+      row = await db.proposal.create({
+        data: { ...createData, publicToken: randomBytes(12).toString("hex") },
+      });
+    }
+  }
 
   const portalUrl = `${appBaseUrl()}/p/${row.publicToken}`;
 

@@ -231,8 +231,8 @@ export function FenceRatesSection() {
                 <div className="microlabel mb-2">
                   {CATEGORY_LABEL[cat] ?? cat}
                 </div>
-                <div className="overflow-hidden rounded-xl border border-zinc-200">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-xl border border-zinc-200">
+                  <table className="w-full min-w-[520px] text-sm">
                     <thead>
                       <tr className="bg-zinc-50 text-left">
                         <th className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">

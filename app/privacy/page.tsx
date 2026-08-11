@@ -60,7 +60,7 @@ export default function PrivacyPolicyPage() {
             </span>,
             <span key="property">
               <strong>Property and project data.</strong> Property addresses
-              you scan, aerial imagery and roof measurements derived from those
+              you scan, aerial imagery and fence measurements derived from those
               addresses, construction plans (PDF or image files) you upload,
               takeoff geometry, pricing, proposals, payment schedules, and
               change orders.
@@ -91,7 +91,7 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="how-we-use" title="3. How we use information">
         <LegalList
           items={[
-            "Provide the service: geocode addresses, retrieve aerial imagery, measure rooflines, generate takeoffs, build and deliver proposals, and process payments schedules.",
+            "Provide the service: geocode addresses, retrieve aerial imagery, measure fence lines, generate takeoffs, build and deliver proposals, and process payments schedules.",
             "Send transactional email you initiate — proposals to your clients, receipts, payment reminders, and crew invitations — through our email provider.",
             "Operate billing: subscriptions, included monthly credits, and credit-pack purchases.",
             "Keep the platform safe: authentication, rate limiting, fraud and abuse prevention, and enforcement of usage limits.",
@@ -141,7 +141,7 @@ export default function PrivacyPolicyPage() {
         <p>
           FenceScan uses the Google Maps Platform (including geocoding and the
           Google Solar API) and other imagery providers to locate the property
-          addresses you enter and to retrieve aerial imagery and roof geometry
+          addresses you enter and to retrieve aerial imagery and property and fence geometry
           for measurement. Addresses you submit are shared with these providers
           to return results. Use of Google Maps features is subject to{" "}
           <a
@@ -158,7 +158,7 @@ export default function PrivacyPolicyPage() {
 
       <LegalSection id="ai-processing" title="6. AI processing of plans and imagery">
         <p>
-          Roof measurement is performed by AI. Construction plans you upload
+          Fence measurement is performed by AI. Construction plans you upload
           and aerial imagery of scanned properties are processed by our AI
           providers (Anthropic, OpenAI, and Google) acting as service providers
           under their API terms, solely to return measurements and

@@ -642,7 +642,7 @@ export async function getMyReferral(): Promise<MyReferral | null> {
   let code = row?.referralCode ?? null;
   if (!code) {
     for (let attempt = 0; attempt < 2 && !code; attempt++) {
-      const candidate = randomBytes(4).toString("hex");
+      const candidate = randomBytes(8).toString("hex");
       try {
         await db.user.update({
           where: { id: me.user.id },

@@ -9,7 +9,7 @@ export function Banner() {
         payments &amp; scheduling are live
       </p>
       <Link
-        href="/sign-in"
+        href="/sign-up"
         className="ring-focus-dark group hidden shrink-0 rounded-sm font-mono text-[10.5px] font-bold uppercase tracking-wide text-accent-300 transition hover:text-accent-200 md:inline"
       >
         Read the announcement{" "}

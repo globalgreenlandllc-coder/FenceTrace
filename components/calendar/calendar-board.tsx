@@ -3001,7 +3001,7 @@ function ModalShell({
         className="anim-enter-fade absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="surface anim-pop relative z-10 w-full max-w-lg space-y-3 p-5 shadow-elevated">
+      <div className="surface anim-pop relative z-10 max-h-[85dvh] w-full max-w-lg space-y-3 overflow-y-auto overscroll-contain p-5 shadow-elevated">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-900">
             {title}

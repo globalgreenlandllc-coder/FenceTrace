@@ -34,7 +34,12 @@ export default async function PublicProposalPage({
     );
   }
 
-  // Demo fallback: tokens not backed by a real proposal still render the
-  // sample portal so /p/demo-7f3a2 keeps working as a sales preview.
-  return <ClientPortalView proposal={{ ...sampleProposal, token }} />;
+  // Only the ONE published demo token renders the sample portal (the
+  // landing page links it). Any other unknown token is a dead link —
+  // showing a homeowner fabricated proposal data would be worse than a
+  // 404.
+  if (token === sampleProposal.token) {
+    return <ClientPortalView proposal={{ ...sampleProposal, token }} />;
+  }
+  notFound();
 }

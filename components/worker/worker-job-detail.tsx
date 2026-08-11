@@ -190,7 +190,7 @@ export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
       {/* Actions — sticky outer stays untransformed; the keyed inner wrapper
           carries the entrance so it replays when the panel swaps. */}
       {job.status === "OFFERED" && (
-        <div className="sticky bottom-4 z-10">
+        <div className="sticky bottom-4 z-10 pb-[env(safe-area-inset-bottom)]">
           <div key={declining ? "decline" : "respond"} className="anim-enter">
             {declining ? (
               <div
@@ -234,7 +234,7 @@ export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
       )}
 
       {job.status === "ACCEPTED" && (
-        <div className="sticky bottom-4 z-10">
+        <div className="sticky bottom-4 z-10 pb-[env(safe-area-inset-bottom)]">
           <div className="anim-enter flex gap-3 rounded-2xl border border-zinc-200 bg-white p-3 shadow-elevated">
             <Button className="flex-1" onClick={start} disabled={busy === "start"}>
               {busy === "start" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -252,7 +252,7 @@ export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
       )}
 
       {job.status === "IN_PROGRESS" && (
-        <div className="sticky bottom-4 z-10">
+        <div className="sticky bottom-4 z-10 pb-[env(safe-area-inset-bottom)]">
           <div className="anim-enter space-y-2 rounded-2xl border border-sky-200 bg-white p-3 shadow-elevated">
             <div className="flex items-center justify-center gap-2 text-sm font-medium text-sky-700">
               <span className="relative flex h-2.5 w-2.5">

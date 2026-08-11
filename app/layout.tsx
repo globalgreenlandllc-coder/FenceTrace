@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Archivo_Black, Space_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { SessionProvider } from "@/components/auth/session-provider";
@@ -31,6 +31,30 @@ export const metadata: Metadata = {
   description:
     "Type one address. Get a satellite-measured fence takeoff, a three-tier proposal your client e-signs, then run the schedule, crew, and payments — all in one platform.",
   metadataBase: new URL("https://fencescan.com"),
+  openGraph: {
+    title: "FenceScan — Smart Takeoffs & Proposals for Fence Contractors",
+    description:
+      "Satellite-measured fence takeoffs, e-signed proposals, scheduling, crew and payments — from one typed address.",
+    url: "https://fencescan.com",
+    siteName: "FenceScan",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "FenceScan — Smart Takeoffs & Proposals for Fence Contractors",
+    description:
+      "Satellite-measured fence takeoffs, e-signed proposals, scheduling, crew and payments — from one typed address.",
+  },
+};
+
+// viewportFit: "cover" is what makes env(safe-area-inset-*) real on
+// iOS — the accept bar and worker action bars pad by it, and without
+// this declaration those pads resolve to 0 under the home indicator.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1E7340",
 };
 
 export default function RootLayout({

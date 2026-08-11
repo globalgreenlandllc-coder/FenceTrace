@@ -47,11 +47,11 @@ export function CTA() {
               place.
             </p>
             <div className="mt-8 flex items-center justify-center gap-3">
-              <PillLink href="/sign-in" variant="accent" className="ring-focus-dark">
+              <PillLink href="/sign-up" variant="accent" className="ring-focus-dark">
                 Get Started
               </PillLink>
               <PillLink
-                href="/sign-in"
+                href="mailto:globalgreenlandllc@gmail.com?subject=FenceScan%20sales"
                 variant="outline"
                 className="ring-focus-dark border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white/5"
               >

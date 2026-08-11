@@ -134,7 +134,7 @@ export function Tiers() {
                   </p>
                   <div className="mt-4 flex items-center justify-between">
                     <Link
-                      href="/sign-in"
+                      href="/p/demo-7f3a2"
                       className="ring-focus transition-smooth press-scale inline-flex h-9 items-center rounded-lg bg-accent-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-accent-700"
                     >
                       View Sample

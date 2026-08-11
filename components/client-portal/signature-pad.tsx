@@ -210,7 +210,7 @@ export function SignaturePad({
               type="button"
               onClick={() => switchMode("type")}
               className={cn(
-                "transition-smooth ring-focus inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium",
+                "transition-smooth ring-focus inline-flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium sm:px-2.5 sm:py-1",
                 mode === "type"
                   ? "bg-white text-accent-700 shadow-sm"
                   : "text-zinc-500 hover:text-zinc-700",
@@ -223,7 +223,7 @@ export function SignaturePad({
               type="button"
               onClick={() => switchMode("draw")}
               className={cn(
-                "transition-smooth ring-focus inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium",
+                "transition-smooth ring-focus inline-flex items-center gap-1 rounded-md px-3 py-2 text-xs font-medium sm:px-2.5 sm:py-1",
                 mode === "draw"
                   ? "bg-white text-accent-700 shadow-sm"
                   : "text-zinc-500 hover:text-zinc-700",
@@ -237,7 +237,7 @@ export function SignaturePad({
             type="button"
             onClick={clear}
             disabled={clearDisabled}
-            className="transition-smooth press-scale ring-focus inline-flex items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:border-rose-300 hover:text-rose-600 disabled:opacity-40"
+            className="transition-smooth press-scale ring-focus inline-flex items-center gap-1 rounded-md border border-zinc-200 px-3 py-2 text-xs text-zinc-600 sm:px-2 sm:py-1 hover:border-rose-300 hover:text-rose-600 disabled:opacity-40"
           >
             <Eraser className="h-3 w-3" />
             Clear

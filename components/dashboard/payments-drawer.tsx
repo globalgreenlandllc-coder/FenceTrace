@@ -794,7 +794,7 @@ function NewChangeOrderForm({
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="What's the extra work? (e.g. Rotted fascia — 18 LF)"
+        placeholder="What's the extra work? (e.g. Rotted post replacement — 3 posts)"
         className="input h-9 bg-white"
       />
       <div className="relative">

@@ -32,7 +32,7 @@ export function Engine() {
                 in. Nothing here is a mockup.
               </p>
               <div className="mt-6">
-                <PillLink href="/sign-in">Run it on a real address</PillLink>
+                <PillLink href="/sign-up">Run it on a real address</PillLink>
               </div>
             </div>
           </div>

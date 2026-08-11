@@ -37,7 +37,7 @@ export function Nav() {
             Sign in
           </Link>
           <Link
-            href="/sign-in"
+            href="/sign-up"
             className="ring-focus inline-flex h-9 items-center rounded-lg bg-accent-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-accent-700 active:scale-[0.98] motion-reduce:transform-none"
           >
             Get Started

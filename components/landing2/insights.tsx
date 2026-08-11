@@ -78,7 +78,7 @@ export function Insights() {
               </>
             }
             copy="Research, field studies, and market intelligence on satellite measurement, remote estimating, and the economics of winning exterior work faster."
-            action={<PillLink href="/sign-in" variant="outline">Explore Our Blog</PillLink>}
+            action={<PillLink href="/sign-up" variant="outline">Explore Our Blog</PillLink>}
           />
         </Reveal>
 
@@ -86,7 +86,7 @@ export function Insights() {
           {POSTS.map((p, i) => (
             <Reveal key={p.title} delay={0.05 + i * 0.07}>
               <Link
-                href="/sign-in"
+                href="/sign-up"
                 className="ring-focus group block h-full rounded-2xl border border-zinc-200/70 bg-white p-4 shadow-card transition duration-300 will-change-transform hover:-translate-y-1 hover:border-zinc-300 hover:shadow-elevated motion-reduce:transform-none"
               >
                 {p.visual}
