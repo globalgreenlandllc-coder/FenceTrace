@@ -3,6 +3,7 @@ import type { ApiKeyProvider } from "@prisma/client";
 export const ALL_PROVIDERS: ApiKeyProvider[] = [
   "GOOGLE_MAPS",
   "REGRID",
+  "REPORTALL",
   "GOOGLE_SOLAR",
   "MAPBOX",
   "OPENAI",

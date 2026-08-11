@@ -53,7 +53,12 @@ const PROVIDER_META: Record<
   },
   REGRID: {
     label: "Regrid",
-    sub: "Parcel boundaries (property lines)",
+    sub: "Parcel boundaries (fallback when ReportAll misses)",
+    tone: "emerald",
+  },
+  REPORTALL: {
+    label: "ReportAll USA",
+    sub: "Parcel boundaries — preferred (cheaper per parcel)",
     tone: "emerald",
   },
   GOOGLE_SOLAR: {

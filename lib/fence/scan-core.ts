@@ -1,5 +1,6 @@
 import { getActiveApiKey } from "@/lib/api-keys";
-import { parcelByAddress, parcelByPoint, type RegridParcel } from "@/lib/regrid";
+import { lookupParcelByAddress, lookupParcelByPoint } from "@/lib/parcels";
+import type { RegridParcel } from "@/lib/regrid";
 import {
   CANVAS_H,
   CANVAS_W,
@@ -176,7 +177,8 @@ export async function fenceScanCore(
   // geocoded point (~250 m) — a wrong-county text match must never show
   // a convincing boundary around the wrong property.
   let parcel: RegridParcel | null =
-    (await parcelByPoint(geo.loc)) ?? (await parcelByAddress(geo.formatted));
+    (await lookupParcelByPoint(geo.loc)) ??
+    (await lookupParcelByAddress(geo.formatted));
   if (parcel) {
     const ring0 = parcel.rings.flat();
     if (ring0.length < 3 || metersBetween(centroid(ring0), geo.loc) > 250) {

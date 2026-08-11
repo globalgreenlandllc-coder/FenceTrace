@@ -725,6 +725,7 @@ model ImpersonationSession {
 enum ApiKeyProvider {
   GOOGLE_MAPS
   REGRID
+  REPORTALL
   GOOGLE_SOLAR
   MAPBOX
   OPENAI
