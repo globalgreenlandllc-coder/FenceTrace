@@ -10,6 +10,7 @@ import {
   runDistanceModel,
   type RunElevationModel,
 } from "@/lib/fence/geo";
+import { buildContours } from "@/lib/fence/contours";
 import {
   DEFAULT_SQUASH,
   DEFAULT_YAW_DEG,
@@ -75,7 +76,7 @@ const NEAR_PX = 4; // walk-mode near plane, plan px
 export type { Fence3DView, Fence3DZoom } from "@/lib/fence/viewpoints";
 
 type WFace = {
-  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree" | "bwall" | "roof" | "shadow";
+  kind: "panel" | "gate" | "post" | "skirt" | "wall" | "ground" | "tree" | "bwall" | "roof" | "shadow" | "contour";
   /** World corners (plan x/y in canvas px, z up in screen px). Trees
    *  store [base, top]. */
   pts: V3[];
@@ -105,6 +106,8 @@ type WFace = {
   /** Posts: which fence type's stock stands here — so a chain-link span
    *  inside a cedar job gets galvanized pipe, not a brown 4×4. */
   tid?: string;
+  /** Contours: a major line (heavier stroke, gets the elevation label). */
+  major?: boolean;
 };
 
 type WLabel = { anchor: V3; text: string };
@@ -260,16 +263,42 @@ function pointInPoly(p: Pt, ring: Pt[]): boolean {
   return inside;
 }
 
-/** Lawn color for a ground cell from its slope (light from the NW) with
- *  smooth, large-scale tone variation — never per-tile noise. */
-function lawnFill(gxFt: number, gyFt: number, jitter: number): string {
-  const b =
-    Math.max(0.66, Math.min(1.06, 0.9 - gxFt * 2.0 + gyFt * 1.0)) *
-    (0.98 + jitter * 0.045);
-  const r = Math.round(172 * b);
-  const g = Math.round(206 * b);
-  const bl = Math.round(152 * b);
-  return `rgb(${r},${g},${bl})`;
+/**
+ * Ground color for a terrain cell — three readable signals, blended:
+ *  - HYPSOMETRIC tint: valley floors sit deep green, hilltops fade to a
+ *    sun-dried light green. The classic map cue that makes 100+ ft of
+ *    relief legible at a glance instead of a flat lawn.
+ *  - Slope shading lit from the NW, computed on the SAME softened
+ *    surface the geometry displays, passed through tanh so steep cells
+ *    shade smoothly instead of slamming into a clamp — the old
+ *    hard-banded terraces came from that saturating clamp.
+ *  - Large soft noise patches so the lawn still reads as grass.
+ * `hypso` (0..1) fades the elevation tint in only when the lot actually
+ * has relief — a flat suburban yard stays plain lawn.
+ */
+function groundFill(
+  e01: number,
+  gxFt: number,
+  gyFt: number,
+  jitter: number,
+  hypso: number,
+): string {
+  const LO = [118, 166, 116]; // valley
+  const MID = [172, 206, 152]; // the flat-lot lawn
+  const HI = [209, 216, 170]; // crest
+  const t = Math.max(0, Math.min(1, e01));
+  const ramp =
+    t < 0.5
+      ? LO.map((v, i) => v + (MID[i] - v) * (t / 0.5))
+      : MID.map((v, i) => v + (HI[i] - v) * ((t - 0.5) / 0.5));
+  const shade =
+    (1 + 0.24 * Math.tanh(-gxFt * 2.6 + gyFt * 1.3)) * (0.98 + jitter * 0.05);
+  const px = ramp.map((v, i) =>
+    Math.round(
+      Math.max(0, Math.min(255, (MID[i] + (v - MID[i]) * hypso) * shade)),
+    ),
+  );
+  return `rgb(${px[0]},${px[1]},${px[2]})`;
 }
 
 export function Fence3D({
@@ -540,6 +569,8 @@ export function Fence3D({
 
     const faces: WFace[] = [];
     const labels: WLabel[] = [];
+    // Muted elevation tags on the major contour lines ("+120′").
+    const elevLabels: WLabel[] = [];
     let steppedCount = 0;
     let wallCount = 0;
 
@@ -570,13 +601,27 @@ export function Fence3D({
       });
     }
 
-    // Terrain surface at 2× lattice density (smooth rolling lawn).
+    // Terrain surface — mesh density adapts to the lattice so a big
+    // hilly lot gets enough quads to roll smoothly instead of showing
+    // its cells. Shading and geometry read the same SOFTENED surface,
+    // so light and shape can't disagree.
+    let contourIntervalFt = 0;
     if (grid) {
-      const SUB = 2;
+      const baseQuads = (gridCols - 1) * (gridRows - 1);
+      const SUB = Math.max(
+        2,
+        Math.min(4, Math.round(Math.sqrt(3600 / Math.max(1, baseQuads)))),
+      );
       const stepX = cellW / SUB;
       const stepY = cellH / SUB;
       const nx = (gridCols - 1) * SUB;
       const ny = (gridRows - 1) * SUB;
+      /** Softened elevation (ft above the lot's low point) — the surface
+       *  the quads actually sit on. */
+      const sElevFt = (x: number, y: number) => soften(bilinear(x, y) - minElev);
+      // Hypsometric tint fades in with real relief: nothing under 2 ft,
+      // full valley-to-crest ramp by 8 ft.
+      const hypso = Math.max(0, Math.min(1, (relief - 2) / 6));
       for (let r = 0; r < ny; r++) {
         for (let c = 0; c < nx; c++) {
           const x0 = c * stepX;
@@ -585,8 +630,9 @@ export function Fence3D({
           const y1 = y0 + stepY;
           const mx = x0 + stepX / 2;
           const my = y0 + stepY / 2;
-          const gx = (bilinear(x1, my) - bilinear(x0, my)) / stepX;
-          const gy = (bilinear(mx, y1) - bilinear(mx, y0)) / stepY;
+          const gx = (sElevFt(x1, my) - sElevFt(x0, my)) / stepX;
+          const gy = (sElevFt(mx, y1) - sElevFt(mx, y0)) / stepY;
+          const e01 = relief > 0 ? (bilinear(mx, my) - minElev) / relief : 0;
           faces.push({
             kind: "ground",
             bias: -0.5,
@@ -598,9 +644,65 @@ export function Fence3D({
             ],
             shaded: false,
             baseLenPx: stepX,
-            fill: lawnFill(gx, gy, smoothNoise(mx, my)),
+            fill: groundFill(e01, gx, gy, smoothNoise(mx, my), hypso),
           });
         }
+      }
+
+      // Topographic contour lines draped ON the surface — the same
+      // marching-squares engine the 2D canvas uses, denser here (≤12
+      // lines) because the 3D view is where the hill gets judged.
+      // Chains split into short slices so the painter sorts them
+      // locally instead of one lot-length line jumping layers.
+      if (relief >= 2) {
+        for (const step of [1, 2, 5, 10, 20, 50]) {
+          if (relief / step <= 12) {
+            contourIntervalFt = step;
+            break;
+          }
+        }
+      }
+      if (contourIntervalFt > 0) {
+        const topo = buildContours(grid, cellW, cellH, contourIntervalFt);
+        const majorEvery = contourIntervalFt * 5;
+        for (const line of topo) {
+          const major = Math.round(line.levelFt) % majorEvery === 0;
+          for (const chain of line.chains) {
+            for (let s = 0; s < chain.length - 1; s += 7) {
+              const slice = chain.slice(s, Math.min(chain.length, s + 8));
+              if (slice.length < 2) continue;
+              faces.push({
+                kind: "contour",
+                bias: -0.46,
+                shaded: false,
+                baseLenPx: 0,
+                major,
+                pts: slice.map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  z: zAtPlan(p.x, p.y) + 0.5,
+                })),
+              });
+            }
+          }
+        }
+        // Elevation labels: up to ~6 levels, each tagged once at the
+        // midpoint of its longest chain, in feet above the lot's low
+        // point — "+120′" reads instantly; absolute datum would not.
+        const stride = Math.max(1, Math.ceil(topo.length / 6));
+        topo.forEach((line, i) => {
+          if (i % stride !== 0) return;
+          const chain = line.chains.reduce(
+            (a, b) => (b.length > a.length ? b : a),
+            line.chains[0] ?? [],
+          );
+          if (!chain || chain.length < 4) return;
+          const p = chain[Math.floor(chain.length / 2)];
+          elevLabels.push({
+            anchor: { x: p.x, y: p.y, z: zAtPlan(p.x, p.y) + 2 },
+            text: `+${Math.round(line.levelFt - minElev)}′`,
+          });
+        });
       }
       // Decorative trees on open ground, clear of the fence lines.
       let treeCount = 0;
@@ -1100,6 +1202,7 @@ export function Fence3D({
       label: `${heightFt}' ${t.label}`,
       faces,
       labels,
+      elevLabels,
       rings,
       zAtPlan,
       centroid,
@@ -1112,6 +1215,7 @@ export function Fence3D({
       wallCount,
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
+      contourIntervalFt,
     };
   }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, sections, retainingWall, postUpgrade]);
 
@@ -1146,6 +1250,7 @@ export function Fence3D({
     pfaces.sort((a, b) => a.depth - b.depth);
 
     const plabels = world.labels.map((l) => ({ text: l.text, at: proj(l.anchor) }));
+    const pElev = world.elevLabels.map((l) => ({ text: l.text, at: proj(l.anchor) }));
     const prings = world.rings.map((ring) => ring.map(proj));
 
     const all: Pt[] = [
@@ -1182,6 +1287,7 @@ export function Fence3D({
     return {
       faces,
       labels: plabels.map((l) => ({ ...l, at: T(l.at) })),
+      elevLabels: pElev.map((l) => ({ ...l, at: T(l.at) })),
       rings: prings.map((r) => r.map(T)),
       marker,
       fit,
@@ -1246,6 +1352,26 @@ export function Fence3D({
         faces.push({ face: f, poly: [projC(base), projC({ ...top, d: base.d })], isQuad: false, depth: base.d });
         continue;
       }
+      // Contours are open polylines, not polygons — the near-plane
+      // clipper would wrap them shut. They're decorative, so any slice
+      // that straddles the near plane (or sits far off) just drops.
+      if (f.kind === "contour") {
+        const cpts2 = f.pts.map(toCam);
+        if (cpts2.some((c) => c.d < NEAR_PX) || cpts2[0].d > 2600) continue;
+        const poly = cpts2.map(projC);
+        if (
+          poly.every((p) => p.x < -80) ||
+          poly.every((p) => p.x > VIEW_W + 80) ||
+          poly.every((p) => p.y < -80) ||
+          poly.every((p) => p.y > VIEW_H + 80)
+        )
+          continue;
+        let meanD = 0;
+        for (const c of cpts2) meanD += c.d;
+        meanD /= cpts2.length;
+        faces.push({ face: f, poly, isQuad: false, depth: meanD - f.bias * 2 });
+        continue;
+      }
       const cpts = f.pts.map(toCam);
       if (cpts.every((c) => c.d < NEAR_PX)) continue;
       let maxD = 0;
@@ -1282,7 +1408,15 @@ export function Fence3D({
       })
       .filter(Boolean) as { text: string; at: Pt }[];
 
-    return { faces, labels, horizon };
+    const elevLabels = world.elevLabels
+      .map((l) => {
+        const c = toCam(l.anchor);
+        if (c.d < NEAR_PX * 3 || c.d > 2000) return null;
+        return { text: l.text, at: projC(c) };
+      })
+      .filter(Boolean) as { text: string; at: Pt }[];
+
+    return { faces, labels, elevLabels, horizon };
   }, [mode, walkCam, world]);
 
   /* ======================= interactions ============================= */
@@ -1620,7 +1754,7 @@ export function Fence3D({
     );
   }
 
-  const { style, styleKey, label, railCount, capRail, gateCount, steppedCount, wallCount, hasSurface, reliefFt } = world;
+  const { style, styleKey, label, railCount, capRail, gateCount, steppedCount, wallCount, hasSurface, reliefFt, contourIntervalFt } = world;
   const polyPath = (pts: Pt[]) =>
     `M${pts.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L")} Z`;
 
@@ -1636,6 +1770,23 @@ export function Fence3D({
     }
     if (kind === "shadow") {
       return <path key={i} d={polyPath(f.poly)} fill={f.face.fill ?? "rgba(22,40,24,0.12)"} />;
+    }
+    if (kind === "contour") {
+      // Open polyline draped on the ground — solid (never dashed, so it
+      // can't be confused with the dashed parcel boundary), majors
+      // heavier and darker.
+      const d = "M" + f.poly.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L");
+      return (
+        <path
+          key={i}
+          d={d}
+          fill="none"
+          stroke={f.face.major ? "rgba(38,64,38,0.44)" : "rgba(38,64,38,0.20)"}
+          strokeWidth={f.face.major ? 1.4 : 0.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      );
     }
     if (kind === "tree") {
       const [base, top] = f.poly;
@@ -2254,6 +2405,20 @@ export function Fence3D({
     );
   };
 
+  /** Muted elevation tag on a major contour — quiet by design; the pink
+   *  chips are for things the client buys (gates), not the landscape. */
+  const elevChip = (l: { text: string; at: Pt }, i: number, unscale = 1) => {
+    const w = l.text.length * 5 + 10;
+    return (
+      <g key={`ev-${i}`} transform={unscale !== 1 ? `translate(${l.at.x} ${l.at.y}) scale(${unscale}) translate(${-l.at.x} ${-l.at.y})` : undefined}>
+        <rect x={l.at.x - w / 2} y={l.at.y - 8} width={w} height={14} rx={7} fill="rgba(255,255,255,0.82)" stroke="rgba(58,92,56,0.4)" strokeWidth={0.8} />
+        <text x={l.at.x} y={l.at.y + 2.5} textAnchor="middle" fontSize={9} fontWeight={600} fill="#3D5C3B">
+          {l.text}
+        </text>
+      </g>
+    );
+  };
+
   const labelChip = (l: { text: string; at: Pt }, i: number, unscale = 1) => {
     const w = l.text.length * 6.4 + 16;
     return (
@@ -2332,8 +2497,9 @@ export function Fence3D({
             <circle cx={VIEW_W * 0.78} cy={Math.min(walkScene!.horizon - 60, 120)} r={90} fill="url(#f3d-sun)" />
             <rect x={0} y={Math.max(0, walkScene!.horizon)} width={VIEW_W} height={Math.max(0, VIEW_H - walkScene!.horizon)} fill="#A9C29B" />
             <g>{walkScene!.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
-            <g>{walkScene!.faces.filter((f) => f.face.kind === "shadow").map(renderFace)}</g>
-            <g>{walkScene!.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow").map(renderFace)}</g>
+            <g>{walkScene!.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
+            <g>{walkScene!.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
+            {walkScene!.elevLabels.map((l, i) => elevChip(l, i))}
             {walkScene!.labels.map((l, i) => labelChip(l, i))}
           </>
         ) : (
@@ -2342,8 +2508,8 @@ export function Fence3D({
             <circle cx={VIEW_W * 0.8} cy={70} r={110} fill="url(#f3d-sun)" />
             <g transform={`translate(${zoomCam.tx} ${zoomCam.ty}) scale(${zoomCam.k})`}>
               <g>{orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
-              <g>{orbitScene.faces.filter((f) => f.face.kind === "shadow").map(renderFace)}</g>
-              <g>{orbitScene.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow").map(renderFace)}</g>
+              <g>{orbitScene.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
+              <g>{orbitScene.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
               {orbitScene.rings.map((ring, i) => (
                 <polygon
                   key={i}
@@ -2355,6 +2521,7 @@ export function Fence3D({
                   opacity={0.85}
                 />
               ))}
+              {orbitScene.elevLabels.map((l, i) => elevChip(l, i, 1 / zoomCam.k))}
               {orbitScene.labels.map((l, i) => labelChip(l, i, 1 / zoomCam.k))}
               {orbitScene.marker && (
                 <g stroke="#52525B" strokeWidth={1.2} fill="none">
@@ -2497,9 +2664,10 @@ export function Fence3D({
                 🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
               </span>
             )}
-            {hasSurface && reliefFt >= heightFt * 5 && (
+            {hasSurface && contourIntervalFt > 0 && (
               <span className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
-                {reliefFt}′ of total rise — hill softened to keep the fence readable
+                ⛰ {reliefFt}′ of rise · contour lines every {contourIntervalFt}′
+                {reliefFt >= heightFt * 5 ? " · hill softened to keep the fence readable" : ""}
               </span>
             )}
           </>
