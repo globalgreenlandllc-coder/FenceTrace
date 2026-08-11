@@ -19,6 +19,10 @@ import {
   Plus,
   Receipt,
   Ruler,
+  Camera,
+  CreditCard,
+  Wallet,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -293,11 +297,21 @@ const EXPENSE_STATUS_META: Record<
  * goes to the owner's Financials page for approval; the status chips
  * here close the loop so the crew knows what got covered.
  */
+type ReceiptFile = { url: string; name: string; mimeType: string };
+
 function ExpensesCard({ jobId }: { jobId: string }) {
   const [rows, setRows] = useState<WorkerExpenseDTO[] | null>(null);
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
+  // Who fronted the money. Defaults to out-of-pocket because that's the
+  // reason a worker opens this form; the company card is the exception.
+  const [paidBy, setPaidBy] = useState<"OUT_OF_POCKET" | "COMPANY_CARD">(
+    "OUT_OF_POCKET",
+  );
+  const [receipt, setReceipt] = useState<ReceiptFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [autoFilled, setAutoFilled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -311,11 +325,45 @@ function ExpensesCard({ jobId }: { jobId: string }) {
     };
   }, [jobId]);
 
+  /** Snap the receipt first: the upload route reads the total off it, so
+   *  the amount fills itself and the crew doesn't type numbers on a
+   *  phone with gloves on. */
+  async function uploadReceipt(file: File) {
+    setErr(null);
+    setUploading(true);
+    setAutoFilled(false);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/job-files", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Upload failed");
+      setReceipt({ url: data.url, name: data.name, mimeType: data.mimeType });
+      // Only ever FILL a blank amount — never overwrite what they typed.
+      if (typeof data.totalCents === "number" && data.totalCents > 0 && !amount.trim()) {
+        setAmount((data.totalCents / 100).toFixed(2));
+        setAutoFilled(true);
+      }
+      if (!label.trim() && typeof data.note === "string" && data.note.trim()) {
+        setLabel(data.note.trim().slice(0, 80));
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't upload that receipt");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function submit() {
     setErr(null);
     setBusy(true);
     const cents = Math.round(parseFloat(amount) * 100);
-    const r = await submitJobExpense(jobId, label, cents, note);
+    const r = await submitJobExpense(jobId, label, cents, note, {
+      paidBy,
+      receiptUrl: receipt?.url,
+      receiptName: receipt?.name,
+      receiptType: receipt?.mimeType,
+    });
     if (!r.ok) {
       setErr(r.reason);
       setBusy(false);
@@ -324,6 +372,9 @@ function ExpensesCard({ jobId }: { jobId: string }) {
     setLabel("");
     setAmount("");
     setNote("");
+    setReceipt(null);
+    setAutoFilled(false);
+    setPaidBy("OUT_OF_POCKET");
     setRows(await listMyJobExpenses(jobId));
     setBusy(false);
   }
@@ -334,8 +385,9 @@ function ExpensesCard({ jobId }: { jobId: string }) {
         <Receipt className="h-3.5 w-3.5" /> Your expenses on this job
       </h3>
       <p className="text-xs text-zinc-400">
-        Paid for something out of pocket? Log it — the contractor approves it
-        from their side.
+        Bought something for this job? Snap the receipt — we&apos;ll read the
+        total off it. Say whether you paid or the company card did, and the
+        contractor approves it from their side.
       </p>
 
       <div className="mt-3 space-y-1.5">
@@ -350,10 +402,34 @@ function ExpensesCard({ jobId }: { jobId: string }) {
                 e.status === "DECLINED" && "opacity-60",
               )}
             >
-              <span className="min-w-0 flex-1 truncate text-zinc-800">{e.label}</span>
+              <span className="min-w-0 flex-1 truncate text-zinc-800">
+                {e.label}
+                {e.receiptUrl && (
+                  <a
+                    href={e.receiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ring-focus ml-1.5 inline-flex items-center gap-0.5 rounded text-[11px] text-accent-700 hover:underline"
+                  >
+                    <FileText className="h-3 w-3" />
+                    receipt
+                  </a>
+                )}
+              </span>
               <span className="font-medium tabular-nums text-ink">
                 {fmtMoney(e.amountCents)}
               </span>
+              {/* The money question, answered at a glance: is the company
+                  still holding this worker's cash? */}
+              {e.paidBy === "OUT_OF_POCKET" ? (
+                e.reimbursedAt ? (
+                  <Badge tone="emerald">Paid back</Badge>
+                ) : (
+                  <Badge tone="amber">You&apos;re owed</Badge>
+                )
+              ) : (
+                <Badge tone="neutral">Company card</Badge>
+              )}
               <Badge tone={meta.tone}>{meta.label}</Badge>
             </div>
           );
@@ -366,6 +442,110 @@ function ExpensesCard({ jobId }: { jobId: string }) {
       </div>
 
       <div className="mt-3 space-y-2">
+        {/* Receipt first — it fills the amount in for them. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            className={cn(
+              "ring-focus inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-smooth",
+              receipt
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                : "border-zinc-200 bg-white text-zinc-700 hover:border-accent-400 hover:text-accent-700",
+              uploading && "pointer-events-none opacity-60",
+            )}
+          >
+            {uploading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : receipt ? (
+              <Check className="h-3.5 w-3.5" />
+            ) : (
+              <Camera className="h-3.5 w-3.5" />
+            )}
+            {uploading
+              ? "Reading receipt…"
+              : receipt
+                ? "Receipt attached"
+                : "Add receipt"}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              capture="environment"
+              className="sr-only"
+              disabled={uploading || busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = ""; // let them re-pick the same file
+                if (f) void uploadReceipt(f);
+              }}
+            />
+          </label>
+          {receipt && (
+            <>
+              <a
+                href={receipt.url}
+                target="_blank"
+                rel="noreferrer"
+                className="ring-focus min-w-0 max-w-[40%] truncate rounded text-xs text-accent-700 hover:underline"
+              >
+                {receipt.name}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  setReceipt(null);
+                  setAutoFilled(false);
+                }}
+                className="ring-focus rounded text-xs text-zinc-400 hover:text-rose-600"
+              >
+                remove
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Who is out the money — the only thing that decides whether the
+            business owes this worker cash. */}
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              {
+                id: "OUT_OF_POCKET" as const,
+                Icon: Wallet,
+                title: "I paid",
+                sub: "Pay me back",
+              },
+              {
+                id: "COMPANY_CARD" as const,
+                Icon: CreditCard,
+                title: "Company card",
+                sub: "Nothing owed",
+              },
+            ]
+          ).map(({ id, Icon, title, sub }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={paidBy === id}
+              onClick={() => setPaidBy(id)}
+              className={cn(
+                "ring-focus flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-smooth",
+                paidBy === id
+                  ? "border-accent-400 bg-accent-50 text-accent-900"
+                  : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300",
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium leading-tight">
+                  {title}
+                </span>
+                <span className="block text-[11px] leading-tight opacity-70">
+                  {sub}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+
         <div className="flex gap-2">
           <input
             value={label}
@@ -379,13 +559,25 @@ function ExpensesCard({ jobId }: { jobId: string }) {
             </span>
             <input
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setAutoFilled(false);
+              }}
               inputMode="decimal"
               placeholder="0"
-              className="input h-9 w-24 pl-6 text-right text-sm tabular-nums"
+              className={cn(
+                "input h-9 w-24 pl-6 text-right text-sm tabular-nums",
+                autoFilled && "border-accent-300 bg-accent-50/50",
+              )}
             />
           </div>
         </div>
+        {autoFilled && (
+          <p className="flex items-center gap-1 text-[11px] text-accent-700">
+            <Sparkles className="h-3 w-3" />
+            Read off your receipt — correct it if it&apos;s wrong.
+          </p>
+        )}
         <div className="flex gap-2">
           <input
             value={note}

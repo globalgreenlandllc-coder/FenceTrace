@@ -1331,6 +1331,13 @@ enum JobExpenseStatus {
   DECLINED
 }
 
+// WHO IS OUT THE MONEY. Both settings cost the job exactly the same —
+// the difference is whether the business still owes somebody cash.
+enum JobExpensePaidBy {
+  COMPANY_CARD // the business already paid; nothing is owed
+  OUT_OF_POCKET // the worker fronted it and needs paying back
+}
+
 // An extra cost on a specific job beyond the estimated materials+labor
 // basis: dump fees, extra downspout run, a worker's receipt for sealant.
 // Worker-submitted rows start PENDING and only count into profit once the
@@ -1349,6 +1356,19 @@ model JobExpense {
   createdAt    DateTime         @default(now())
   decidedAt    DateTime?
 
+  // Who fronted the money. Defaults to COMPANY_CARD because an
+  // owner-logged expense is by definition already paid by the business;
+  // the worker portal asks explicitly and sets it.
+  paidBy       JobExpensePaidBy @default(COMPANY_CARD)
+  // When an OUT_OF_POCKET expense was actually paid back. Null while the
+  // business still owes it. Meaningless on COMPANY_CARD rows.
+  reimbursedAt DateTime?
+
+  // The receipt itself (Vercel Blob, uploaded via /api/job-files).
+  receiptUrl   String?
+  receiptName  String?
+  receiptType  String?
+
   owner      User           @relation("ExpenseOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   proposal   Proposal?      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
   assignment JobAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
@@ -1357,6 +1377,8 @@ model JobExpense {
   @@index([ownerId, status])
   @@index([proposalId])
   @@index([workerId])
+  // "What do I still owe the crew" — approved, out-of-pocket, unpaid.
+  @@index([ownerId, paidBy, reimbursedAt])
   @@map("job_expenses")
 }
 

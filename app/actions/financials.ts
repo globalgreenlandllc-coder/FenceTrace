@@ -46,6 +46,12 @@ export type JobExpenseDto = {
   status: "PENDING" | "APPROVED" | "DECLINED";
   workerName: string | null;
   createdAt: string;
+  /** Who fronted the money. OUT_OF_POCKET rows are a debt to the crew
+   *  until reimbursedAt is set; both kinds cost the job the same. */
+  paidBy: "COMPANY_CARD" | "OUT_OF_POCKET";
+  reimbursedAt: string | null;
+  receiptUrl: string | null;
+  receiptName: string | null;
 };
 
 export type FinancialJobRow = {
@@ -93,6 +99,11 @@ export type FinancialsOverview = {
   coverage: OverheadCoverage;
   /** Worker-submitted expenses awaiting a decision, newest first. */
   pendingExpenses: (JobExpenseDto & { jobLabel: string })[];
+  /** Approved out-of-pocket expenses not yet paid back — real money the
+   *  business owes its crew right now. Already counted as job cost; this
+   *  is a cash-owed view, not a second charge. */
+  owedToCrew: (JobExpenseDto & { jobLabel: string })[];
+  owedToCrewCents: number;
 };
 
 function toExpenseDto(e: {
@@ -104,6 +115,10 @@ function toExpenseDto(e: {
   source: "OWNER" | "WORKER";
   status: "PENDING" | "APPROVED" | "DECLINED";
   createdAt: Date;
+  paidBy: "COMPANY_CARD" | "OUT_OF_POCKET";
+  reimbursedAt: Date | null;
+  receiptUrl: string | null;
+  receiptName: string | null;
   worker?: { name: string | null; email: string } | null;
 }): JobExpenseDto {
   return {
@@ -116,6 +131,10 @@ function toExpenseDto(e: {
     status: e.status,
     workerName: e.worker ? e.worker.name ?? e.worker.email : null,
     createdAt: e.createdAt.toISOString(),
+    paidBy: e.paidBy,
+    reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
+    receiptUrl: e.receiptUrl,
+    receiptName: e.receiptName,
   };
 }
 
@@ -135,7 +154,7 @@ export async function getFinancialsOverview(): Promise<FinancialsOverview | null
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [overheadRows, proposals, collected, pendingRows, settingsRow] =
+  const [overheadRows, proposals, collected, pendingRows, owedRows, settingsRow] =
     await Promise.all([
     db.overheadItem.findMany({
       where: { userId },
@@ -176,6 +195,24 @@ export async function getFinancialsOverview(): Promise<FinancialsOverview | null
       where: { ownerId: userId, status: "PENDING" },
       orderBy: { createdAt: "desc" },
       take: 50,
+      include: {
+        worker: { select: { name: true, email: true } },
+        proposal: { select: { clientName: true, address: true } },
+        assignment: { select: { title: true } },
+      },
+    }),
+    // Money the business is holding that belongs to the crew: approved,
+    // fronted by a worker, not yet paid back. Oldest first — the debt
+    // you've sat on longest is the one to settle.
+    db.jobExpense.findMany({
+      where: {
+        ownerId: userId,
+        status: "APPROVED",
+        paidBy: "OUT_OF_POCKET",
+        reimbursedAt: null,
+      },
+      orderBy: { createdAt: "asc" },
+      take: 100,
       include: {
         worker: { select: { name: true, email: true } },
         proposal: { select: { clientName: true, address: true } },
@@ -281,6 +318,15 @@ export async function getFinancialsOverview(): Promise<FinancialsOverview | null
         e.proposal?.address ??
         "Job",
     })),
+    owedToCrew: owedRows.map((e) => ({
+      ...toExpenseDto(e),
+      jobLabel:
+        e.proposal?.clientName ??
+        e.assignment?.title ??
+        e.proposal?.address ??
+        "Job",
+    })),
+    owedToCrewCents: owedRows.reduce((a, e) => a + e.amountCents, 0),
   };
 }
 
@@ -464,6 +510,44 @@ export async function decideJobExpense(
   });
   if (res.count === 0)
     return { ok: false, reason: "This expense was already decided" };
+  revalidatePath("/dashboard/financials");
+  return { ok: true };
+}
+
+/**
+ * Settle an out-of-pocket expense: the worker has been paid back.
+ *
+ * Only APPROVED + OUT_OF_POCKET rows can move, and only into the paid
+ * state — a company-card expense was never a debt, and a declined one
+ * is not owed. `reimbursedAt: null` in the filter makes this idempotent,
+ * so a double-click can't restamp the settlement date.
+ *
+ * This does NOT change job cost. The expense was already a cost the
+ * moment it was approved; paying the worker back moves cash, not P&L.
+ */
+export async function markExpenseReimbursed(
+  id: string,
+  paid: boolean,
+): Promise<VoidResult> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const res = await db.jobExpense.updateMany({
+    where: {
+      id,
+      ownerId: me.user.id,
+      status: "APPROVED",
+      paidBy: "OUT_OF_POCKET",
+      ...(paid ? { reimbursedAt: null } : { NOT: { reimbursedAt: null } }),
+    },
+    data: { reimbursedAt: paid ? new Date() : null },
+  });
+  if (res.count === 0)
+    return {
+      ok: false,
+      reason: paid
+        ? "That expense isn't an approved out-of-pocket cost, or it's already settled"
+        : "That expense wasn't marked paid back",
+    };
   revalidatePath("/dashboard/financials");
   return { ok: true };
 }

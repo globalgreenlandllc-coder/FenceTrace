@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   CircleCheckBig,
+  FileText,
   HardHat,
   Loader2,
   PencilLine,
@@ -15,6 +16,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Undo2,
+  Wallet,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,7 @@ import {
   decideJobExpense,
   deleteJobExpense,
   getFinancialsOverview,
+  markExpenseReimbursed,
   setJobManualCost,
   type FinancialJobRow,
   type FinancialsOverview,
@@ -118,6 +121,10 @@ export function FinancialsClient() {
         <PendingExpenses ov={ov} onDone={refresh} />
       )}
 
+      {ov && ov.owedToCrew.length > 0 && (
+        <OwedToCrew ov={ov} onDone={refresh} />
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         <div className="space-y-4">
           <CoverageCard ov={ov} />
@@ -203,6 +210,91 @@ function PendingExpenses({
                 Approve
               </Button>
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Owed to the crew — approved out-of-pocket money not yet paid back  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * This is a CASH view, not a P&L one. Every row here was already
+ * subtracted from job profit the moment it was approved; what's shown is
+ * money the business is still holding that belongs to a worker.
+ */
+function OwedToCrew({
+  ov,
+  onDone,
+}: {
+  ov: FinancialsOverview;
+  onDone: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  async function settle(id: string) {
+    setBusy(id);
+    await markExpenseReimbursed(id, true);
+    await onDone();
+    setBusy(null);
+  }
+  return (
+    <div className="anim-enter rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Wallet className="h-4 w-4 text-sky-600" />
+        <span className="text-sm font-semibold text-sky-900">
+          You owe the crew
+        </span>
+        <Badge tone="accent">{usd(ov.owedToCrewCents)}</Badge>
+        <span className="text-xs text-sky-800/70">
+          Already counted as job cost — this is cash still to hand over.
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {ov.owedToCrew.map((e) => (
+          <div
+            key={e.id}
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-sky-200/70 bg-white px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                <span className="font-medium text-zinc-900">{e.label}</span>
+                <span className="font-semibold tabular-nums text-zinc-900">
+                  {usd(e.amountCents)}
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {e.workerName ?? "Crew"} · {e.jobLabel}
+                </span>
+                {e.receiptUrl && (
+                  <a
+                    href={e.receiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ring-focus inline-flex items-center gap-0.5 rounded text-xs text-accent-700 hover:underline"
+                  >
+                    <FileText className="h-3 w-3" />
+                    receipt
+                  </a>
+                )}
+              </div>
+              {e.note && (
+                <p className="mt-0.5 truncate text-xs text-zinc-500">{e.note}</p>
+              )}
+            </div>
+            <Button
+              size="sm"
+              onClick={() => settle(e.id)}
+              disabled={busy !== null}
+            >
+              {busy === e.id ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              Mark paid back
+            </Button>
           </div>
         ))}
       </div>

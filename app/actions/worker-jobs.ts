@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getMe } from "@/app/actions/me";
 import { toWorkerJobDTO, type WorkerJobDTO } from "@/lib/worker-dto";
+import { safeBlobUrl } from "@/lib/blob";
 import type { JobAssignmentStatus } from "@prisma/client";
 
 /**
@@ -195,20 +196,40 @@ export type WorkerExpenseDTO = {
   note: string | null;
   status: "PENDING" | "APPROVED" | "DECLINED";
   createdAt: string;
+  /** Who fronted the money — drives whether this is owed back. */
+  paidBy: "COMPANY_CARD" | "OUT_OF_POCKET";
+  /** Set once the owner has actually paid the worker back. */
+  reimbursedAt: string | null;
+  receiptUrl: string | null;
+  receiptName: string | null;
+};
+
+export type SubmitExpenseInput = {
+  /** OUT_OF_POCKET ⇒ the worker wants paying back. COMPANY_CARD ⇒ the
+   *  business already paid; this is a cost record with a receipt. */
+  paidBy?: "COMPANY_CARD" | "OUT_OF_POCKET";
+  receiptUrl?: string;
+  receiptName?: string;
+  receiptType?: string;
 };
 
 /**
- * A worker logs an extra cost they covered on a job (materials run, dump
- * fee, extra sealant). The row lands PENDING on the owner's financials
- * page; it only counts toward job cost — and toward reimbursing the
- * worker — once the owner approves. Workers can only file against jobs
- * they hold that are accepted or further along.
+ * A worker logs an extra cost on a job (materials run, dump fee, extra
+ * sealant). The row lands PENDING on the owner's financials page; it
+ * only counts toward job cost — and toward reimbursing the worker —
+ * once the owner approves. Workers can only file against jobs they hold
+ * that are accepted or further along.
+ *
+ * `paidBy` is the money question: an OUT_OF_POCKET expense leaves the
+ * business owing the worker, a COMPANY_CARD one doesn't. Both cost the
+ * job identically.
  */
 export async function submitJobExpense(
   jobId: string,
   label: string,
   amountCents: number,
   note?: string,
+  extra?: SubmitExpenseInput,
 ): Promise<VoidResult> {
   const me = await getMe();
   if (!me) return { ok: false, reason: "Not signed in" };
@@ -217,6 +238,10 @@ export async function submitJobExpense(
   if (!clean) return { ok: false, reason: "Give the expense a name" };
   if (!Number.isFinite(cents) || cents <= 0)
     return { ok: false, reason: "Enter an amount above zero" };
+  // A receipt URL is only ever accepted if it came from our own blob
+  // store — a worker-supplied link is otherwise an open redirect and a
+  // way to render arbitrary remote content on the owner's screen.
+  const receiptUrl = safeBlobUrl(extra?.receiptUrl);
   const job = await db.jobAssignment.findFirst({
     where: {
       id: jobId,
@@ -237,6 +262,10 @@ export async function submitJobExpense(
       label: clean.slice(0, 80),
       amountCents: cents,
       note: note?.trim().slice(0, 500) || null,
+      paidBy: extra?.paidBy === "OUT_OF_POCKET" ? "OUT_OF_POCKET" : "COMPANY_CARD",
+      receiptUrl,
+      receiptName: receiptUrl ? extra?.receiptName?.slice(0, 120) || null : null,
+      receiptType: receiptUrl ? extra?.receiptType?.slice(0, 80) || null : null,
     },
   });
   revalidatePath(`/worker/jobs/${jobId}`);
@@ -265,6 +294,10 @@ export async function listMyJobExpenses(jobId: string): Promise<WorkerExpenseDTO
     note: e.note,
     status: e.status,
     createdAt: e.createdAt.toISOString(),
+    paidBy: e.paidBy,
+    reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
+    receiptUrl: e.receiptUrl,
+    receiptName: e.receiptName,
   }));
 }
 
