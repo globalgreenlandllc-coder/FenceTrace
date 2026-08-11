@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/lib/auth-mock";
 import {
-  createCreditsCheckout,
   createSubscriptionCheckout,
   getMyBilling,
   openBillingPortal,
@@ -61,8 +60,6 @@ function BillingSection() {
     const b = params.get("billing");
     if (b === "success")
       setBanner("🎉 Welcome to Pro — your plan is activating (a few seconds).");
-    if (b === "credits")
-      setBanner("✓ Credits purchased — they'll appear in your wallet shortly.");
     if (b === "cancelled") setBanner("Checkout cancelled — nothing was charged.");
     if (b) {
       params.delete("billing");

@@ -65,8 +65,37 @@ export async function POST(request: Request) {
         if (session.metadata?.kind === "credits") {
           await grantCredits(session);
         }
-        // kind=subscription is handled by invoice.paid (fires for the
-        // first payment too) so there's exactly one writer.
+        // kind=subscription: status/periodEnd stay invoice.paid's job
+        // (one writer), but stamp the Stripe ids NOW — Stripe doesn't
+        // order deliveries, and subscription.updated/.deleted match on
+        // stripeSubscriptionId, so arriving before the first
+        // invoice.paid used to hit zero rows and vanish.
+        if (session.metadata?.kind === "subscription" && session.metadata.userId) {
+          const subId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription?.id;
+          const custId =
+            typeof session.customer === "string"
+              ? session.customer
+              : session.customer?.id;
+          if (subId) {
+            await db.subscription.upsert({
+              where: { userId: session.metadata.userId },
+              create: {
+                userId: session.metadata.userId,
+                status: "INCOMPLETE",
+                planId: PRO_PLAN.id,
+                stripeCustomerId: custId ?? null,
+                stripeSubscriptionId: subId,
+              },
+              update: {
+                stripeCustomerId: custId ?? undefined,
+                stripeSubscriptionId: subId,
+              },
+            });
+          }
+        }
         break;
       }
       case "invoice.paid": {
@@ -201,6 +230,13 @@ async function handleInvoicePaid(stripe: Stripe, inv: Stripe.Invoice) {
   const periodEnd = subscriptionPeriodEnd(sub) ?? nextMonthBoundary();
   const pricing = await getPlanPricing();
 
+  // Duplicate-delivery guard FIRST — it used to sit after the wallet
+  // refresh, so a retried invoice.paid re-zeroed `used` mid-month.
+  const already = await db.transaction.findFirst({
+    where: { stripeInvoiceId: inv.id },
+    select: { id: true },
+  });
+
   await db.subscription.upsert({
     where: { userId },
     create: {
@@ -223,27 +259,31 @@ async function handleInvoicePaid(stripe: Stripe, inv: Stripe.Invoice) {
   });
 
   // Fresh month of included credits; purchased bonus carries over.
-  await db.creditWallet.upsert({
-    where: { userId },
-    create: {
-      userId,
-      included: pricing.pro.includedCredits,
-      used: 0,
-      bonus: 0,
-      resetsAt: periodEnd,
-    },
-    update: {
-      included: pricing.pro.includedCredits,
-      used: 0,
-      resetsAt: periodEnd,
-    },
-  });
+  // Only genuine cycle invoices refresh the allowance — a mid-cycle
+  // proration invoice is money, not a new month.
+  const cycleInvoice =
+    !inv.billing_reason ||
+    inv.billing_reason === "subscription_create" ||
+    inv.billing_reason === "subscription_cycle";
+  if (!already && cycleInvoice) {
+    await db.creditWallet.upsert({
+      where: { userId },
+      create: {
+        userId,
+        included: pricing.pro.includedCredits,
+        used: 0,
+        bonus: 0,
+        resetsAt: periodEnd,
+      },
+      update: {
+        included: pricing.pro.includedCredits,
+        used: 0,
+        resetsAt: periodEnd,
+      },
+    });
+  }
 
   // Revenue record, once per invoice.
-  const already = await db.transaction.findFirst({
-    where: { stripeInvoiceId: inv.id },
-    select: { id: true },
-  });
   if (!already && (inv.amount_paid ?? 0) > 0) {
     await db.transaction.create({
       data: {

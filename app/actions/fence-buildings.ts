@@ -114,9 +114,15 @@ export async function getScanBuildings(input: {
         const sqft = Math.abs(area2 / 2) / (pxPerFt * pxPerFt);
         if (sqft < 120) continue; // ignore tiny sheds/noise
         out.push(ring);
-        if (out.length >= 6) break;
       }
-      return { ok: true, buildings: out };
+      // Closest-to-center first BEFORE capping: the subject house must
+      // never lose its slot to a row of neighbors at the frame edge.
+      out.sort((a, b) => {
+        const da = distToCenter(a);
+        const db = distToCenter(b);
+        return da - db;
+      });
+      return { ok: true, buildings: out.slice(0, 6) };
     } catch (e) {
       console.warn(
         `[fence-buildings] ${endpoint} failed`,
@@ -126,4 +132,47 @@ export async function getScanBuildings(input: {
     }
   }
   return { ok: true, buildings: [] };
+}
+
+function distToCenter(ring: Pt[]): number {
+  const cx = ring.reduce((a, p) => a + p.x, 0) / ring.length;
+  const cy = ring.reduce((a, p) => a + p.y, 0) / ring.length;
+  return Math.hypot(cx - CANVAS_W / 2, cy - CANVAS_H / 2);
+}
+
+export type MainBuildingResult = { ok: true; ring: Pt[] | null };
+
+/**
+ * AI-vision fallback for the SUBJECT house: OSM regularly knows the
+ * neighbor's roof but not the one being fenced (rural parcels, new
+ * builds). When the estimator finds no footprint on the parcel, it
+ * sends the scan aerial here and Claude traces the main house off the
+ * image itself. Seeds the House layer — always hand-editable.
+ */
+export async function extractMainBuilding(input: {
+  imageDataUrl: string;
+}): Promise<MainBuildingResult> {
+  const me = await getMe();
+  if (!me) return { ok: true, ring: null };
+  const rl = await consumeLimit({
+    policy: POLICIES.fenceTopo,
+    key: `ai-building:${me.user.id}`,
+    context: { userId: me.user.id, route: "fence-buildings-ai" },
+  });
+  if (!rl.ok) return { ok: true, ring: null };
+
+  const m = /^data:(image\/(?:png|jpeg));base64,(.+)$/.exec(
+    input.imageDataUrl ?? "",
+  );
+  if (!m) return { ok: true, ring: null };
+  const { extractBuildingFootprint } = await import(
+    "@/lib/ai/building-footprint"
+  );
+  const res = await extractBuildingFootprint({
+    base64: m[2],
+    mimeType: m[1] as "image/png" | "image/jpeg",
+    width: CANVAS_W,
+    height: CANVAS_H,
+  });
+  return { ok: true, ring: res.ring };
 }
