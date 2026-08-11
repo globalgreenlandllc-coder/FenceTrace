@@ -562,9 +562,15 @@ export function blankProposal(): Proposal {
  * being quoted, and it's the same single knob both modes write to.
  */
 export function sanitizeProposalForClient(p: Proposal): Proposal {
+  // Top-level contractor-private fields go FIRST. The portal serializes
+  // this object wholesale, so anything left on it is readable in
+  // devtools — jobCostManual is the contractor's true cost basis, and
+  // publishing it hands the homeowner their exact markup.
+  const { jobCostManual, ...rest } = p;
+  void jobCostManual;
   return {
-    ...p,
-    packages: p.packages.map((pkg) => {
+    ...rest,
+    packages: rest.packages.map((pkg) => {
       const { aiQuote, myMarkupPct, pricingMode, ...pub } = pkg;
       void aiQuote;
       void myMarkupPct;

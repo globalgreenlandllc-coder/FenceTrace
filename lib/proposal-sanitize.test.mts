@@ -51,6 +51,20 @@ test("scrub strips every contractor-private pricing field", () => {
   }
 });
 
+test("scrub strips the contractor's true cost basis", () => {
+  // jobCostManual is what the job costs THEM. It rides at the top level
+  // of the proposal rather than on a package, so the package-level
+  // destructure never touched it and the portal shipped it to the
+  // browser — handing the homeowner the exact markup.
+  const withCost = { ...proposalOnAiPricing(), jobCostManual: 4123.45 };
+  const pub = sanitizeProposalForClient(withCost);
+  assert.equal("jobCostManual" in pub, false);
+  const json = JSON.stringify(pub);
+  for (const needle of ["jobCostManual", "4123.45"]) {
+    assert.equal(json.includes(needle), false, `payload leaks "${needle}"`);
+  }
+});
+
 test("scrub never changes the price the client is quoted", () => {
   const priced = proposalOnAiPricing();
   const pub = sanitizeProposalForClient(priced);
