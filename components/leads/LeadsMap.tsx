@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, Component, type ReactNode } from "react";
 import {
   APIProvider,
   Map as GoogleMap,
@@ -939,6 +939,7 @@ export default function LeadsMap({ apiKey }: { apiKey: string }) {
     // The map is FULL-BLEED; the leads list and detail panel float over it
     // as translucent glass overlays, so panels never steal map width.
     <div className="relative h-[calc(100dvh-9.25rem)] min-h-[420px] w-full overflow-hidden bg-ink lg:h-[calc(100vh-3.5rem)]">
+      <MapErrorBoundary>
       <APIProvider apiKey={apiKey} libraries={["visualization"]}>
         <div className="absolute inset-0">
           <MapControls
@@ -1428,6 +1429,7 @@ export default function LeadsMap({ apiKey }: { apiKey: string }) {
           radiusActive={prospect != null}
         />
       </APIProvider>
+      </MapErrorBoundary>
 
       {selectedLead && (
         <LeadDetailsPanel
@@ -1630,4 +1632,46 @@ function HeatmapLayer({
     };
   }, [map, viz, leads, scores]);
   return null;
+}
+
+
+/**
+ * A blocked or misconfigured Maps key must not take the whole leads
+ * page down. Google's JS API throws from deep inside marker rendering
+ * when the key lacks "Maps JavaScript API" (ApiTargetBlockedMapError),
+ * which used to surface as the app-wide error screen. Catch it here and
+ * degrade to a readable notice instead.
+ */
+class MapErrorBoundary extends Component<
+  { children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(err: unknown) {
+    console.error("[LeadsMap] map failed to load", err);
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="flex h-full w-full items-center justify-center bg-ink p-8">
+          <div className="max-w-md rounded-2xl border border-white/15 bg-white/5 p-6 text-center">
+            <p className="text-sm font-semibold text-white">
+              The map couldn&apos;t load
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-white/60">
+              This is almost always the Google Maps key: it needs the
+              &ldquo;Maps JavaScript API&rdquo; (and &ldquo;Street View
+              Static API&rdquo; for lead photos) enabled in its API
+              restrictions. Fix the key in Google Cloud Console, then
+              reload this page.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
