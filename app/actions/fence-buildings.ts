@@ -57,18 +57,30 @@ export async function getScanBuildings(input: {
   const e = Math.max(nw.lng, se.lng);
   const query = `[out:json][timeout:8];way["building"](${s},${w},${n},${e});out geom 40;`;
   const pxPerFt = canvasPxPerFt(center.lat, zoom);
+  // Overpass throttles datacenter IPs hard, and Vercel's egress IPs are
+  // shared — the main instance 429ing while a laptop sails through is
+  // NORMAL. Four mirrors, a UA (some mirrors 403 without one), and a
+  // warn per miss so a silent "no house" is diagnosable from the logs.
   for (const endpoint of [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.osm.jp/api/interpreter",
   ]) {
     try {
       const res = await fetch(endpoint, {
         method: "POST",
         body: "data=" + encodeURIComponent(query),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "FenceScan/1.0 (building footprints; fencescan.com)",
+        },
         signal: AbortSignal.timeout(9_000),
       });
-      if (!res.ok) continue;
+      if (!res.ok) {
+        console.warn(`[fence-buildings] ${endpoint} HTTP ${res.status}`);
+        continue;
+      }
       const body = (await res.json()) as {
         elements?: { type: string; geometry?: { lat: number; lon: number }[] }[];
       };
@@ -105,7 +117,11 @@ export async function getScanBuildings(input: {
         if (out.length >= 6) break;
       }
       return { ok: true, buildings: out };
-    } catch {
+    } catch (e) {
+      console.warn(
+        `[fence-buildings] ${endpoint} failed`,
+        e instanceof Error ? e.message : e,
+      );
       // try the next mirror
     }
   }

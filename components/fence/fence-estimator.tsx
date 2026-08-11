@@ -231,14 +231,28 @@ export function FenceEstimator() {
   useEffect(() => {
     if (!scan) return;
     let cancelled = false;
-    void getScanBuildings({ center: scan.center, zoom: scan.zoom }).then(
-      (res) => {
-        if (cancelled || res.buildings.length === 0) return;
-        setBuildings((cur) => (cur.length === 0 ? res.buildings : cur));
-      },
-    );
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const attempt = (retriesLeft: number) => {
+      void getScanBuildings({ center: scan.center, zoom: scan.zoom }).then(
+        (res) => {
+          if (cancelled) return;
+          if (res.buildings.length > 0) {
+            setBuildings((cur) => (cur.length === 0 ? res.buildings : cur));
+            return;
+          }
+          // Overpass throttles shared cloud IPs — an empty answer is as
+          // often a 429 as a truly houseless lot. One quiet retry
+          // rescues most of them; after that, the House tool is there.
+          if (retriesLeft > 0) {
+            retryTimer = setTimeout(() => attempt(retriesLeft - 1), 6_000);
+          }
+        },
+      );
+    };
+    attempt(1);
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [scan]);
 

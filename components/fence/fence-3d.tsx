@@ -1765,7 +1765,7 @@ export function Fence3D({
     const kind = f.face.kind;
     if (kind === "ground") {
       return (
-        <path key={i} d={polyPath(f.poly)} fill={f.face.fill} stroke={f.face.fill} strokeWidth={0.6} />
+        <path key={i} d={polyPath(f.poly)} fill={f.face.fill} stroke={f.face.fill} strokeWidth={0.6} vectorEffect="non-scaling-stroke" />
       );
     }
     if (kind === "shadow") {
@@ -1785,6 +1785,9 @@ export function Fence3D({
           strokeWidth={f.face.major ? 1.4 : 0.8}
           strokeLinecap="round"
           strokeLinejoin="round"
+          // Constant screen width: zooming the orbit must not fatten a
+          // hairline contour into sludge.
+          vectorEffect="non-scaling-stroke"
         />
       );
     }
@@ -2642,11 +2645,21 @@ export function Fence3D({
                   fill="none"
                   stroke="#3FA65B"
                   strokeWidth={1.5}
-                  strokeDasharray="7 5"
+                  // Dash lengths live in world units, so zoom would blow
+                  // them into slabs — counter-scale them (and the width).
+                  strokeDasharray={`${7 / zoomCam.k} ${5 / zoomCam.k}`}
+                  vectorEffect="non-scaling-stroke"
                   opacity={0.85}
                 />
               ))}
-              {orbitScene.elevLabels.map((l, i) => elevChip(l, i, 1 / zoomCam.k))}
+              {orbitScene.elevLabels
+                .filter((l) => {
+                  // A chip clipped by the frame is noise, not information.
+                  const sx = l.at.x * zoomCam.k + zoomCam.tx;
+                  const sy = l.at.y * zoomCam.k + zoomCam.ty;
+                  return sx > 36 && sx < VIEW_W - 36 && sy > 20 && sy < VIEW_H - 14;
+                })
+                .map((l, i) => elevChip(l, i, 1 / zoomCam.k))}
               {orbitScene.labels.map((l, i) => labelChip(l, i, 1 / zoomCam.k))}
               {orbitScene.marker && (
                 <g stroke="#52525B" strokeWidth={1.2} fill="none">
