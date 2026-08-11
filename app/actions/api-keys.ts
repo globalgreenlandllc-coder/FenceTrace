@@ -805,6 +805,97 @@ export async function testApiKey(
       }
     }
 
+    if (row.provider === "REPORTALL") {
+      // Real end-to-end lookup of the docs' own example parcel — proves
+      // the client key AND the geometry pipeline in one shot. Costs 1
+      // parcel of the monthly quota per click, which is what a test
+      // button is for. Invalid keys come back HTTP 200 with a non-OK
+      // status body, so the body is the verdict, not the HTTP code.
+      try {
+        const u = new URL("https://reportallusa.com/api/parcels");
+        u.searchParams.set("client", value);
+        u.searchParams.set("v", "9");
+        u.searchParams.set("region", "Geauga County, OH");
+        u.searchParams.set("address", "100 Short Court");
+        u.searchParams.set("returnGeometry", "true");
+        u.searchParams.set("rpp", "1");
+        const res = await fetch(u.toString(), { cache: "no-store" });
+        const body = (await res.json().catch(() => ({}))) as {
+          status?: string;
+          message?: string;
+          count?: number;
+          results?: { geom_as_wkt?: string }[];
+        };
+        if (res.ok && body.status === "OK") {
+          const gotGeom = !!body.results?.[0]?.geom_as_wkt;
+          return {
+            ok: true,
+            status: gotGeom
+              ? "ReportAll accepted the key and returned a parcel with geometry"
+              : "ReportAll accepted the key (parcel found, no geometry field)",
+            error: null,
+            testedFingerprint: fp,
+            reason: "ok",
+          };
+        }
+        return {
+          ok: false,
+          status: `ReportAll rejected the key${body.message ? ` — ${body.message}` : ""}`,
+          error: body.message ?? body.status ?? `HTTP ${res.status}`,
+          testedFingerprint: fp,
+          reason: "invalid_key",
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          status: "Network error reaching ReportAll",
+          error: e instanceof Error ? e.message : String(e),
+          testedFingerprint: fp,
+          reason: "network_error",
+        };
+      }
+    }
+
+    if (row.provider === "REGRID") {
+      try {
+        const u = new URL("https://app.regrid.com/api/v2/parcels/address");
+        u.searchParams.set("query", "1600 Pennsylvania Ave NW, Washington DC");
+        u.searchParams.set("limit", "1");
+        u.searchParams.set("token", value);
+        const res = await fetch(u.toString(), { cache: "no-store" });
+        if (res.ok) {
+          return {
+            ok: true,
+            status: "Regrid accepted the token and answered a parcel query",
+            error: null,
+            testedFingerprint: fp,
+            reason: "ok",
+          };
+        }
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string; error?: string;
+        };
+        return {
+          ok: false,
+          status:
+            res.status === 401 || res.status === 403
+              ? "Regrid rejected the token as invalid"
+              : `Regrid rejected the request (HTTP ${res.status})`,
+          error: body.message ?? body.error ?? `HTTP ${res.status}`,
+          testedFingerprint: fp,
+          reason: res.status === 401 || res.status === 403 ? "invalid_key" : "unknown_error",
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          status: "Network error reaching Regrid",
+          error: e instanceof Error ? e.message : String(e),
+          testedFingerprint: fp,
+          reason: "network_error",
+        };
+      }
+    }
+
     return {
       ok: false,
       status: `Test not implemented for ${row.provider} yet`,
