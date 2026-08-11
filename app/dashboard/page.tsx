@@ -15,17 +15,12 @@ import { OnboardingStrip } from "@/components/dashboard/onboarding-strip";
 import { NeedsAttention } from "@/components/dashboard/needs-attention";
 import { Button } from "@/components/ui/button";
 import {
-  getOverviewData,
-  listMyActivity,
-  listMyProposals,
+  getDashboardHome,
   type MyActivityEvent,
   type MyProposalRow,
   type OverviewData,
 } from "@/app/actions/dashboard";
-import {
-  getNeedsAttention,
-  type AttentionItem,
-} from "@/app/actions/payments";
+import { type AttentionItem } from "@/app/actions/payments";
 import { formatCurrency } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -36,30 +31,35 @@ export default function DashboardPage() {
   );
 }
 
+type HomeData = {
+  proposals: MyProposalRow[];
+  activity: MyActivityEvent[];
+  attention: AttentionItem[];
+  overview: OverviewData;
+};
+
+// Module-scope stale-while-revalidate: coming BACK to the overview
+// paints the last payload instantly (no skeleton), then refreshes in
+// the background. Cleared on hard reload, shared across visits within
+// one session.
+let homeCache: { at: number; data: HomeData } | null = null;
+const HOME_FRESH_MS = 45_000;
+
 function Inner() {
-  const [proposals, setProposals] = useState<MyProposalRow[]>([]);
-  const [activity, setActivity] = useState<MyActivityEvent[]>([]);
-  const [attention, setAttention] = useState<AttentionItem[]>([]);
-  const [overview, setOverview] = useState<OverviewData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [home, setHome] = useState<HomeData | null>(homeCache?.data ?? null);
+  const [loading, setLoading] = useState(homeCache === null);
 
   useEffect(() => {
+    // Fresh enough — paint from cache and fire nothing.
+    if (homeCache && Date.now() - homeCache.at < HOME_FRESH_MS) return;
     let cancelled = false;
-    Promise.all([
-      listMyProposals(),
-      listMyActivity(),
-      getNeedsAttention(),
-      // Pass the browser timezone so "This week" / "Upcoming jobs"
-      // bucket by the contractor's wall-clock day, matching the
-      // calendar page (revenue stays UTC-bucketed by design).
-      getOverviewData(Intl.DateTimeFormat().resolvedOptions().timeZone),
-    ])
-      .then(([p, a, att, o]) => {
-        if (cancelled) return;
-        setProposals(p);
-        setActivity(a);
-        setAttention(att);
-        setOverview(o);
+    // One bundled action = one round trip. Pass the browser timezone so
+    // "This week" / "Upcoming jobs" bucket by the contractor's
+    // wall-clock day (revenue stays UTC-bucketed by design).
+    getDashboardHome(Intl.DateTimeFormat().resolvedOptions().timeZone)
+      .then((d) => {
+        homeCache = { at: Date.now(), data: d };
+        if (!cancelled) setHome(d);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -68,6 +68,11 @@ function Inner() {
       cancelled = true;
     };
   }, []);
+
+  const proposals = home?.proposals ?? [];
+  const activity = home?.activity ?? [];
+  const attention = home?.attention ?? [];
+  const overview = home?.overview ?? null;
 
   const recent = proposals.slice(0, 6);
   const isEmpty = !loading && proposals.length === 0;

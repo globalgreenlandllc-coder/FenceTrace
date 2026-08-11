@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { getMe } from "./me";
+import { getNeedsAttention, type AttentionItem } from "./payments";
 
 import type { ProposalListItem } from "@/lib/dashboard-mock";
 import { packageTotal, type Proposal } from "@/lib/proposal-mock";
@@ -654,4 +655,28 @@ function messageForEvent(kind: string, address: string, client: string): string 
     default:
       return `${kind} · ${address}`;
   }
+}
+
+/**
+ * The whole overview page in ONE round trip.
+ *
+ * Next serializes server actions per client — a Promise.all of four
+ * actions in the browser still runs them one after another, each paying
+ * its own auth + user lookup. Called HERE they're plain functions on
+ * the same server, so they genuinely run in parallel and the page pays
+ * one round trip instead of four queued ones.
+ */
+export async function getDashboardHome(timeZone?: string): Promise<{
+  proposals: MyProposalRow[];
+  activity: MyActivityEvent[];
+  attention: AttentionItem[];
+  overview: OverviewData;
+}> {
+  const [proposals, activity, attention, overview] = await Promise.all([
+    listMyProposals(),
+    listMyActivity(),
+    getNeedsAttention(),
+    getOverviewData(timeZone),
+  ]);
+  return { proposals, activity, attention, overview };
 }

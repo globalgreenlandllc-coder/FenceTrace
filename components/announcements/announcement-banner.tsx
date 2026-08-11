@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { X, Megaphone, CheckCircle2, AlertTriangle, AlertOctagon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  getActiveAnnouncements,
   dismissAnnouncement,
   type UserAnnouncement,
 } from "@/app/actions/announcements";
+import { shellDataCached, dropAnnouncementFromCache } from "@/components/dashboard/shell-data";
 
 const STYLE: Record<
   UserAnnouncement["level"],
@@ -47,16 +47,16 @@ export function AnnouncementBanner() {
 
   useEffect(() => {
     let alive = true;
-    const load = () =>
-      void getActiveAnnouncements().then((a) => {
-        if (alive) setItems(a);
-      });
-    load();
+    const load = (maxAgeMs: number) =>
+      void shellDataCached(maxAgeMs).then((d) => {
+        if (alive) setItems(d.announcements);
+      }).catch(() => undefined);
+    load(30_000);
     // The shell (and this banner) mounts once and survives client-side
     // navigation, so an announcement published mid-session would never show
     // without a refetch. Coming back to the tab is the natural moment.
     const onVisible = () => {
-      if (document.visibilityState === "visible") load();
+      if (document.visibilityState === "visible") load(0);
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -69,6 +69,7 @@ export function AnnouncementBanner() {
 
   function dismiss(id: string) {
     setItems((prev) => prev.filter((a) => a.id !== id));
+    dropAnnouncementFromCache(id);
     void dismissAnnouncement(id);
   }
 

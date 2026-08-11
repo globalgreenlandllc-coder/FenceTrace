@@ -313,21 +313,67 @@ export async function getMe(): Promise<MeData | null> {
   const { userId: clerkId } = await auth();
   if (!clerkId) return null;
 
-  const clerkUser = await currentUser();
-  if (!clerkUser) return null;
+  // FAST PATH — getMe runs at the top of nearly every server action, so
+  // its cost multiplies across the whole app. auth() is a local JWT
+  // check; the expensive parts were currentUser() (a Clerk Backend API
+  // round trip) and findOrCreateUser's unconditional lastLoginAt write.
+  // A returning user resolves with ONE indexed read; Clerk is only
+  // consulted on first login, when the row doesn't exist yet.
+  let adminUser = await db.user.findFirst({
+    where: { clerkId },
+    include: {
+      contractorProfile: true,
+      creditWallet: true,
+      subscription: { select: { status: true } },
+    },
+  });
 
-  const email =
-    clerkUser.emailAddresses.find(
-      (e) => e.id === clerkUser.primaryEmailAddressId,
-    )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
-  if (!email) return null;
+  if (adminUser) {
+    // Role stays env-driven without a network call: ADMIN_EMAILS is a
+    // string compare. WORKER promotion is preserved (see findOrCreateUser).
+    const desiredRole = isAdminEmail(adminUser.email)
+      ? "SUPER_ADMIN"
+      : adminUser.role === "WORKER"
+        ? "WORKER"
+        : "CONTRACTOR";
+    if (adminUser.role !== desiredRole) {
+      adminUser = await db.user.update({
+        where: { id: adminUser.id },
+        data: { role: desiredRole },
+        include: {
+          contractorProfile: true,
+          creditWallet: true,
+          subscription: { select: { status: true } },
+        },
+      });
+    }
+    // lastLoginAt powers admin analytics, not auth — hourly resolution
+    // is plenty, and fire-and-forget keeps it off the request's clock.
+    const last = adminUser.lastLoginAt?.getTime() ?? 0;
+    if (Date.now() - last > 60 * 60 * 1000) {
+      void db.user
+        .update({ where: { id: adminUser.id }, data: { lastLoginAt: new Date() } })
+        .catch(() => undefined);
+    }
+  } else {
+    // First login (or a pre-created row linked by email): the full
+    // Clerk lookup + create/sync path, exactly as before.
+    const clerkUser = await currentUser();
+    if (!clerkUser) return null;
 
-  const fullName =
-    clerkUser.fullName ||
-    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
-    null;
+    const email =
+      clerkUser.emailAddresses.find(
+        (e) => e.id === clerkUser.primaryEmailAddressId,
+      )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
+    if (!email) return null;
 
-  const adminUser = await findOrCreateUser(clerkId, email, fullName);
+    const fullName =
+      clerkUser.fullName ||
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") ||
+      null;
+
+    adminUser = await findOrCreateUser(clerkId, email, fullName);
+  }
   if (!adminUser) return null;
 
   if (adminUser.role === "SUPER_ADMIN") {
@@ -372,7 +418,9 @@ export async function getMe(): Promise<MeData | null> {
     }
   }
 
-  return shape(adminUser, clerkId, email, fullName);
+  // The DB row is the identity of record (synced from Clerk at creation
+  // and on role changes) — the fast path never fetched Clerk's copy.
+  return shape(adminUser, clerkId, adminUser.email, adminUser.name);
 }
 
 export async function updateMyProfile(

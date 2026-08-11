@@ -16,10 +16,10 @@ import {
   Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listWorkerActivity, type WorkerActivityDTO } from "@/app/actions/workers";
-import { getBellCounts, type BellCounts } from "@/app/actions/notifications";
+import type { WorkerActivityDTO } from "@/app/actions/workers";
+import type { BellCounts } from "@/app/actions/notifications";
+import { shellDataCached, dropAnnouncementFromCache } from "./shell-data";
 import {
-  getActiveAnnouncements,
   dismissAnnouncement,
   type UserAnnouncement,
 } from "@/app/actions/announcements";
@@ -60,13 +60,20 @@ export function NotificationsBell() {
 
   useEffect(() => {
     let alive = true;
-    const load = () => {
-      listWorkerActivity().then((a) => alive && setItems(a));
-      getBellCounts().then((c) => alive && setCounts(c));
-      getActiveAnnouncements().then((a) => alive && setAnnouncements(a));
-    };
-    load();
-    const t = setInterval(load, 60_000);
+    // One shared, cached round trip with the announcement banner — a
+    // page switch inside the freshness window paints from memory and
+    // fires nothing. The interval forces a real refresh.
+    const load = (maxAgeMs: number) =>
+      shellDataCached(maxAgeMs)
+        .then((d) => {
+          if (!alive) return;
+          setItems(d.activity);
+          setCounts(d.counts);
+          setAnnouncements(d.announcements);
+        })
+        .catch(() => undefined);
+    load(30_000);
+    const t = setInterval(() => load(0), 60_000);
     return () => {
       alive = false;
       clearInterval(t);
@@ -91,6 +98,7 @@ export function NotificationsBell() {
 
   function onDismissAnnouncement(id: string) {
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    dropAnnouncementFromCache(id);
     void dismissAnnouncement(id);
   }
 

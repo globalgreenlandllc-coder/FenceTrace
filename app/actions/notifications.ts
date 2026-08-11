@@ -2,6 +2,8 @@
 
 import { db } from "@/lib/db";
 import { getMe } from "./me";
+import { listWorkerActivity, type WorkerActivityDTO } from "./workers";
+import { getActiveAnnouncements, type UserAnnouncement } from "./announcements";
 
 /**
  * notifications.ts — the bell counts. Deliberately schema-free: "unread"
@@ -50,4 +52,22 @@ export async function getBellCounts(): Promise<BellCounts> {
   ]);
 
   return { support, announcements, adminTickets };
+}
+
+/**
+ * Everything the shell chrome (bell + announcement banner) needs, in
+ * one round trip. The bell alone used to fire three serialized actions
+ * on every page switch — before the page's own data could even start.
+ */
+export async function getShellData(): Promise<{
+  activity: WorkerActivityDTO[];
+  counts: BellCounts;
+  announcements: UserAnnouncement[];
+}> {
+  const [activity, counts, announcements] = await Promise.all([
+    listWorkerActivity(),
+    getBellCounts(),
+    getActiveAnnouncements(),
+  ]);
+  return { activity, counts, announcements };
 }
