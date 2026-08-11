@@ -14,6 +14,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
 import { AddressAutocompleteInput } from "@/components/ui/address-autocomplete";
+import { getRecentAddresses } from "@/app/actions/estimate";
+import {
+  mergeRecents,
+  pushLocalRecent,
+  readLocalRecents,
+  removeLocalRecent,
+} from "@/lib/recent-addresses";
 import { cn } from "@/lib/utils";
 import { runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
 import { saveDraftFromEstimate } from "@/app/actions/proposals";
@@ -165,6 +172,11 @@ export function FenceEstimator() {
       setScanError(res.reason);
       return;
     }
+    // Remember the scan under its geocoded display form so the history
+    // reads clean even when the user typed a rough version.
+    const remembered = res.address?.trim() || addr;
+    pushLocalRecent(remembered);
+    setRecents((prev) => mergeRecents([remembered, ...prev], readLocalRecents()));
     setScan(res);
     setLayout({ runs: [], gates: [] });
     setBuildings(res.buildings ?? []);
@@ -188,6 +200,24 @@ export function FenceEstimator() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressParam]);
+
+  // Address history for the scan bar: localStorage instantly, then the
+  // server copy (every past successful scan, any device) merged in.
+  const [recents, setRecents] = useState<string[]>([]);
+  useEffect(() => {
+    setRecents(readLocalRecents());
+    let cancelled = false;
+    getRecentAddresses()
+      .then((server) => {
+        if (!cancelled) setRecents(mergeRecents(server, readLocalRecents()));
+      })
+      .catch(() => {
+        // offline / cold DB — the local list is already showing
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Keep height valid when the type changes.
   useEffect(() => {
@@ -593,6 +623,13 @@ export function FenceEstimator() {
                 onPick={(addr) => {
                   setAddress(addr);
                   void scanAddress(addr);
+                }}
+                recents={recents}
+                onRemoveRecent={(addr) => {
+                  removeLocalRecent(addr);
+                  setRecents((prev) =>
+                    prev.filter((a) => a.toLowerCase() !== addr.toLowerCase()),
+                  );
                 }}
                 placeholder="123 Property Ln, Austin, TX"
                 autoFocus

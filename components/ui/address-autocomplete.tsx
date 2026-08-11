@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { MapPin } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { History, MapPin, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { suggestAddresses } from "@/app/actions/address-suggest";
 
@@ -85,6 +85,8 @@ export function AddressAutocompleteInput({
   className,
   inputClassName,
   fetcher,
+  recents,
+  onRemoveRecent,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -96,6 +98,11 @@ export function AddressAutocompleteInput({
   inputClassName?: string;
   /** Test/demo override for the suggestion source. */
   fetcher?: (q: string) => Promise<string[]>;
+  /** Address history shown above live suggestions (and on focus with an
+   *  empty input). Filtered by the typed text as the user narrows. */
+  recents?: string[];
+  /** Renders an × on history rows; called with the removed address. */
+  onRemoveRecent?: (address: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -103,7 +110,24 @@ export function AddressAutocompleteInput({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { places } = usePlacesSuggestions(value, fetcher);
 
-  const open = focused && places.length > 0;
+  // History first (it's one click and costs nothing), live Places after,
+  // deduped case-insensitively so a re-typed recent doesn't show twice.
+  const suggestions = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    const rec = (recents ?? [])
+      .filter((a) => !q || a.toLowerCase().includes(q))
+      .filter((a) => a.toLowerCase() !== q)
+      .slice(0, 5)
+      .map((text) => ({ text, kind: "recent" as const }));
+    const seen = new Set(rec.map((s) => s.text.toLowerCase()));
+    const live = places
+      .filter((p) => !seen.has(p.toLowerCase()))
+      .map((text) => ({ text, kind: "place" as const }));
+    return [...rec, ...live];
+  }, [recents, places, value]);
+
+  const open = focused && suggestions.length > 0;
+  const hasPlaces = suggestions.some((s) => s.kind === "place");
 
   useEffect(() => {
     setHighlight(-1);
@@ -146,13 +170,13 @@ export function AddressAutocompleteInput({
           if (!open) return;
           if (e.key === "ArrowDown") {
             e.preventDefault();
-            setHighlight((h) => (h + 1 >= places.length ? 0 : h + 1));
+            setHighlight((h) => (h + 1 >= suggestions.length ? 0 : h + 1));
           } else if (e.key === "ArrowUp") {
             e.preventDefault();
-            setHighlight((h) => (h <= 0 ? places.length - 1 : h - 1));
-          } else if (e.key === "Enter" && highlight >= 0 && places[highlight]) {
+            setHighlight((h) => (h <= 0 ? suggestions.length - 1 : h - 1));
+          } else if (e.key === "Enter" && highlight >= 0 && suggestions[highlight]) {
             e.preventDefault();
-            onPick(places[highlight]);
+            onPick(suggestions[highlight].text);
             setFocused(false);
           } else if (e.key === "Escape") {
             setHighlight(-1);
@@ -175,30 +199,52 @@ export function AddressAutocompleteInput({
           role="listbox"
           className="anim-pop absolute left-0 right-0 top-full z-30 mt-2 origin-top overflow-hidden rounded-xl border border-zinc-200/80 bg-white py-1.5 shadow-elevated"
         >
-          {places.map((s, i) => (
-            <li key={s} role="option" aria-selected={i === highlight}>
-              <button
-                type="button"
-                // mousedown fires before input blur — pick before unmount
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  onPick(s);
-                  setFocused(false);
-                }}
-                onMouseEnter={() => setHighlight(i)}
+          {suggestions.map((s, i) => (
+            <li key={`${s.kind}:${s.text}`} role="option" aria-selected={i === highlight}>
+              <div
                 className={cn(
-                  "transition-smooth flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm",
+                  "transition-smooth flex w-full items-center gap-2.5 px-3.5 text-left text-sm",
                   i === highlight
                     ? "bg-accent-50 text-accent-900"
                     : "text-zinc-700 hover:bg-zinc-50",
                 )}
               >
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
-                <span className="truncate">{s}</span>
-              </button>
+                <button
+                  type="button"
+                  // mousedown fires before input blur — pick before unmount
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onPick(s.text);
+                    setFocused(false);
+                  }}
+                  onMouseEnter={() => setHighlight(i)}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 py-2.5"
+                >
+                  {s.kind === "recent" ? (
+                    <History className="h-3.5 w-3.5 shrink-0 text-accent-500" />
+                  ) : (
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                  )}
+                  <span className="truncate">{s.text}</span>
+                </button>
+                {s.kind === "recent" && onRemoveRecent && (
+                  <button
+                    type="button"
+                    aria-label={`Remove ${s.text} from history`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onRemoveRecent(s.text);
+                    }}
+                    className="ring-focus shrink-0 rounded-md p-1 text-zinc-300 transition-smooth hover:bg-zinc-100 hover:text-rose-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </li>
           ))}
-          <PlacesAttribution />
+          {hasPlaces && <PlacesAttribution />}
         </ul>
       )}
     </div>

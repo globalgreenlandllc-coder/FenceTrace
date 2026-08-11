@@ -20,6 +20,11 @@ import {
 import { cn } from "@/lib/utils";
 import { getRecentAddresses } from "@/app/actions/estimate";
 import {
+  mergeRecents,
+  pushLocalRecent,
+  readLocalRecents,
+} from "@/lib/recent-addresses";
+import {
   PlacesAttribution,
   usePlacesSuggestions,
 } from "@/components/ui/address-autocomplete";
@@ -30,49 +35,10 @@ type JobType = "replacement" | "new";
 const MICROLABEL =
   "font-mono text-[10px] font-bold uppercase tracking-[0.14em]";
 
-/* ------------------------------------------------------------------ */
-/*  Recent-address helpers                                            */
-/*                                                                    */
-/*  localStorage mirror of the server-side recents so the combobox    */
-/*  still works for users who haven't successfully run an estimate    */
-/*  yet (or while the server action is in flight). Ported from the    */
-/*  old QuickStart card, which this page replaces.                    */
-/* ------------------------------------------------------------------ */
-const LOCAL_RECENTS_KEY = "fencescan.recentAddresses";
-const LOCAL_RECENTS_MAX = 8;
 /** Address typed into the landing-page teaser scan before signup —
  *  same literal as PENDING_SCAN_KEY in landing2/teaser-scan.tsx
  *  (duplicated to keep the landing bundle out of the dashboard). */
 const PENDING_SCAN_KEY = "fencescan.pendingAddress";
-
-function readLocalRecents(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(LOCAL_RECENTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed)
-      ? parsed.filter((s): s is string => typeof s === "string")
-      : [];
-  } catch {
-    return [];
-  }
-}
-
-function pushLocalRecent(addr: string) {
-  if (typeof window === "undefined") return;
-  const trimmed = addr.trim();
-  if (!trimmed) return;
-  const existing = readLocalRecents().filter(
-    (a) => a.toLowerCase() !== trimmed.toLowerCase(),
-  );
-  const next = [trimmed, ...existing].slice(0, LOCAL_RECENTS_MAX);
-  try {
-    window.localStorage.setItem(LOCAL_RECENTS_KEY, JSON.stringify(next));
-  } catch {
-    // localStorage may be unavailable (private mode, quota); silently drop.
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /*  StartOptions — the whole body of /dashboard/proposals/new         */
@@ -275,17 +241,7 @@ function SatelliteTakeoffCard() {
     getRecentAddresses()
       .then((server) => {
         if (cancelled) return;
-        const local = readLocalRecents();
-        const seen = new Set<string>();
-        const merged: string[] = [];
-        for (const a of [...server, ...local]) {
-          const k = a.toLowerCase();
-          if (seen.has(k)) continue;
-          seen.add(k);
-          merged.push(a);
-          if (merged.length >= LOCAL_RECENTS_MAX) break;
-        }
-        setRecents(merged);
+        setRecents(mergeRecents(server, readLocalRecents()));
       })
       .catch(() => {
         // Server action failed (DB cold-start, not signed in). Fall
