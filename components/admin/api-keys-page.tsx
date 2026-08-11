@@ -170,6 +170,15 @@ const CATEGORIES: {
     providers: ["STRIPE_SECRET", "STRIPE_WEBHOOK"],
   },
   {
+    // Both parcel providers were in ALL_PROVIDERS but in no category, so
+    // neither card ever RENDERED — the badge counted them, the grid
+    // didn't show them. Every provider must live in exactly one category.
+    key: "parcels",
+    label: "Parcel boundaries",
+    icon: MapIcon,
+    providers: ["REPORTALL", "REGRID"],
+  },
+  {
     key: "data",
     label: "Public data",
     icon: Database,
@@ -182,6 +191,10 @@ const CATEGORIES: {
 // expect. Skips the user-friendly back-and-forth where the admin
 // pastes an email or the wrong provider's key by mistake.
 const ADD_KEY_HINTS: Partial<Record<ApiKeyProvider, string>> = {
+  REPORTALL:
+    "reportallusa.com → sign in → API Dashboard → Client Key (top of the page). A short alphanumeric string — not a URL, not the username.",
+  REGRID:
+    "app.regrid.com → Account → API tokens. A long JWT-style token.",
   RESEND:
     "resend.com → API Keys → Create API Key (with 'Sending access'). Key starts with 're_' and is ~40 characters. NOT an email address.",
   OPENAI:
