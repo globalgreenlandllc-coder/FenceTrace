@@ -1077,6 +1077,25 @@ export function Fence3D({
               shaded,
               baseLenPx: segLen,
             });
+          } else if (stepped && grid) {
+            // A stepped bay stays LEVEL while the ground drops beneath
+            // it — physically true, but in the axonometric view the
+            // floating panel bottom reads as "the fence left the
+            // boundary line". Fill the wedge between the level base and
+            // the falling ground as earth, so the fence stays visually
+            // planted on its line.
+            faces.push({
+              kind: "skirt",
+              bias: -0.02,
+              pts: [
+                { ...A, z: zA },
+                { ...B, z: zB },
+                { ...B, z: bzB },
+                { ...A, z: bzA },
+              ],
+              shaded,
+              baseLenPx: segLen,
+            });
           } else if (!grid && models[ri] && (zA > 0.5 || zB > 0.5)) {
             const ribbon = 4 * scale * HEIGHT_EXAGGERATION;
             faces.push({
