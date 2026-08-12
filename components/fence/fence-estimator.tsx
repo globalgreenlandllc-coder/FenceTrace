@@ -931,6 +931,14 @@ export function FenceEstimator() {
                         ) : (
                           <>Racks with the grade — {slope.basePostLengthFt}&apos; posts throughout.</>
                         )}
+                        {layout.runs.length > 0 && slope.rackedExtraLf >= 1 && (
+                          <>
+                            {" "}Racked bays follow the ground, so the true
+                            fabric length runs ≈{" "}
+                            <strong>+{Math.round(slope.rackedExtraLf)} LF</strong>{" "}
+                            over the map length — inside your waste factor.
+                          </>
+                        )}
                       </span>
                     </div>
                   )}

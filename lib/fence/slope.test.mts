@@ -93,3 +93,16 @@ test("walkPostPositions: vertices kept, spacing respected", () => {
   const gap = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
   assert.ok(gap <= 40 + 1e-9);
 });
+
+test("racked bays report the extra fabric the map length hides", () => {
+  // 8' bays, 1' rise each — rackable for stick (limit 1'): each bay's
+  // fabric is √(64+1) ≈ 8.062', so ~0.062' extra per bay.
+  const s = summarizeSlopes([[100, 101, 102, 103]], 8, 6, "stick");
+  assert.ok(s.rackedExtraLf > 0.15 && s.rackedExtraLf < 0.25, `got ${s.rackedExtraLf}`);
+  // Stepped ground (3' per bay beats the limit): panels stay level — no
+  // fabric excess, the drop is vertical.
+  const st = summarizeSlopes([[100, 103, 106]], 8, 6, "stick");
+  assert.equal(st.rackedExtraLf, 0);
+  // Flat: nothing.
+  assert.equal(summarizeSlopes([[100, 100, 100]], 8, 6, "stick").rackedExtraLf, 0);
+});

@@ -40,6 +40,10 @@ export type RunSlope = {
   maxGradePct: number;
   /** Total elevation change end-to-end, ft. */
   totalRiseFt: number;
+  /** Extra FABRIC length on racked bays, ft: a bay that follows the
+   *  grade is √(run² + rise²) long, not its map length. Stepped bays
+   *  contribute nothing (level panels — the drop is vertical). */
+  rackedExtraFt: number;
 };
 
 export type SlopeSummary = {
@@ -55,6 +59,11 @@ export type SlopeSummary = {
   /** LF of fence sitting over wall-like drops — seed for the estimator's
    *  "mount on the retaining wall" toggle. */
   wallLikeLf: number;
+  /** Extra fabric across all racked bays, LF — real material the map
+   *  length doesn't show. Small by construction (racking is angle-
+   *  capped) and normally inside the waste factor; surfaced so the
+   *  contractor SEES it instead of trusting it. */
+  rackedExtraLf: number;
   /** Suggested labor terrain from the measured grade. */
   suggestedTerrain: Terrain;
   /** Standard post length for this fence, ft (height + burial). */
@@ -104,6 +113,7 @@ export function analyzeRunSlope(
       avgGradePct: 0,
       maxGradePct: 0,
       totalRiseFt: 0,
+      rackedExtraFt: 0,
     };
   }
   const rises: number[] = [];
@@ -118,9 +128,17 @@ export function analyzeRunSlope(
   let wallSections = 0;
   let wallSteps = 0;
   let maxPerStep = 0;
+  let rackedExtra = 0;
   for (const r of rises) {
     const rise = Math.abs(r);
-    if (rise <= rackLimitFt) continue;
+    if (rise <= rackLimitFt) {
+      // Racked: rails follow the ground — the true fabric length is the
+      // hypotenuse of the bay.
+      if (rise > 0) {
+        rackedExtra += Math.hypot(sectionLenFt, rise) - sectionLenFt;
+      }
+      continue;
+    }
     const splits = Math.max(1, Math.ceil(rise / MAX_STEP_DROP_FT));
     steps += splits;
     maxPerStep = Math.max(maxPerStep, rise / splits);
@@ -135,6 +153,7 @@ export function analyzeRunSlope(
     wallSections,
     wallSteppedSections: wallSteps,
     maxStepFt: round2(maxPerStep),
+    rackedExtraFt: round2(rackedExtra),
     avgGradePct: round2(grades.reduce((a, b) => a + b, 0) / grades.length),
     maxGradePct: round2(Math.max(...grades)),
     totalRiseFt: round2(
@@ -177,6 +196,7 @@ export function summarizeSlopes(
     wallSections: walls,
     wallSteppedSections: wallSteps,
     wallLikeLf: round2(walls * sectionLenFt),
+    rackedExtraLf: round2(all.reduce((a, r) => a + r.rackedExtraFt, 0)),
     suggestedTerrain,
     basePostLengthFt: roundPost(base),
     stepPostLengthFt: roundPost(base + Math.min(2, maxStep)),
