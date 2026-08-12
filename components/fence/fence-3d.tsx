@@ -2676,20 +2676,35 @@ export function Fence3D({
               <g>{orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
               <g>{orbitScene.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
               <g>{orbitScene.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
-              {orbitScene.rings.map((ring, i) => (
-                <polygon
-                  key={i}
-                  points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
-                  fill="none"
-                  stroke="#3FA65B"
-                  strokeWidth={1.5}
-                  // Dash lengths live in world units, so zoom would blow
-                  // them into slabs — counter-scale them (and the width).
-                  strokeDasharray={`${7 / zoomCam.k} ${5 / zoomCam.k}`}
-                  vectorEffect="non-scaling-stroke"
-                  opacity={0.85}
-                />
-              ))}
+              {orbitScene.rings.map((ring, i) => {
+                const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
+                // Dash lengths live in world units, so zoom would blow
+                // them into slabs — counter-scale them. White boundary
+                // over a dark casing stays readable on light lawn and
+                // shaded slopes alike, at any zoom.
+                const dash = `${7 / zoomCam.k} ${5 / zoomCam.k}`;
+                return (
+                  <g key={i}>
+                    <polygon
+                      points={pts}
+                      fill="none"
+                      stroke="rgba(30,44,32,0.45)"
+                      strokeWidth={3}
+                      strokeDasharray={dash}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <polygon
+                      points={pts}
+                      fill="none"
+                      stroke="#FFFFFF"
+                      strokeWidth={1.5}
+                      strokeDasharray={dash}
+                      vectorEffect="non-scaling-stroke"
+                      opacity={0.95}
+                    />
+                  </g>
+                );
+              })}
               {orbitScene.elevLabels
                 .filter((l) => {
                   // A chip clipped by the frame is noise, not information.

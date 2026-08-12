@@ -1191,17 +1191,31 @@ export function FenceCanvas({
           )}
 
           {/* Parcel boundary — the Regrid property line */}
-          {scan.parcelRings.map((ring, i) => (
-            <polygon
-              key={`parcel-${i}`}
-              points={ring.map((p) => `${p.x},${p.y}`).join(" ")}
-              fill="rgba(74,222,128,0.06)"
-              stroke="#4ade80"
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-              strokeDasharray="6 4"
-            />
-          ))}
+          {scan.parcelRings.map((ring, i) => {
+            const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
+            return (
+              // White reads on any imagery because it rides a soft dark
+              // casing — crisp over bright driveways AND dark tree cover.
+              <g key={`parcel-${i}`}>
+                <polygon
+                  points={pts}
+                  fill="rgba(255,255,255,0.05)"
+                  stroke="rgba(15,23,20,0.55)"
+                  strokeWidth={3}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="6 4"
+                />
+                <polygon
+                  points={pts}
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth={1.5}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="6 4"
+                />
+              </g>
+            );
+          })}
 
           {/* Fence runs */}
           {layout.runs.map((run) => {
