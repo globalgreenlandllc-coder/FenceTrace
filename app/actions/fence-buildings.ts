@@ -151,6 +151,9 @@ export type MainBuildingResult = { ok: true; ring: Pt[] | null };
  */
 export async function extractMainBuilding(input: {
   imageDataUrl: string;
+  /** Parcel ring in canvas px — masks the neighbors out of the frame
+   *  and anchors the on-parcel validation. */
+  parcelRing?: Pt[];
 }): Promise<MainBuildingResult> {
   const me = await getMe();
   if (!me) return { ok: true, ring: null };
@@ -168,11 +171,15 @@ export async function extractMainBuilding(input: {
   const { extractBuildingFootprint } = await import(
     "@/lib/ai/building-footprint"
   );
+  const parcelRing = (input.parcelRing ?? [])
+    .filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+    .slice(0, 200);
   const res = await extractBuildingFootprint({
     base64: m[2],
     mimeType: m[1] as "image/png" | "image/jpeg",
     width: CANVAS_W,
     height: CANVAS_H,
+    parcelRing: parcelRing.length >= 3 ? parcelRing : undefined,
   });
   return { ok: true, ring: res.ring };
 }

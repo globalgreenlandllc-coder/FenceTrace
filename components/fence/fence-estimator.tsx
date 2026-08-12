@@ -262,7 +262,10 @@ export function FenceEstimator() {
     // parcel, Claude traces the main house off the scan aerial itself.
     const ensureSubjectHouse = (osmFound: { x: number; y: number }[][]) => {
       if (osmFound.some(onParcel)) return;
-      void extractMainBuilding({ imageDataUrl: scan.aerial.imageDataUrl }).then(
+      void extractMainBuilding({
+        imageDataUrl: scan.aerial.imageDataUrl,
+        parcelRing: scan.parcelRings[0],
+      }).then(
         (r) => {
           if (cancelled || !r.ring) return;
           setBuildings((cur) =>
