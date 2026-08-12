@@ -174,9 +174,9 @@ const TYPE_DETAIL: Record<string, "hboards" | "spaced" | "shadowbox" | "bob"> = 
 };
 
 const TREE_TONES = [
-  ["#4C7A45", "#3B6136"],
-  ["#557F42", "#436639"],
-  ["#47714B", "#38593B"],
+  ["#5C7A4C", "#49623C"],
+  ["#67824F", "#536D42"],
+  ["#4F6E48", "#40593A"],
 ];
 
 function cumLengths(pts: Pt[]): number[] {
@@ -264,17 +264,18 @@ function pointInPoly(p: Pt, ring: Pt[]): boolean {
 }
 
 /**
- * Ground color for a terrain cell — three readable signals, blended:
- *  - HYPSOMETRIC tint: valley floors sit deep green, hilltops fade to a
- *    sun-dried light green. The classic map cue that makes 100+ ft of
- *    relief legible at a glance instead of a flat lawn.
- *  - Slope shading lit from the NW, computed on the SAME softened
- *    surface the geometry displays, passed through tanh so steep cells
- *    shade smoothly instead of slamming into a clamp — the old
- *    hard-banded terraces came from that saturating clamp.
- *  - Large soft noise patches so the lawn still reads as grass.
- * `hypso` (0..1) fades the elevation tint in only when the lot actually
- * has relief — a flat suburban yard stays plain lawn.
+ * Ground color for a terrain cell — drawn like land, not a lawn chart:
+ *  - a natural sage/olive ramp by ELEVATION (deep valley green → dry
+ *    crest), fading in only when the lot has real relief;
+ *  - warm/cool DIRECTIONAL light: sun-facing cells warm toward yellow-
+ *    green, shadow faces cool toward blue-gray — the classic terrain-
+ *    painting trick that makes relief read as light, not as banding;
+ *  - steep faces blend toward EARTH: grass thins where the ground
+ *    stands up, so slope magnitude pulls in a soil tone;
+ *  - cells OUTSIDE the parcel wash out toward pale gray-green, so the
+ *    property itself reads as the subject and the neighbors as context
+ *    — the way a site plan presents it;
+ *  - large soft noise so it still reads as ground cover.
  */
 function groundFill(
   e01: number,
@@ -282,22 +283,41 @@ function groundFill(
   gyFt: number,
   jitter: number,
   hypso: number,
+  /** 1 = on the property, 0 = far outside; fractional near the line. */
+  inParcel: number,
 ): string {
-  const LO = [118, 166, 116]; // valley
-  const MID = [172, 206, 152]; // the flat-lot lawn
-  const HI = [209, 216, 170]; // crest
+  const LO = [104, 142, 96]; // valley sage
+  const MID = [149, 176, 126]; // mid lawn
+  const HI = [186, 194, 146]; // dry crest
+  const EARTH = [148, 134, 102]; // steep-face soil
   const t = Math.max(0, Math.min(1, e01));
-  const ramp =
+  let c =
     t < 0.5
       ? LO.map((v, i) => v + (MID[i] - v) * (t / 0.5))
       : MID.map((v, i) => v + (HI[i] - v) * ((t - 0.5) / 0.5));
-  const shade =
-    (1 + 0.24 * Math.tanh(-gxFt * 2.6 + gyFt * 1.3)) * (0.98 + jitter * 0.05);
-  const px = ramp.map((v, i) =>
-    Math.round(
-      Math.max(0, Math.min(255, (MID[i] + (v - MID[i]) * hypso) * shade)),
-    ),
-  );
+  c = c.map((v, i) => MID[i] + (v - MID[i]) * hypso);
+  // Steep ground → earth. Grade in ft/plan-px; ~0.35 ≈ very steep.
+  const slopeMag = Math.hypot(gxFt, gyFt);
+  const earth = Math.max(0, Math.min(0.55, (slopeMag - 0.1) * 2.2));
+  c = c.map((v, i) => v + (EARTH[i] - v) * earth);
+  // Warm light from the NW, cool shade opposite.
+  const lit = Math.tanh((-gxFt * 2.4 + gyFt * 1.2) * 1.4);
+  const bright = 1 + 0.16 * lit;
+  c = [
+    c[0] * bright * (1 + 0.05 * lit),
+    c[1] * bright * (1 + 0.015 * lit),
+    c[2] * bright * (1 - 0.05 * lit),
+  ];
+  // Off-parcel context washes out — brighter, grayer, quieter. `inParcel`
+  // is a 0..1 fade (1 on the property), so the wash rolls in smoothly
+  // instead of stair-stepping cell by cell along the boundary.
+  const wash = 1 - Math.max(0, Math.min(1, inParcel));
+  if (wash > 0) {
+    const gray = (c[0] + c[1] + c[2]) / 3;
+    c = c.map((v) => (v + (gray - v) * 0.42 * wash) * (1 + 0.06 * wash) + 14 * wash);
+  }
+  const n = 0.97 + jitter * 0.06;
+  const px = c.map((v) => Math.round(Math.max(0, Math.min(255, v * n))));
   return `rgb(${px[0]},${px[1]},${px[2]})`;
 }
 
@@ -622,7 +642,7 @@ export function Fence3D({
       const baseQuads = (gridCols - 1) * (gridRows - 1);
       const SUB = Math.max(
         2,
-        Math.min(4, Math.round(Math.sqrt(3600 / Math.max(1, baseQuads)))),
+        Math.min(4, Math.round(Math.sqrt(4800 / Math.max(1, baseQuads)))),
       );
       const stepX = cellW / SUB;
       const stepY = cellH / SUB;
@@ -631,6 +651,31 @@ export function Fence3D({
       /** Softened elevation (ft above the lot's low point) — the surface
        *  the quads actually sit on. */
       const sElevFt = (x: number, y: number) => soften(bilinear(x, y) - minElev);
+      // The subject parcel keeps full color; everything beyond it fades
+      // to context. No ring ⇒ everything is "the property".
+      const parcelRing0 =
+        parcelRings.length > 0 && parcelRings[0].length >= 3
+          ? parcelRings[0]
+          : null;
+      const FADE_PX = 55;
+      const cellInParcel = (x: number, y: number): number => {
+        if (!parcelRing0) return 1;
+        if (pointInPoly({ x, y }, parcelRing0)) return 1;
+        // Outside: fade by distance to the nearest boundary edge.
+        let d2 = Infinity;
+        for (let i = 0, j = parcelRing0.length - 1; i < parcelRing0.length; j = i++) {
+          const a = parcelRing0[j];
+          const b = parcelRing0[i];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const len2 = dx * dx + dy * dy;
+          const t2 = len2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len2)) : 0;
+          const qx = a.x + dx * t2 - x;
+          const qy = a.y + dy * t2 - y;
+          d2 = Math.min(d2, qx * qx + qy * qy);
+        }
+        return Math.max(0, 1 - Math.sqrt(d2) / FADE_PX);
+      };
       // Hypsometric tint fades in with real relief: nothing under 2 ft,
       // full valley-to-crest ramp by 8 ft.
       const hypso = Math.max(0, Math.min(1, (relief - 2) / 6));
@@ -656,7 +701,7 @@ export function Fence3D({
             ],
             shaded: false,
             baseLenPx: stepX,
-            fill: groundFill(e01, gx, gy, smoothNoise(mx, my), hypso),
+            fill: groundFill(e01, gx, gy, smoothNoise(mx, my), hypso, cellInParcel(mx, my)),
           });
         }
       }
@@ -758,6 +803,25 @@ export function Fence3D({
       if (!Number.isFinite(base)) base = 0;
       const wallTop = base + 10 * scale * HEIGHT_EXAGGERATION;
       const roofTop = wallTop + 1.2 * scale * HEIGHT_EXAGGERATION;
+      // Eave overhang: real roofs stand ~1.5' proud of the walls. The
+      // fascia band and cap ride the EXPANDED ring; the walls keep the
+      // footprint. Centroid-scaled — fine at this small offset.
+      let bcx = 0;
+      let bcy = 0;
+      for (const p of ring) {
+        bcx += p.x;
+        bcy += p.y;
+      }
+      bcx /= ring.length;
+      bcy /= ring.length;
+      const avgR =
+        ring.reduce((a, p) => a + Math.hypot(p.x - bcx, p.y - bcy), 0) /
+        ring.length;
+      const ok = 1 + Math.min(0.12, (1.5 * scale) / Math.max(1, avgR));
+      const eave = ring.map((p) => ({
+        x: bcx + (p.x - bcx) * ok,
+        y: bcy + (p.y - bcy) * ok,
+      }));
       for (let i = 0; i < ring.length; i++) {
         const A = ring[i];
         const B = ring[(i + 1) % ring.length];
@@ -776,14 +840,16 @@ export function Fence3D({
           shaded: -uy < 0,
           baseLenPx: segLen,
         });
+        const EA = eave[i];
+        const EB = eave[(i + 1) % ring.length];
         faces.push({
           kind: "roof",
           bias: 0.005,
           pts: [
-            { ...A, z: wallTop },
-            { ...B, z: wallTop },
-            { ...B, z: roofTop },
-            { ...A, z: roofTop },
+            { ...EA, z: wallTop },
+            { ...EB, z: wallTop },
+            { ...EB, z: roofTop },
+            { ...EA, z: roofTop },
           ],
           shaded: -uy < 0,
           baseLenPx: segLen,
@@ -792,7 +858,7 @@ export function Fence3D({
       faces.push({
         kind: "roof",
         bias: 0.01,
-        pts: ring.map((p) => ({ ...p, z: roofTop })),
+        pts: eave.map((p) => ({ ...p, z: roofTop })),
         shaded: false,
         baseLenPx: 0,
       });
@@ -2605,9 +2671,9 @@ export function Fence3D({
       >
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#DDEDF9" />
-            <stop offset="52%" stopColor="#EFF5E9" />
-            <stop offset="100%" stopColor="#DCE8D4" />
+            <stop offset="0%" stopColor="#D8E6F0" />
+            <stop offset="46%" stopColor="#EDF1E3" />
+            <stop offset="100%" stopColor="#D9E0CC" />
           </linearGradient>
           <linearGradient id="f3d-sky" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#BFDCF2" />
