@@ -47,6 +47,10 @@ export type FenceLayoutInput = {
   wallTopLf?: number;
   /** Post stock upgrade — steel or 6×6 pressure-treated. */
   postUpgrade?: "steel" | "6x6";
+  /** Line-post spacing override, ft o.c. (4–12). Stick, mesh and rail
+   *  builds only — prefab panel systems come in fixed sections, so
+   *  panels always keep the catalog spacing. */
+  postSpacingFt?: number;
   /** Mixed-type sections (e.g. chain link across the back of a cedar
    *  job): total LF per secondary type. Carved out of the primary
    *  fabric and materialized as their own BOM block. */
@@ -102,6 +106,13 @@ function concreteBagsPerPost(heightFt: number): number {
 
 export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const t = fenceType(input.type);
+  const spacingFt =
+    t.build !== "panel" &&
+    Number.isFinite(input.postSpacingFt) &&
+    (input.postSpacingFt as number) >= 4 &&
+    (input.postSpacingFt as number) <= 12
+      ? (input.postSpacingFt as number)
+      : t.postSpacingFt;
   const waste = 1 + Math.min(30, Math.max(0, input.wastePct ?? 10)) / 100;
   const hf = heightFactor(t, input.heightFt);
 
@@ -133,7 +144,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const runTotal = runLfs.reduce((a, b) => a + b, 0) || 1;
   const netRatio = netFenceLf / runTotal;
   const sections = runLfs.reduce(
-    (acc, r) => acc + Math.ceil((r * netRatio) / t.postSpacingFt),
+    (acc, r) => acc + Math.ceil((r * netRatio) / spacingFt),
     0,
   );
   // Posts: one per section boundary (sections+1 per open run), corners
@@ -152,7 +163,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const wallTopLf = Math.max(0, Math.min(input.wallTopLf ?? 0, input.totalLf));
   const wallPosts =
     wallTopLf > 0
-      ? Math.min(totalPosts, Math.floor(wallTopLf / t.postSpacingFt) + 1)
+      ? Math.min(totalPosts, Math.floor(wallTopLf / spacingFt) + 1)
       : 0;
 
   const bom: BomLine[] = [];
@@ -160,7 +171,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     if (qty > 0) bom.push({ key, label, qty: Math.ceil(qty), unit });
   };
 
-  add("post-line", `Line posts (${t.postSpacingFt}' o.c.)`, linePosts * waste, "ea");
+  add("post-line", `Line posts (${spacingFt}' o.c.)`, linePosts * waste, "ea");
   add("post-corner", "Corner posts", cornerPosts, "ea");
   add("post-end", "End posts", endPosts, "ea");
   add("post-gate", "Gate posts (heavy-set)", gatePosts, "ea");
@@ -190,7 +201,7 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
 
   if (t.build === "stick") {
     const rails = sections * t.railsPerSection(input.heightFt);
-    add("rail", `Rails (${t.postSpacingFt}')`, rails * waste, "ea");
+    add("rail", `Rails (${spacingFt}')`, rails * waste, "ea");
     const w = t.picketWidthIn ?? 5.5;
     const gap = t.picketGapIn ?? 0;
     const pitch = Math.max(1.5, w + gap); // board-on-board overlap floors at 1.5"

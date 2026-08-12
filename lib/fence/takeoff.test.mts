@@ -287,3 +287,25 @@ test("bucket adjusters: labor +20% moves labor only; tax is untouched", async ()
   );
   assert.ok(Math.abs(wild.total - capped.total) < 0.02);
 });
+
+test("post spacing override: tighter spacing = more posts; panels ignore it", () => {
+  const std = computeFenceTakeoff(CEDAR_100);
+  const tight = computeFenceTakeoff({ ...CEDAR_100, postSpacingFt: 4 });
+  // 8' → 4' o.c. roughly doubles the sections on the same footage.
+  assert.ok(
+    tight.sections >= std.sections * 1.8,
+    `4' o.c. should ~double sections: ${tight.sections} vs ${std.sections}`,
+  );
+  assert.ok(tight.posts.total > std.posts.total, "more posts at tighter spacing");
+  assert.ok(
+    tight.bom.find((b) => b.key === "post-line")!.label.includes("4'"),
+    "BOM label names the chosen spacing",
+  );
+  // Junk values fall back to the catalog spacing.
+  const junk = computeFenceTakeoff({ ...CEDAR_100, postSpacingFt: 99 });
+  assert.equal(junk.sections, std.sections);
+  // Prefab panel systems keep their fixed section width.
+  const vinyl = computeFenceTakeoff({ ...CEDAR_100, type: "vinyl-privacy", heightFt: 6 });
+  const vinylTight = computeFenceTakeoff({ ...CEDAR_100, type: "vinyl-privacy", heightFt: 6, postSpacingFt: 4 });
+  assert.equal(vinylTight.sections, vinyl.sections, "panels ignore the override");
+});

@@ -22,6 +22,7 @@ export type FenceDraftInput = {
   steppedSections?: number;
   wallTopLf?: number;
   postUpgrade?: "steel" | "6x6";
+  postSpacingFt?: number;
   mixed?: { type: FenceTypeId; lf: number }[];
   /** The market the estimator quoted in, frozen at scan time. Copied
    *  onto every tier so the saved proposal reprices at the same
@@ -103,6 +104,7 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
         steppedSections: input.steppedSections ?? 0,
         wallTopLf: input.wallTopLf ?? 0,
         postUpgrade: input.postUpgrade,
+        postSpacingFt: input.postSpacingFt,
         mixed: input.mixed,
         market: input.market,
         // Every tier quotes off the same price book — including the

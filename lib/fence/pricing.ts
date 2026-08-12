@@ -102,6 +102,7 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       steppedSections: Math.max(0, layout.steppedSections ?? 0),
       wallTopLf: Math.max(0, layout.wallTopLf ?? 0),
       postUpgrade: layout.postUpgrade,
+      postSpacingFt: layout.postSpacingFt,
       mixed: layout.mixed,
       // Local market rides along so the proposal prices at the same
       // state/ZIP rates the estimator quoted.

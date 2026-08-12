@@ -141,6 +141,11 @@ export function FenceEstimator() {
   const [wallLfInput, setWallLfInput] = useState<number | null>(null);
   // Post stock: standard, galvanized steel, or heavy 6×6 PT.
   const [postUpgrade, setPostUpgrade] = useState<"none" | "steel" | "6x6">("none");
+  // Line-post spacing, ft o.c. — null = the fence type's standard.
+  // Prefab panel systems ignore it (fixed section widths).
+  const [postSpacing, setPostSpacing] = useState<number | null>(null);
+  const effSpacingFt =
+    t.build === "panel" ? t.postSpacingFt : postSpacing ?? t.postSpacingFt;
   // Topo overlay: a coarse elevation lattice over the visible yard →
   // contour lines with ft labels on the layout canvas. One batched
   // Elevation call per scan; toggleable, on by default.
@@ -316,7 +321,7 @@ export function FenceEstimator() {
       setSlope(null);
       return;
     }
-    const spacingPx = t.postSpacingFt * scan.canvasPxPerFt;
+    const spacingPx = effSpacingFt * scan.canvasPxPerFt;
     const sources: { points: { x: number; y: number }[] }[] =
       layout.runs.length > 0
         ? layout.runs
@@ -350,7 +355,7 @@ export function FenceEstimator() {
       );
       const summary = summarizeSlopes(
         res.runElevationsFt,
-        t.postSpacingFt,
+        effSpacingFt,
         heightFt,
         t.build,
       );
@@ -359,7 +364,7 @@ export function FenceEstimator() {
     }, 1200);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layout.runs, scan, typeId, heightFt]);
+  }, [layout.runs, scan, typeId, heightFt, effSpacingFt]);
 
   // Contours from the lattice, relative to the lot's low point (labels
   // read "+8′"). Null when the yard is too flat to contour.
@@ -463,6 +468,7 @@ export function FenceEstimator() {
       steppedSections: effSteppedSections,
       wallTopLf: effWallLf,
       postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
+      postSpacingFt: postSpacing ?? undefined,
       mixed: mixedByType.length > 0 ? mixedByType : undefined,
       // Local market resolved from the scanned address's state + ZIP —
       // scales every catalog rate and carries the local tax rule.
@@ -470,7 +476,7 @@ export function FenceEstimator() {
       // …and the contractor's own rates, which the market then scales.
       rates: rateBook,
     }),
-    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, mixedByType, scan?.market, rateBook],
+    [typeId, heightFt, totalLf, runLengths, corners, ends, gatesSingle, gatesDouble, gatesCustomWidthsFt, terrain, effRemoval, stain, jobType, effSteppedSections, effWallLf, postUpgrade, postSpacing, mixedByType, scan?.market, rateBook],
   );
 
   const takeoff = useMemo(
@@ -574,6 +580,7 @@ export function FenceEstimator() {
         steppedSections: effSteppedSections,
         wallTopLf: effWallLf,
         postUpgrade: postUpgrade === "none" ? undefined : postUpgrade,
+        postSpacingFt: postSpacing ?? undefined,
         mixed: mixedByType.length > 0 ? mixedByType : undefined,
         market: scan.market,
         rates: rateBook,
@@ -747,6 +754,7 @@ export function FenceEstimator() {
                   sections={layout.sections}
                   retainingWall={effWallLf > 0}
                   postUpgrade={postUpgrade === "none" ? undefined : postUpgrade}
+                  postSpacingFt={effSpacingFt}
                   initialView={cam3d}
                   onViewChange={setCam3d}
                   className="aspect-[16/10]"
@@ -838,6 +846,43 @@ export function FenceEstimator() {
                       Galvanized steel posts never rot, warp or lean — the
                       panels stay wood.
                     </p>
+                  )}
+                </div>
+
+                <div className="mt-3">
+                  <span className="font-label text-zinc-500">Post spacing</span>
+                  {t.build === "panel" ? (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                      {t.label} installs as prefab {t.postSpacingFt}&apos;
+                      panels — spacing is fixed by the section width.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {([null, 4, 6, 8, 10] as const).map((o) => (
+                          <button
+                            key={String(o)}
+                            type="button"
+                            onClick={() => setPostSpacing(o)}
+                            className={cn(
+                              "transition-smooth ring-focus rounded-full border px-2.5 py-1.5 text-xs font-medium",
+                              postSpacing === o
+                                ? "border-accent-500 bg-accent-50 text-accent-900"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                            )}
+                          >
+                            {o === null ? `Standard (${t.postSpacingFt}′)` : `${o}′`}
+                          </button>
+                        ))}
+                      </div>
+                      {postSpacing !== null && postSpacing !== t.postSpacingFt && (
+                        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                          {postSpacing < t.postSpacingFt
+                            ? `Tighter than the ${t.postSpacingFt}′ standard — more posts and a stiffer fence; the takeoff and 3D update to match.`
+                            : `Wider than the ${t.postSpacingFt}′ standard — fewer posts; check your rail stock spans ${postSpacing}′.`}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 

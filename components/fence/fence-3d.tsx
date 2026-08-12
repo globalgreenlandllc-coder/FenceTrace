@@ -315,6 +315,7 @@ export function Fence3D({
   sections = null,
   retainingWall = false,
   postUpgrade,
+  postSpacingFt,
   initialView,
   onViewChange,
   shots,
@@ -356,6 +357,9 @@ export function Fence3D({
   /** Post stock: steel renders gray galvanized posts, 6×6 renders
    *  visibly heavier posts. */
   postUpgrade?: "steel" | "6x6";
+  /** Line-post spacing override, ft o.c. — panel builds keep their
+   *  prefab section width regardless. */
+  postSpacingFt?: number;
   /** Starting camera (yaw + tilt). The contractor's saved angle becomes
    *  the client's opening view; both can drag to orbit from there. */
   initialView?: Fence3DView;
@@ -434,7 +438,15 @@ export function Fence3D({
     const style = styleOf(t);
     const scale = pxPerFt && pxPerFt > 0 ? pxPerFt : 2.4;
     const zTop = heightFt * scale * HEIGHT_EXAGGERATION;
-    const spacingPx = t.postSpacingFt * scale;
+    const spacingFt =
+      t.build !== "panel" &&
+      postSpacingFt !== undefined &&
+      Number.isFinite(postSpacingFt) &&
+      postSpacingFt >= 4 &&
+      postSpacingFt <= 12
+        ? postSpacingFt
+        : t.postSpacingFt;
+    const spacingPx = spacingFt * scale;
     const rackFt = rackingLimitFt(t.build);
     // Cast-shadow plan direction (sun from the NW) — solid fences throw
     // a darker strip than see-through ones. Length ~ half the height.
@@ -1217,7 +1229,7 @@ export function Fence3D({
       reliefFt: Math.round(relief),
       contourIntervalFt,
     };
-  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, sections, retainingWall, postUpgrade]);
+  }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, sections, retainingWall, postUpgrade, postSpacingFt]);
 
   /* ===================== orbit (axonometric) ======================== */
   const orbitScene = useMemo(() => {

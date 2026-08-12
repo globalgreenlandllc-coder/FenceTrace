@@ -207,6 +207,9 @@ export type FenceEstimateConfig = {
   /** Post stock upgrade: galvanized-steel posts (rot-proof, wood fences)
    *  or heavy 6×6 pressure-treated posts. Absent = standard posts. */
   postUpgrade?: "steel" | "6x6";
+  /** Line-post spacing override, ft o.c. — absent = the type's catalog
+   *  spacing. Panel builds ignore it (prefab sections). */
+  postSpacingFt?: number;
   /** Mixed-type sections: stretches of the SAME layout built as a
    *  different fence (e.g. chain link across the back of a cedar job),
    *  grouped by type with the total LF per type. Their footage is

@@ -330,6 +330,7 @@ export function AerialSection({
                 gates={takeoff!.downspouts}
                 heightFt={fenceCfg!.heightFt}
                 typeId={fenceCfg!.type}
+                postSpacingFt={fenceCfg!.postSpacingFt}
                 pxPerFt={takeoff!.canvasPxPerFt}
                 runElevationsFt={takeoff!.runElevationsFt}
                 elevationSpacingPx={takeoff!.elevationSpacingPx}
