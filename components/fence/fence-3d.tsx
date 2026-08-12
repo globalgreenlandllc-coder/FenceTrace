@@ -397,7 +397,7 @@ export function Fence3D({
   const [walkCam, setWalkCam] = useState({ x: 450, y: 300, heading: 0, pitch: 0 });
 
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean; pan: boolean; k0: number; tx0: number; ty0: number; vscale: number } | null>(null);
   // Live pointers over the svg: one spins the camera, two pinch-zoom it.
   // Touch has no wheel, so without this the orbit view can't zoom at all
   // on a phone.
@@ -1585,7 +1585,9 @@ export function Fence3D({
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
-      if (e.button !== 0) return;
+      // Left drag spins; Shift+left or MIDDLE drag pans the zoomed frame
+      // (touch already pans via the two-finger pinch midpoint).
+      if (e.button !== 0 && e.button !== 1) return;
       // Guided/locked: the camera belongs to the contractor. Swallow the
       // gesture entirely rather than starting a drag that goes nowhere.
       if (!canOrbit) return;
@@ -1612,6 +1614,11 @@ export function Fence3D({
       if (ptrsRef.current.size > 1) return;
       const v = viewRef.current;
       const w = walkCamRef.current;
+      const z0 = zoomRef.current;
+      const pan =
+        modeRef.current === "orbit" && (e.button === 1 || e.shiftKey);
+      if (e.button === 1) e.preventDefault(); // no middle-click autoscroll
+      const rect = e.currentTarget.getBoundingClientRect();
       dragRef.current = {
         sx: e.clientX,
         sy: e.clientY,
@@ -1620,6 +1627,13 @@ export function Fence3D({
         h0: w.heading,
         p0: w.pitch,
         moved: false,
+        pan,
+        k0: z0.k,
+        tx0: z0.tx,
+        ty0: z0.ty,
+        // client px → VIEW px, so the frame tracks the cursor 1:1 on
+        // any rendered size.
+        vscale: VIEW_W / Math.max(1, rect.width),
       };
     },
     [canOrbit, toView],
@@ -1655,6 +1669,16 @@ export function Fence3D({
             pitch: Math.max(-0.42, Math.min(0.42, d.p0 + dy * 0.0028)),
           })),
         );
+      } else if (d.pan) {
+        // Same clamp as zoomTo: the framed scene never pans off-screen,
+        // and at k=1 the clamp collapses to no-op.
+        const tx = Math.min(0, Math.max(VIEW_W * (1 - d.k0), d.tx0 + dx * d.vscale));
+        const ty = Math.min(0, Math.max(VIEW_H * (1 - d.k0), d.ty0 + dy * d.vscale));
+        scheduleFrame(() =>
+          setZoomCam((z) =>
+            z.tx === tx && z.ty === ty ? z : { ...z, tx, ty },
+          ),
+        );
       } else {
         scheduleFrame(() =>
           setView({
@@ -1678,10 +1702,12 @@ export function Fence3D({
       if (wasPinching) return;
       if (!d) return;
       if (d.moved) {
-        if (modeRef.current === "orbit") onViewChange?.(viewRef.current);
+        if (modeRef.current === "orbit" && !d.pan) onViewChange?.(viewRef.current);
         return;
       }
       // clean click: in orbit mode, step into the yard at that spot
+      // (a shift-click or middle-click that never moved does nothing).
+      if (d.pan) return;
       if (modeRef.current === "orbit" && canWalk) {
         const at = pickGround(e.clientX, e.clientY);
         if (at) enterWalk(at);
@@ -2737,7 +2763,7 @@ export function Fence3D({
                   ↻ Drag to spin · pinch to zoom · tap to walk
                 </span>
                 <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
-                  ↻ Drag to spin · scroll to zoom · click a spot to walk
+                  ↻ Drag to spin · scroll to zoom · ⇧ drag to pan · click to walk
                 </span>
               </>
             ) : interaction === "guided" && showShots ? (
