@@ -54,7 +54,7 @@ import { contoursFromGrid } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getMyFenceRates } from "@/app/actions/fence-rates";
 import type { RateBook } from "@/lib/fence/rates";
-import { getScanBuildings, extractMainBuilding } from "@/app/actions/fence-buildings";
+import { getScanBuildings } from "@/app/actions/fence-buildings";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { Mountain } from "lucide-react";
 import type { Downspout, EditableLine, Measurements } from "@/lib/types";
@@ -233,64 +233,19 @@ export function FenceEstimator() {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Is this footprint the SUBJECT house? Centroid on the parcel (or
-    // near the canvas center when the scan has no parcel ring). OSM
-    // knowing only the neighbor's roof must not count as success.
-    const onParcel = (ring: { x: number; y: number }[]): boolean => {
-      const cx = ring.reduce((a, p) => a + p.x, 0) / ring.length;
-      const cy = ring.reduce((a, p) => a + p.y, 0) / ring.length;
-      const parcel = scan.parcelRings[0];
-      if (parcel && parcel.length >= 3) {
-        let inside = false;
-        for (let i = 0, j = parcel.length - 1; i < parcel.length; j = i++) {
-          const a = parcel[i];
-          const b = parcel[j];
-          if (
-            a.y > cy !== b.y > cy &&
-            cx < ((b.x - a.x) * (cy - a.y)) / (b.y - a.y) + a.x
-          ) {
-            inside = !inside;
-          }
-        }
-        return inside;
-      }
-      return Math.hypot(cx - CANVAS_W / 2, cy - CANVAS_H / 2) < 200;
-    };
-
-    // OSM missing the subject house is routine (rural lots, new builds
-    // — it often has the NEIGHBOR instead). When nothing lands on the
-    // parcel, Claude traces the main house off the scan aerial itself.
-    const ensureSubjectHouse = (osmFound: { x: number; y: number }[][]) => {
-      if (osmFound.some(onParcel)) return;
-      void extractMainBuilding({
-        imageDataUrl: scan.aerial.imageDataUrl,
-        parcelRing: scan.parcelRings[0],
-      }).then(
-        (r) => {
-          if (cancelled || !r.ring) return;
-          setBuildings((cur) =>
-            cur.some(onParcel) ? cur : [...cur, r.ring!],
-          );
-        },
-      );
-    };
-
     const attempt = (retriesLeft: number) => {
       void getScanBuildings({ center: scan.center, zoom: scan.zoom }).then(
         (res) => {
           if (cancelled) return;
           if (res.buildings.length > 0) {
             setBuildings((cur) => (cur.length === 0 ? res.buildings : cur));
-            ensureSubjectHouse(res.buildings);
             return;
           }
           // Overpass throttles shared cloud IPs — an empty answer is as
-          // often a 429 as a truly houseless lot. One quiet retry, then
-          // the AI trace takes over.
+          // often a 429 as a truly houseless lot. One quiet retry; after
+          // that the canvas House tool is the way to trace the home.
           if (retriesLeft > 0) {
             retryTimer = setTimeout(() => attempt(retriesLeft - 1), 6_000);
-          } else {
-            ensureSubjectHouse([]);
           }
         },
       );
