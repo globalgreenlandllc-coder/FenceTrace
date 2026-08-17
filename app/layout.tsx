@@ -30,12 +30,21 @@ export const metadata: Metadata = {
   title: "FenceScan — Smart Takeoffs, Proposals & Payments for Fence Contractors",
   description:
     "Type one address. Get a satellite-measured fence takeoff, a three-tier proposal your client e-signs, then run the schedule, crew, and payments — all in one platform.",
-  metadataBase: new URL("https://fencescan.com"),
+  // Vercel 308s the apex to www — every URL the site claims about
+  // itself must use the host Google actually lands on, or the crawler
+  // sees a site whose canonical story disagrees with its redirects.
+  metadataBase: new URL("https://www.fencescan.com"),
+  alternates: { canonical: "./" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large" },
+  },
   openGraph: {
     title: "FenceScan — Smart Takeoffs & Proposals for Fence Contractors",
     description:
       "Satellite-measured fence takeoffs, e-signed proposals, scheduling, crew and payments — from one typed address.",
-    url: "https://fencescan.com",
+    url: "https://www.fencescan.com",
     siteName: "FenceScan",
     type: "website",
   },

@@ -167,7 +167,10 @@ export default clerkMiddleware(async (auth, req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    // txt/xml matter here: without them robots.txt and sitemap.xml fell
+    // through to Clerk and redirected GOOGLEBOT TO THE SIGN-IN PAGE —
+    // the site was unindexable while looking perfectly healthy.
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|txt|xml)).*)",
     "/(api|trpc)(.*)",
     "/__clerk/:path*",
   ],
