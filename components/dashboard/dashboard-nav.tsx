@@ -25,6 +25,8 @@ import {
   Users,
   Wallet,
   X,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
 import { Logo } from "@/components/ui/logo";
@@ -99,14 +101,19 @@ function NavItem({
   Icon,
   active,
   featured,
+  collapsed = false,
 }: NavEntry & {
   active: boolean;
+  /** Icon-only rail mode — label becomes a native tooltip. */
+  collapsed?: boolean;
 }) {
   return (
     <Link
       href={href}
+      title={collapsed ? label : undefined}
       className={cn(
         "transition-smooth ring-focus flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
+        collapsed && "justify-center px-0 py-2",
         active
           ? "bg-accent-50 text-accent-800"
           : featured
@@ -123,7 +130,7 @@ function NavItem({
           active || featured ? "text-accent-700" : "text-zinc-400",
         )}
       />
-      {label}
+      {!collapsed && label}
     </Link>
   );
 }
@@ -363,39 +370,95 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Collapsed = icon rail (64px) instead of the full 224px sidebar —
+  // more room for canvases and tables. Persisted so it survives
+  // navigation and reloads; applied after mount so SSR and the first
+  // client render agree (the expanded default just flashes for a beat).
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(localStorage.getItem("fencescan.sidebarCollapsed") === "1");
+  }, []);
+  const toggleSidebar = () => {
+    setCollapsed((c) => {
+      localStorage.setItem("fencescan.sidebarCollapsed", c ? "0" : "1");
+      return !c;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-paper">
       {/* Sidebar (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[224px] flex-col border-r border-zinc-200/70 bg-white lg:flex">
-        <div className="flex h-16 shrink-0 items-center border-b border-zinc-200/70 px-5">
-          <Link href="/dashboard" className="ring-focus rounded-md">
-            <Logo showSubtitle={false} />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200/70 bg-white transition-[width] duration-200 motion-reduce:transition-none lg:flex",
+          collapsed ? "w-16" : "w-[224px]",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-16 shrink-0 items-center border-b border-zinc-200/70",
+            collapsed ? "justify-center px-0" : "px-5",
+          )}
+        >
+          <Link href="/dashboard" className="ring-focus rounded-md" title="FenceScan">
+            {collapsed ? (
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-600 text-white">
+                <Fence className="h-5 w-5" />
+              </span>
+            ) : (
+              <Logo showSubtitle={false} />
+            )}
           </Link>
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mt-5 first:mt-0">
-              <div className="microlabel mb-1.5 px-2.5">{group.label}</div>
+              {collapsed ? (
+                <div className="mx-2 mb-1.5 border-t border-zinc-200/70 first:hidden" />
+              ) : (
+                <div className="microlabel mb-1.5 px-2.5">{group.label}</div>
+              )}
               <div className="space-y-0.5">
                 {group.items.map((n) => (
                   <NavItem
                     key={n.href}
                     {...n}
                     active={isActive(pathname, n.href)}
+                    collapsed={collapsed}
                   />
                 ))}
               </div>
             </div>
           ))}
         </nav>
-        <div className="border-t border-zinc-200/70 p-3">
-          <AccountMenu align="up" />
-        </div>
+        {!collapsed && (
+          <div className="border-t border-zinc-200/70 p-3">
+            <AccountMenu align="up" />
+          </div>
+        )}
+        {/* Fold handle — mid-edge, like a drawer pull. */}
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="ring-focus transition-smooth absolute -right-3 top-1/2 z-50 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border border-zinc-200 bg-white text-zinc-400 shadow-sm hover:text-zinc-700 hover:shadow"
+        >
+          {collapsed ? (
+            <ChevronsRight className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronsLeft className="h-3.5 w-3.5" />
+          )}
+        </button>
       </aside>
 
       {/* Content column */}
-      <div className="flex min-h-screen flex-col lg:pl-[224px]">
+      <div
+        className={cn(
+          "flex min-h-screen flex-col transition-[padding] duration-200 motion-reduce:transition-none",
+          collapsed ? "lg:pl-16" : "lg:pl-[224px]",
+        )}
+      >
         {/* Mobile top bar */}
         <div className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white lg:hidden">
           <div className="flex h-14 items-center gap-1 pl-1.5 pr-4">
