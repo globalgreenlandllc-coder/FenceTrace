@@ -421,6 +421,26 @@ export function Fence3D({
   const [walkCam, setWalkCam] = useState({ x: 450, y: 300, heading: 0, pitch: 0 });
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // Overlay sizing follows the CANVAS, not the viewport: the portal
+  // embeds this in a narrow column where full-size touch pills + hint +
+  // shot strip + summary chips stacked into rows and buried the yard.
+  const [uiW, setUiW] = useState(900);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((es) => {
+      const w = es[0]?.contentRect.width;
+      if (w) setUiW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const compactUi = uiW < 560;
+  /** Overlay pill sizing: compact canvases get dense pills; big ones
+   *  keep the touch-friendly mobile sizing. */
+  const pillCls = compactUi
+    ? "px-2.5 py-1.5 text-[11px]"
+    : "${pillCls}";
   const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean; pan: boolean; k0: number; tx0: number; ty0: number; vscale: number } | null>(null);
   // Live pointers over the svg: one spins the camera, two pinch-zoom it.
   // Touch has no wheel, so without this the orbit view can't zoom at all
@@ -2822,7 +2842,7 @@ export function Fence3D({
           <button
             type="button"
             onClick={() => setMode("orbit")}
-            className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+            className={`transition-smooth ring-focus whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white`}
           >
             ✕ Exit walk (Esc)
           </button>
@@ -2839,7 +2859,7 @@ export function Fence3D({
                     zoomRef.current.k > 1 ? zoomRef.current : null,
                   )
                 }
-                className="transition-smooth ring-focus rounded-full bg-accent-600 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-white shadow-sm ring-1 ring-accent-500 hover:bg-accent-700"
+                className={`transition-smooth ring-focus whitespace-nowrap shrink-0 rounded-full bg-accent-600 ${pillCls} font-semibold text-white shadow-sm ring-1 ring-accent-500 hover:bg-accent-700`}
               >
                 📌 Save this angle
               </button>
@@ -2853,7 +2873,7 @@ export function Fence3D({
                   setZoomCam({ k: 1, tx: 0, ty: 0 });
                   onViewChange?.(v);
                 }}
-                className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+                className={`transition-smooth ring-focus whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200 hover:bg-white`}
               >
                 Reset view
               </button>
@@ -2862,15 +2882,17 @@ export function Fence3D({
               <button
                 type="button"
                 onClick={() => enterWalk()}
-                className="transition-smooth ring-focus rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white"
+                className={`transition-smooth ring-focus whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-accent-800 shadow-sm ring-1 ring-accent-200 hover:bg-white`}
               >
                 🚶 Walk the yard
               </button>
             )}
-            {canOrbit ? (
+            {canOrbit && !compactUi ? (
               <>
                 {/* Same gestures, named the way each input actually does
-                    them — the phone has no scroll wheel. */}
+                    them — the phone has no scroll wheel. On a compact
+                    canvas the hint is clutter, not help: gestures still
+                    work, the pills were covering the fence. */}
                 <span className="pointer-events-none rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:hidden">
                   ↻ Drag to spin · pinch to zoom · tap to walk
                 </span>
@@ -2878,7 +2900,7 @@ export function Fence3D({
                   ↻ Drag to spin · scroll to zoom · ⇧ drag to pan · click to walk
                 </span>
               </>
-            ) : interaction === "guided" && showShots ? (
+            ) : interaction === "guided" && showShots && !compactUi ? (
               <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
                 Tap an angle below to view from that side
               </span>
@@ -2891,7 +2913,13 @@ export function Fence3D({
           camera; this is the client's way "around" the fence in guided
           mode and a set of bookmarks in free mode. */}
       {showShots && !walking && (
-        <div className="absolute inset-x-3 top-12 flex flex-wrap justify-end gap-1.5">
+        <div
+          className={
+            compactUi
+              ? "absolute inset-x-3 top-11 flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              : "absolute inset-x-3 top-12 flex flex-wrap justify-end gap-1.5"
+          }
+        >
           {shotList.map((s) => {
             const active = s.id === activeShotId;
             return (
@@ -2901,7 +2929,7 @@ export function Fence3D({
                 onClick={() => selectShot(s)}
                 aria-pressed={active}
                 className={cn(
-                  "transition-smooth ring-focus rounded-full px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold shadow-sm ring-1",
+                  `transition-smooth ring-focus whitespace-nowrap shrink-0 whitespace-nowrap shrink-0 rounded-full ${pillCls} font-semibold shadow-sm ring-1`,
                   active
                     ? "bg-accent-600 text-white ring-accent-500"
                     : "bg-white/90 text-zinc-700 ring-zinc-200 hover:bg-white",
@@ -2914,34 +2942,42 @@ export function Fence3D({
         </div>
       )}
 
-      {/* client-readable summary chips */}
-      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5">
+      {/* client-readable summary chips — on a compact canvas: ONE
+          scrollable line, primary chips only (the scope sheet below the
+          fold carries the full story now). */}
+      <div
+        className={
+          compactUi
+            ? "absolute bottom-2 left-2 right-2 flex flex-nowrap items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            : "absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5"
+        }
+      >
         {walking ? (
-          <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+          <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200`}>
             W A S D / arrows to walk · Shift to hurry · drag to look around
           </span>
         ) : (
           <>
-            <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200">
+            <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-zinc-700 shadow-sm ring-1 ring-zinc-200`}>
               {label} — to scale
             </span>
             {gateCount > 0 && (
-              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200">
+              <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-pink-700 shadow-sm ring-1 ring-pink-200`}>
                 {gateCount} {gateCount === 1 ? "gate" : "gates"}
               </span>
             )}
             {steppedCount > 0 && (
-              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200">
+              <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-accent-700 shadow-sm ring-1 ring-accent-200`}>
                 ⛰ {steppedCount} sections step down the slope
               </span>
             )}
-            {wallCount > 0 && (
-              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300">
+            {wallCount > 0 && !compactUi && (
+              <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-stone-700 shadow-sm ring-1 ring-stone-300`}>
                 🧱 {wallCount} {wallCount === 1 ? "section mounts" : "sections mount"} on the retaining wall
               </span>
             )}
-            {hasSurface && contourIntervalFt > 0 && (
-              <span className="rounded-full bg-white/90 px-3 py-2 text-xs sm:px-2.5 sm:py-1 sm:text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200">
+            {hasSurface && contourIntervalFt > 0 && !compactUi && (
+              <span className={`whitespace-nowrap shrink-0 rounded-full bg-white/90 ${pillCls} font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200`}>
                 ⛰ {reliefFt}′ of rise · contour lines every {contourIntervalFt}′
                 {reliefFt >= heightFt * 5 ? " · hill softened to keep the fence readable" : ""}
               </span>

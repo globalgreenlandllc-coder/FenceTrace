@@ -12,6 +12,7 @@ import { AerialSection } from "@/components/proposal/aerial-section";
 import { PackagesSection } from "@/components/proposal/packages-section";
 import { PhotosSection } from "@/components/proposal/photos-section";
 import { TermsSection } from "@/components/proposal/terms-section";
+import { ScopeSection } from "./scope-section";
 import { SignaturePad } from "./signature-pad";
 import { ListenCard } from "./listen-card";
 import { AcceptBar } from "./accept-bar";
@@ -150,6 +151,10 @@ export function ClientPortalView({
             selectedPackageId={selectedId}
             onSelectPackage={setSelectedId}
           />
+
+          {/* The itemized scope for whichever package is selected —
+              posts, concrete, sizes, labor, the works. */}
+          <ScopeSection proposal={proposal} selectedPackageId={selectedId} />
 
           {discountThread && !previewMode && (
             <DiscountThread
