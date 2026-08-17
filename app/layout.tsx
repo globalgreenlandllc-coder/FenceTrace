@@ -66,6 +66,41 @@ export const viewport: Viewport = {
   themeColor: "#1E7340",
 };
 
+/**
+ * Structured data for search: who this is (Organization) and what the
+ * product is (SoftwareApplication). Static and truthful — no ratings,
+ * no invented review counts, nothing Google can penalize.
+ */
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.fencescan.com/#org",
+      name: "FenceScan",
+      url: "https://www.fencescan.com",
+      logo: "https://www.fencescan.com/icon.svg",
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.fencescan.com/#site",
+      name: "FenceScan",
+      url: "https://www.fencescan.com",
+      publisher: { "@id": "https://www.fencescan.com/#org" },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "FenceScan",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web",
+      description:
+        "Satellite-measured fence takeoffs, three-tier proposals with e-signature, scheduling, crew and payments for fence contractors.",
+      url: "https://www.fencescan.com",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -89,6 +124,12 @@ export default function RootLayout({
         className={`${inter.variable} ${display.variable} ${mono.variable}`}
       >
         <body className="font-sans antialiased text-zinc-900">
+        <script
+          type="application/ld+json"
+          // JSON.stringify of a static literal — nothing user-supplied
+          // ever reaches this sink.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
           {/* EstimateJobProvider lives above routing so a running
               takeoff analysis (and its floating mini-window) survives
               navigation anywhere in the app. */}
