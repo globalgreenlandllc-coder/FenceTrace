@@ -531,7 +531,11 @@ export function DashboardShell({
           <div className="flex-1 bg-paper lg:min-h-[calc(100vh-3.5rem)]">
             <main
               className={cn(
-                "mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6",
+                // The freed sidebar width must reach the CONTENT, not
+                // become empty margin — the max-width cap grows by the
+                // same ~160px the rail gives back.
+                "mx-auto w-full px-4 py-8 transition-[max-width] duration-200 motion-reduce:transition-none sm:px-6",
+                collapsed ? "max-w-[1360px]" : "max-w-[1200px]",
                 contentClassName,
               )}
             >
