@@ -34,6 +34,9 @@ const VIDEOS = [
   ["v25-snohomish-ridgeline-30-916.html", 1080, 1920, "vid-25-snohomish-real-ridgeline-30s-9x16"],
   ["v26-snohomish-daylight-30-916.html", 1080, 1920, "vid-26-snohomish-real-daylight-30s-9x16"],
   ["v27-snohomish-jobsite-30-916.html", 1080, 1920, "vid-27-snohomish-real-jobsite-30s-9x16"],
+  ["v28-boundary-record-30-916.html", 1080, 1920, "vid-28-boundary-record-30s-9x16"],
+  ["v29-boundary-blueprint-30-916.html", 1080, 1920, "vid-29-boundary-blueprint-30s-9x16"],
+  ["v30-boundary-jobsite-30-916.html", 1080, 1920, "vid-30-boundary-jobsite-30s-9x16"],
 ];
 
 const only = process.argv[2];

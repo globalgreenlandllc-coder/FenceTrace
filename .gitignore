@@ -39,6 +39,10 @@ scripts/*.html
 marketing/fence-ads/src/plates/act*.png
 marketing/fence-ads/src/plates/hero-*.png
 marketing/fence-ads/src/plates/section-*.png
+# Render scratch: per-frame PNGs (deleted after a clean encode, left
+# behind by an interrupted one) and --preview layout stills.
+marketing/fence-ads/frames-*/
+marketing/fence-ads/preview/
 
 # Claude Code session config
 .claude/

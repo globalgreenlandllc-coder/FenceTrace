@@ -1,0 +1,13 @@
+{
+  "address": "230 Avenue B, Snohomish, WA 98290",
+  "pxPerFt": 4.318899999999999,
+  "acres": 0.26,
+  "anchor": {
+    "lat": 47.913415511173,
+    "lng": -122.095855343346
+  },
+  "market": {
+    "label": "Washington",
+    "labor": 1.15
+  }
+}

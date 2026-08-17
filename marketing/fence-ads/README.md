@@ -1,6 +1,6 @@
 # marketing/fence-ads
 
-The FenceScan Meta ad set — 27 videos and 10 statics for Facebook and
+The FenceScan Meta ad set — 30 videos and 10 statics for Facebook and
 Instagram, plus the pipeline that renders them.
 
 Start with [AD-COPY-AND-LAUNCH-GUIDE.md](AD-COPY-AND-LAUNCH-GUIDE.md): it
@@ -14,10 +14,14 @@ src/
   render-topo.mts      builds contour lines with lib/fence/contours.ts itself
   kit.css              the ad design system (colors lifted from tailwind.config.ts)
   kit.js               the timeline — every ad is a pure function of window.seek(ms)
-  v01…v27.html         one file per video
+  v01…v30.html         one file per video
   fetch-real.mts       pulls a real address: aerial + elevation + market
   compute-real-job.mts prices the drawn enclosure with the real engine
   real-ad.css/js       the shared Snohomish choreography (v23–v27 set palettes)
+  fetch-real2.mts      pulls a lot WITH its county parcel ring (v28–v30)
+  build-real2-plates.mts  a saved live scan → aerial + ring + USGS topo plates
+  compute-real2-job.mts   prices the fence that rides the recorded line
+  boundary-ad.css/js   the county-boundary choreography (v28–v30 palettes)
   steps3d.js           the stepped-fence 3D scene shared by v14/v20
   statics.html         all ten images, one block each
   render-video.mjs     one HTML → MP4 (or --preview stills)

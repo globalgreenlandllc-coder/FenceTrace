@@ -1,4 +1,4 @@
-# FenceScan — Meta ad set (10 videos + 10 statics)
+# FenceScan — Meta ad set (30 videos + 10 statics)
 
 Everything in `out/` is ready to upload to Meta Ads Manager for Facebook and
 Instagram. Nothing here is a mockup: the product shots are screenshots of the
@@ -82,6 +82,55 @@ Headline: `A real yard, priced in 60 seconds` · CTA: `Learn more`
   this specific home, re-run `fetch-real.mts` with any address you own.
 - The 5-acre figure is owner-supplied (no parcel record was fetched);
   everything else on screen is computed.
+
+### The county-boundary set — the parcel line arrives live (28–30)
+
+| # | File | Design |
+|---|------|--------|
+| 28 | `vid-28-boundary-record-30s-9x16.mp4` | FenceScan emerald + hard-cut flashes |
+| 29 | `vid-29-boundary-blueprint-30s-9x16.mp4` | Blueprint navy/cyan + HUD corners |
+| 30 | `vid-30-boundary-jobsite-30s-9x16.mp4` | Amber jobsite + contour backdrop |
+
+The set built around the question every fence contractor actually asks:
+**where does the property end?** All three run the same 30s story on
+**230 Avenue B, Snohomish, WA 98290** — a real 0.26-acre in-town lot:
+address typed → the real Google aerial → **the county parcel record
+arrives on screen** (radar sweep, the recorded ring drawing corner by
+corner, the 6 recorded sides locking in) → the fence snaps onto three of
+those lines with the street frontage left open → USGS topo → 3D on the
+true per-post elevations, county line still drawn on the ground → the
+priced proposal.
+
+The boundary act is the hook: the parcel polygon is a **live ReportAll
+lookup through the shipping scan pipeline**, not a drawing. Everything
+downstream is engine output for this yard at real Washington rates
+(labor ×1.15): 270 LF drawn / **266 net** · 2 corners · 37 posts · 74
+bags of concrete · grade 3.9% avg, 20.0% max · **8 slope steps** · 130
+crew hours · Good $13,876 / **Better $16,006** / Best $21,951 · $4,802
+deposit. Elevation is USGS 3DEP on the estimator's 18×12 lattice: **14′
+of relief in frame** (the headline number, 2′ contours) and 5.5′ of fall
+along the fence line itself — which is what the 8 steps come from.
+
+Copy for all three:
+> Where does the yard actually end? Type the address and FenceScan pulls
+> the recorded parcel line straight from the county — 0.26 acres, 6
+> recorded sides, on the photo in seconds. Snap the fence to three of
+> them, leave the front open, and the grade gets counted too: 8 stepped
+> sections off real elevation. 266 feet, $16,006, Washington rates — no
+> tape, no site visit.
+Headline: `The property line, before you drive out` · CTA: `Learn more`
+
+**Notes for this set:**
+- The parcel ring is a real county record via ReportAll, fetched through
+  the live app; the aerial is a Google Static Maps tile with attribution
+  visible (keep it). Elevation is USGS 3DEP, free and public.
+- The fence deliberately stops short of the street on both ends (18′
+  setback) — that's how these jobs are built, and it makes the "we know
+  which line is the frontage" point without saying it.
+- No building footprint is drawn in 3D: OpenStreetMap has none for this
+  lot, and the app would show the same. Nothing invented.
+- To re-run on a different address: scan it once through the app, save
+  the teaser JSON, then `build-real2-plates.mts` → `compute-real2-job.mts`.
 - Rebuild chain: `fetch-real.mts` → `compute-real-job.mts` →
   `render-all.mjs v23` (etc). Change the drawn polygon in
   `compute-real-job.mts` and every figure re-derives.

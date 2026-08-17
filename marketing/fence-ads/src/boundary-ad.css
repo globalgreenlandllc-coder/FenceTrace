@@ -1,0 +1,37 @@
+/* boundary-ad.css — additions for the county-boundary ad set (v28-v30).
+   Loaded AFTER real-ad.css, which carries the shared frame/scene system. */
+
+/* the "pulling county records" status pill, top-left of the canvas */
+.rec-pill { position: absolute; left: 14px; top: 14px; z-index: 6; opacity: 0;
+  display: inline-flex; align-items: center; gap: 10px; border-radius: 999px;
+  background: rgba(9, 20, 12, .88); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.16);
+  padding: 11px 18px; font-size: 20px; font-weight: 700; color: #fff; }
+.rec-pill .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--acc);
+  box-shadow: 0 0 0 0 rgba(74,222,128,.75); animation: recpulse 1.2s infinite; }
+.rec-pill.done .dot { animation: none; background: #34D399; }
+@keyframes recpulse {
+  0% { box-shadow: 0 0 0 0 rgba(74,222,128,.7); }
+  70% { box-shadow: 0 0 0 12px rgba(74,222,128,0); }
+  100% { box-shadow: 0 0 0 0 rgba(74,222,128,0); }
+}
+
+/* APN / acreage plate that lands with the boundary */
+.apn { position: absolute; right: 14px; bottom: 14px; z-index: 6; opacity: 0;
+  text-align: right; background: rgba(9,20,12,.94); border-radius: 14px;
+  box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.2); padding: 12px 18px; }
+.apn b { display: block; font-family: "Space Mono", monospace; font-size: 23px;
+  font-weight: 700; color: #fff; letter-spacing: .02em; }
+.apn span { display: block; font-size: 17px; color: rgba(255,255,255,.78); margin-top: 3px; }
+
+/* the source stamp that appears when the ring locks */
+.src-stamp { position: absolute; left: 50%; top: 50%; z-index: 7; opacity: 0;
+  transform: translate(-50%, -50%); text-align: center; pointer-events: none; }
+.src-stamp .t { font-family: "Archivo Black", sans-serif; text-transform: uppercase;
+  font-size: 42px; letter-spacing: .04em; color: #fff;
+  text-shadow: 0 3px 24px rgba(0,0,0,.85); }
+/* The subline sits over bright aerial — a palette accent alone can wash
+   out completely (the blueprint blue did), so it carries its own plate. */
+.src-stamp .u { display: inline-block; margin-top: 10px; padding: 6px 14px;
+  border-radius: 999px; background: rgba(9,20,12,.82);
+  font-family: "Space Mono", monospace; font-size: 19px; font-weight: 700;
+  letter-spacing: .16em; color: var(--acc); text-transform: uppercase; }
