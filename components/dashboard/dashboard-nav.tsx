@@ -45,34 +45,31 @@ type NavEntry = {
   /** Tint the row in brand green even when it isn't the active route —
    *  reserved for the estimator, the one entry that starts real work. */
   featured?: boolean;
-  /** Resting icon color — one muted hue per destination so the nav
-   *  scans by color, not just by word. Active/featured rows override. */
-  tint?: string;
 };
 
 const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Work",
     items: [
-      { href: "/dashboard", label: "Overview", Icon: LayoutGrid, tint: "text-indigo-500" },
-      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText, tint: "text-sky-600" },
+      { href: "/dashboard", label: "Overview", Icon: LayoutGrid },
+      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText },
       // Tape-measure proposals — no plans, address won't scan; the
       // contractor measured on site, types the numbers in, and sends
       // the proposal from the same page (separate from the AI builder).
-      { href: "/dashboard/measure", label: "Manual proposal", Icon: Ruler, tint: "text-cyan-600" },
+      { href: "/dashboard/measure", label: "Manual proposal", Icon: Ruler },
       // Fully-paid jobs — the proposals list pre-filtered to Done.
-      { href: "/dashboard/proposals?filter=done", label: "Done jobs", Icon: PartyPopper, tint: "text-amber-500" },
-      { href: "/dashboard/leads", label: "Leads", Icon: MapPin, tint: "text-rose-500" },
-      { href: "/dashboard/clients", label: "Clients", Icon: Users, tint: "text-violet-500" },
+      { href: "/dashboard/proposals?filter=done", label: "Done jobs", Icon: PartyPopper },
+      { href: "/dashboard/leads", label: "Leads", Icon: MapPin },
+      { href: "/dashboard/clients", label: "Clients", Icon: Users },
       // Overhead + per-job profit — the contractor's own P&L, never client-facing.
-      { href: "/dashboard/financials", label: "Financials", Icon: Wallet, tint: "text-emerald-600" },
+      { href: "/dashboard/financials", label: "Financials", Icon: Wallet },
     ],
   },
   {
     label: "Delivery",
     items: [
-      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays, tint: "text-blue-600" },
-      { href: "/dashboard/workers", label: "Workers", Icon: HardHat, tint: "text-orange-500" },
+      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays },
+      { href: "/dashboard/workers", label: "Workers", Icon: HardHat },
     ],
   },
   {
@@ -86,11 +83,17 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Account",
     items: [
-      { href: "/dashboard/settings", label: "Settings", Icon: Settings, tint: "text-zinc-500" },
-      { href: "/dashboard/support", label: "Help & support", Icon: LifeBuoy, tint: "text-teal-600" },
+      { href: "/dashboard/settings", label: "Settings", Icon: Settings },
+      { href: "/dashboard/support", label: "Help & support", Icon: LifeBuoy },
     ],
   },
 ];
+
+/** The sidebar's dark forest surface — brand ink with a green cast. */
+const SIDEBAR_SURFACE = "bg-gradient-to-b from-accent-950 to-ink";
+/** Main-action button: bright brand gradient that glows on the dark rail. */
+const CTA_CLASSES =
+  "bg-gradient-to-b from-accent-500 to-accent-600 text-white ring-1 ring-inset ring-white/15 shadow-lg shadow-accent-950/50 hover:from-accent-400 hover:to-accent-500";
 
 function isActive(pathname: string | null, href: string) {
   return href === "/dashboard"
@@ -104,7 +107,6 @@ function NavItem({
   Icon,
   active,
   featured,
-  tint,
   collapsed = false,
 }: NavEntry & {
   active: boolean;
@@ -116,27 +118,30 @@ function NavItem({
       href={href}
       title={collapsed ? label : undefined}
       className={cn(
-        "transition-smooth ring-focus flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
+        "transition-smooth ring-focus group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
         collapsed && "justify-center px-0 py-2",
         active
-          ? // The route you're on reads as a solid brand-green pill.
-            "bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-sm shadow-accent-600/25"
+          ? // Lit row + green edge tick — where you are, at a glance.
+            "bg-white/[0.09] text-white ring-1 ring-inset ring-white/10"
           : featured
-            ? // Resting state still reads green, with a hairline so the row
-              //  has an edge against the plain items above it.
-              "bg-accent-50/60 text-accent-800 ring-1 ring-inset ring-accent-100 hover:bg-accent-50 hover:ring-accent-200"
-            : "text-zinc-600 hover:bg-zinc-100/70 hover:text-zinc-900",
+            ? // Resting state still reads green against the dark rail.
+              "bg-accent-400/10 text-accent-100 ring-1 ring-inset ring-accent-400/25 hover:bg-accent-400/15"
+            : "text-white/55 hover:bg-white/[0.05] hover:text-white",
         featured && !active && "font-semibold",
       )}
     >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent-400"
+        />
+      )}
       <Icon
         className={cn(
           "transition-smooth h-4 w-4",
-          active
-            ? "text-white"
-            : featured
-              ? "text-accent-700"
-              : (tint ?? "text-zinc-400"),
+          active || featured
+            ? "text-accent-300"
+            : "text-white/40 group-hover:text-white/75",
         )}
       />
       {!collapsed && label}
@@ -167,20 +172,24 @@ function AccountMenu({ align = "up" }: { align?: "up" | "down" }) {
           <Avatar initials={session?.user.initials ?? "?"} />
         </button>
       ) : (
+        // Sits on the dark sidebar rail, so it's styled for that surface.
         <button
           onClick={() => setOpen((v) => !v)}
-          className="ring-focus transition-smooth flex w-full items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left hover:border-zinc-200 hover:bg-zinc-50"
+          className="ring-focus transition-smooth flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left hover:bg-white/[0.07]"
         >
-          <Avatar initials={session?.user.initials ?? "?"} />
+          <Avatar
+            initials={session?.user.initials ?? "?"}
+            className="ring-1 ring-white/20"
+          />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium text-zinc-900">
+            <div className="truncate text-[13px] font-medium text-white">
               {session?.user.name ?? "—"}
             </div>
-            <div className="truncate text-[11px] text-zinc-500">
+            <div className="truncate text-[11px] text-white/45">
               {session?.profile.company ?? ""}
             </div>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-white/35" />
         </button>
       )}
       {open && (
@@ -279,18 +288,19 @@ function MobileNavDrawer({
         aria-modal="true"
         aria-label="Navigation menu"
         className={cn(
-          "absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col bg-white shadow-elevated transition-transform duration-200 ease-out motion-reduce:transition-none",
+          "absolute inset-y-0 left-0 flex w-[280px] max-w-[85vw] flex-col shadow-elevated transition-transform duration-200 ease-out motion-reduce:transition-none",
+          SIDEBAR_SURFACE,
           open ? "translate-x-0" : "-translate-x-full",
         )}
       >
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200/70 pl-5 pr-2">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-white/[0.06] pl-5 pr-2">
           <Link href="/dashboard" className="ring-focus rounded-md">
-            <Logo showSubtitle={false} />
+            <Logo showSubtitle={false} className="text-white" />
           </Link>
           <button
             onClick={onClose}
             aria-label="Close menu"
-            className="ring-focus transition-smooth grid h-10 w-10 place-items-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+            className="ring-focus transition-smooth grid h-10 w-10 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
@@ -303,14 +313,17 @@ function MobileNavDrawer({
         >
           <Link
             href="/dashboard/proposals/new"
-            className="ring-focus transition-smooth press-scale mb-4 flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-accent-500 to-accent-600 px-3.5 text-[13px] font-semibold text-white shadow-sm shadow-accent-600/25 hover:from-accent-600 hover:to-accent-700"
+            className={cn(
+              "ring-focus transition-smooth press-scale mb-4 flex h-10 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold",
+              CTA_CLASSES,
+            )}
           >
             <Plus className="h-4 w-4" />
             New Proposal
           </Link>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mt-5 first:mt-0">
-              <div className="microlabel mb-1.5 px-2.5">{group.label}</div>
+              <div className="microlabel mb-1.5 px-2.5 text-white/30">{group.label}</div>
               <div className="space-y-0.5">
                 {group.items.map((n) => (
                   <NavItem
@@ -323,7 +336,7 @@ function MobileNavDrawer({
             </div>
           ))}
         </nav>
-        <div className="border-t border-zinc-200/70 p-3">
+        <div className="border-t border-white/[0.06] p-3">
           <AccountMenu align="up" />
         </div>
       </div>
@@ -351,10 +364,10 @@ function CompanyChip() {
 }
 
 /**
- * Contractor-OS app shell: fixed white sidebar with grouped nav (WORK /
- * DELIVERY / TOOLS / ACCOUNT), a slim white topbar (search, company chip,
- * new-proposal CTA, credits, notifications, account), and page content on
- * the warm paper canvas.
+ * Contractor-OS app shell: fixed deep-forest sidebar (brand ink with a
+ * green cast) with grouped nav (WORK / DELIVERY / TOOLS / ACCOUNT), a slim
+ * white topbar (search, company chip, new-proposal CTA, credits,
+ * notifications, account), and page content on the warm paper canvas.
  *
  * Pages render everything inside <DashboardShell title="…" actions={…}>.
  * `eyebrow` renders a microlabel above the title; `subtitle` a muted line
@@ -399,23 +412,24 @@ export function DashboardShell({
       {/* Sidebar (desktop) */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-zinc-200/70 bg-white transition-[width] duration-200 motion-reduce:transition-none lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-white/5 transition-[width] duration-200 motion-reduce:transition-none lg:flex",
+          SIDEBAR_SURFACE,
           collapsed ? "w-16" : "w-[224px]",
         )}
       >
         <div
           className={cn(
-            "flex h-16 shrink-0 items-center border-b border-zinc-200/70",
+            "flex h-16 shrink-0 items-center border-b border-white/[0.06]",
             collapsed ? "justify-center px-0" : "px-5",
           )}
         >
           <Link href="/dashboard" className="ring-focus rounded-md" title="FenceScan">
             {collapsed ? (
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-600 text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent-600 text-white ring-1 ring-white/15">
                 <Fence className="h-5 w-5" />
               </span>
             ) : (
-              <Logo showSubtitle={false} />
+              <Logo showSubtitle={false} className="text-white" />
             )}
           </Link>
         </div>
@@ -426,7 +440,8 @@ export function DashboardShell({
             href="/dashboard/proposals/new"
             title={collapsed ? "New Proposal" : undefined}
             className={cn(
-              "ring-focus transition-smooth press-scale flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-accent-500 to-accent-600 text-[13px] font-semibold text-white shadow-sm shadow-accent-600/25 hover:from-accent-600 hover:to-accent-700",
+              "ring-focus transition-smooth press-scale flex items-center justify-center gap-1.5 rounded-lg text-[13px] font-semibold",
+              CTA_CLASSES,
               collapsed ? "mx-auto h-10 w-10 rounded-xl" : "h-9 w-full px-3.5",
             )}
           >
@@ -438,9 +453,9 @@ export function DashboardShell({
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mt-5 first:mt-0">
               {collapsed ? (
-                <div className="mx-2 mb-1.5 border-t border-zinc-200/70 first:hidden" />
+                <div className="mx-2 mb-1.5 border-t border-white/[0.07] first:hidden" />
               ) : (
-                <div className="microlabel mb-1.5 px-2.5">{group.label}</div>
+                <div className="microlabel mb-1.5 px-2.5 text-white/30">{group.label}</div>
               )}
               <div className="space-y-0.5">
                 {group.items.map((n) => (
@@ -456,7 +471,7 @@ export function DashboardShell({
           ))}
         </nav>
         {!collapsed && (
-          <div className="border-t border-zinc-200/70 p-3">
+          <div className="border-t border-white/[0.06] p-3">
             <AccountMenu align="up" />
           </div>
         )}
