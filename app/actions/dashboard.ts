@@ -680,3 +680,48 @@ export async function getDashboardHome(timeZone?: string): Promise<{
   ]);
   return { proposals, activity, attention, overview };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Sidebar live badges — two cheap counts so the nav shows the state  */
+/*  of the business at a glance.                                       */
+/* ------------------------------------------------------------------ */
+
+export type NavCounts = {
+  /** Proposals sitting with the client (SENT or VIEWED). */
+  proposalsAwaiting: number;
+  /** Scheduled calendar entries inside the caller's local "today". */
+  jobsToday: number;
+};
+
+export async function getNavCounts(input: {
+  /** Client-local day bounds as ISO strings — "today" is the
+   *  contractor's day, not the server's UTC day. */
+  dayStartIso: string;
+  dayEndIso: string;
+}): Promise<NavCounts> {
+  const me = await getMe();
+  if (!me) return { proposalsAwaiting: 0, jobsToday: 0 };
+  const dayStart = new Date(input.dayStartIso);
+  const dayEnd = new Date(input.dayEndIso);
+  const validDay =
+    Number.isFinite(dayStart.getTime()) &&
+    Number.isFinite(dayEnd.getTime()) &&
+    dayEnd > dayStart &&
+    // sanity-clamp: a "day" larger than 48h is a garbage client clock
+    dayEnd.getTime() - dayStart.getTime() <= 48 * 3_600_000;
+  const [proposalsAwaiting, jobsToday] = await Promise.all([
+    db.proposal.count({
+      where: { userId: me.user.id, status: { in: ["SENT", "VIEWED"] } },
+    }),
+    validDay
+      ? db.appointment.count({
+          where: {
+            userId: me.user.id,
+            status: "SCHEDULED",
+            startsAt: { gte: dayStart, lt: dayEnd },
+          },
+        })
+      : Promise.resolve(0),
+  ]);
+  return { proposalsAwaiting, jobsToday };
+}

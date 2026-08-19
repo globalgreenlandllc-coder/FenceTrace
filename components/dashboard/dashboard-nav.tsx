@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion, useReducedMotion } from "framer-motion";
 import { AnnouncementBanner } from "@/components/announcements/announcement-banner";
 import { usePathname, useRouter } from "next/navigation";
+import { getNavCounts, type NavCounts } from "@/app/actions/dashboard";
 import {
   CalendarDays,
   ChevronsUpDown,
@@ -20,6 +22,7 @@ import {
   Ruler,
   Search,
   Settings,
+  Sparkles,
   ShieldAlert,
   User,
   Users,
@@ -45,6 +48,8 @@ type NavEntry = {
   /** Tint the row in brand green even when it isn't the active route —
    *  reserved for the estimator, the one entry that starts real work. */
   featured?: boolean;
+  /** Which live count badges this row (see getNavCounts). */
+  badge?: keyof NavCounts;
 };
 
 const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
@@ -52,7 +57,7 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
     label: "Work",
     items: [
       { href: "/dashboard", label: "Overview", Icon: LayoutGrid },
-      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText },
+      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText, badge: "proposalsAwaiting" },
       // Tape-measure proposals — no plans, address won't scan; the
       // contractor measured on site, types the numbers in, and sends
       // the proposal from the same page (separate from the AI builder).
@@ -68,7 +73,7 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Delivery",
     items: [
-      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays },
+      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays, badge: "jobsToday" },
       { href: "/dashboard/workers", label: "Workers", Icon: HardHat },
     ],
   },
@@ -108,11 +113,19 @@ function NavItem({
   active,
   featured,
   collapsed = false,
+  count = 0,
+  scope,
 }: NavEntry & {
   active: boolean;
   /** Icon-only rail mode — label becomes a native tooltip. */
   collapsed?: boolean;
+  /** Live badge value (0 hides the badge). */
+  count?: number;
+  /** Keeps the shared active-pill animation inside one nav tree —
+   *  the desktop rail and the mobile drawer must not trade pills. */
+  scope: "rail" | "drawer";
 }) {
+  const reduceMotion = useReducedMotion();
   return (
     <Link
       href={href}
@@ -121,8 +134,7 @@ function NavItem({
         "transition-smooth ring-focus group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
         collapsed && "justify-center px-0 py-2",
         active
-          ? // Lit row + green edge tick — where you are, at a glance.
-            "bg-white/[0.09] text-white ring-1 ring-inset ring-white/10"
+          ? "text-white"
           : featured
             ? // Resting state still reads green against the dark rail.
               "bg-accent-400/10 text-accent-100 ring-1 ring-inset ring-accent-400/25 hover:bg-accent-400/15"
@@ -131,21 +143,83 @@ function NavItem({
       )}
     >
       {active && (
-        <span
+        // Lit row + green edge tick — where you are, at a glance. The
+        // layoutId makes the pill GLIDE to the next row on navigation.
+        <motion.span
           aria-hidden
-          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent-400"
-        />
+          layoutId={`nav-pill-${scope}`}
+          transition={
+            reduceMotion
+              ? { duration: 0 }
+              : { type: "spring", stiffness: 480, damping: 40 }
+          }
+          className="absolute inset-0 rounded-lg bg-white/[0.09] ring-1 ring-inset ring-white/10"
+        >
+          <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent-400" />
+        </motion.span>
       )}
       <Icon
         className={cn(
-          "transition-smooth h-4 w-4",
+          "transition-smooth relative h-4 w-4",
           active || featured
             ? "text-accent-300"
             : "text-white/40 group-hover:text-white/75",
         )}
       />
-      {!collapsed && label}
+      {!collapsed && <span className="relative min-w-0 flex-1 truncate">{label}</span>}
+      {!collapsed && count > 0 && (
+        <span
+          className={cn(
+            "relative rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none",
+            active
+              ? "bg-white/15 text-white"
+              : "bg-accent-400/15 text-accent-200 ring-1 ring-inset ring-accent-400/25",
+          )}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      )}
+      {collapsed && count > 0 && (
+        <span
+          aria-hidden
+          className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent-400 ring-2 ring-accent-950"
+        />
+      )}
     </Link>
+  );
+}
+
+/** Slim credits gauge for the sidebar footer — the wallet the CreditsChip
+ *  shows in the topbar, restyled for the dark rail. */
+function CreditsMeter() {
+  const { session } = useSession();
+  if (!session || session.user.role === "SUPER_ADMIN") return null;
+  const total = session.credits.included + session.credits.bonus;
+  if (total <= 0) return null;
+  const left = Math.max(total - session.credits.used, 0);
+  const pct = Math.round((left / total) * 100);
+  const low = left <= 3 && left < total;
+  return (
+    <div className="rounded-xl bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.06]">
+      <div className="flex items-center justify-between text-[11px] font-medium">
+        <span className="flex items-center gap-1.5 text-white/60">
+          <Sparkles className={cn("h-3 w-3", low ? "text-amber-400" : "text-accent-300")} />
+          Takeoff credits
+        </span>
+        <span className={low ? "text-amber-300" : "text-white/80"}>{left} left</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div
+          className={cn(
+            "h-full rounded-full transition-[width] duration-500 motion-reduce:transition-none",
+            low
+              ? "bg-gradient-to-r from-amber-400 to-amber-500"
+              : "bg-gradient-to-r from-accent-400 to-accent-500",
+          )}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -244,9 +318,11 @@ function AccountMenu({ align = "up" }: { align?: "up" | "down" }) {
 function MobileNavDrawer({
   open,
   onClose,
+  counts,
 }: {
   open: boolean;
   onClose: () => void;
+  counts: NavCounts | null;
 }) {
   const pathname = usePathname();
 
@@ -330,12 +406,17 @@ function MobileNavDrawer({
                     key={n.href}
                     {...n}
                     active={isActive(pathname, n.href)}
+                    count={n.badge && counts ? counts[n.badge] : 0}
+                    scope="drawer"
                   />
                 ))}
               </div>
             </div>
           ))}
         </nav>
+        <div className="px-3 pb-3">
+          <CreditsMeter />
+        </div>
         <div className="border-t border-white/[0.06] p-3">
           <AccountMenu align="up" />
         </div>
@@ -400,6 +481,28 @@ export function DashboardShell({
   useEffect(() => {
     setCollapsed(localStorage.getItem("fencescan.sidebarCollapsed") === "1");
   }, []);
+  // Live nav badges — refreshed on every route change so "proposals
+  // awaiting reply" and "jobs today" stay honest as you work. Fails
+  // silent: no counts just means no badges.
+  const [navCounts, setNavCounts] = useState<NavCounts | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    getNavCounts({
+      dayStartIso: dayStart.toISOString(),
+      dayEndIso: dayEnd.toISOString(),
+    })
+      .then((c) => {
+        if (!cancelled) setNavCounts(c);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
   const toggleSidebar = () => {
     setCollapsed((c) => {
       localStorage.setItem("fencescan.sidebarCollapsed", c ? "0" : "1");
@@ -417,6 +520,11 @@ export function DashboardShell({
           collapsed ? "w-16" : "w-[224px]",
         )}
       >
+        {/* Soft brand glow bleeding down from the logo — depth, not decor. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(70%_100%_at_50%_0%,rgba(52,141,81,0.28),transparent)]"
+        />
         <div
           className={cn(
             "flex h-16 shrink-0 items-center border-b border-white/[0.06]",
@@ -464,6 +572,8 @@ export function DashboardShell({
                     {...n}
                     active={isActive(pathname, n.href)}
                     collapsed={collapsed}
+                    count={n.badge && navCounts ? navCounts[n.badge] : 0}
+                    scope="rail"
                   />
                 ))}
               </div>
@@ -471,9 +581,14 @@ export function DashboardShell({
           ))}
         </nav>
         {!collapsed && (
-          <div className="border-t border-white/[0.06] p-3">
-            <AccountMenu align="up" />
-          </div>
+          <>
+            <div className="px-3 pb-3">
+              <CreditsMeter />
+            </div>
+            <div className="border-t border-white/[0.06] p-3">
+              <AccountMenu align="up" />
+            </div>
+          </>
         )}
         {/* Fold handle — mid-edge, like a drawer pull. */}
         <button
@@ -519,7 +634,11 @@ export function DashboardShell({
             </div>
           </div>
         </div>
-        <MobileNavDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+        <MobileNavDrawer
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          counts={navCounts}
+        />
 
         {/* Topbar (desktop) */}
         <header className="sticky top-0 z-30 hidden h-14 shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white px-4 sm:px-6 lg:flex">
