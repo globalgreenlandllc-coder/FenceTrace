@@ -38,7 +38,13 @@ export type SendProposalResult =
        *  the client's first tap instead. */
       audioReady: boolean;
     }
-  | { ok: false; reason: string };
+  | {
+      ok: false;
+      reason: string;
+      /** "limit_reached" lets the send modal show the one-click upgrade
+       *  instead of a plain error — the cap moment IS the buy moment. */
+      code?: "limit_reached";
+    };
 
 /**
  * Persists the in-memory proposal draft to the database and emails the
@@ -108,7 +114,8 @@ export async function sendProposal(args: {
     if (sentThisMonth >= FREE_PROPOSALS_PER_MONTH) {
       return {
         ok: false,
-        reason: `The free plan sends ${FREE_PROPOSALS_PER_MONTH} proposals a month — upgrade to Pro in Settings → Billing for unlimited sending.`,
+        code: "limit_reached",
+        reason: `You've sent all ${FREE_PROPOSALS_PER_MONTH} free proposals this month.`,
       };
     }
   }

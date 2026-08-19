@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { AlertTriangle, Check, Copy, Headphones, Mail, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, Headphones, Loader2, Mail, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Proposal } from "@/lib/proposal-mock";
 import { sendProposal } from "@/app/actions/proposals";
+import { createSubscriptionCheckout } from "@/app/actions/billing";
 import { cn } from "@/lib/utils";
 
 function isPlausibleEmail(s: string): boolean {
@@ -43,6 +44,8 @@ export function SendModal({
   const [messageDirty, setMessageDirty] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [limitHit, setLimitHit] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
   const [pending, startTransition] = useTransition();
   const [sentPortalUrl, setSentPortalUrl] = useState<string | null>(null);
   // Whether the spoken summary finished building during the send.
@@ -69,8 +72,24 @@ export function SendModal({
     });
   }
 
+  async function upgrade() {
+    setUpgrading(true);
+    try {
+      const res = await createSubscriptionCheckout();
+      if (res.ok) {
+        window.location.href = res.url;
+        return;
+      }
+      setError(res.reason);
+    } catch {
+      setError("Couldn't start checkout — try again from Settings → Billing.");
+    }
+    setUpgrading(false);
+  }
+
   function send() {
     setError(null);
+    setLimitHit(false);
     const trimmedName = clientName.trim();
     const trimmedEmail = clientEmail.trim();
     if (!trimmedName) {
@@ -102,6 +121,10 @@ export function SendModal({
         setSentPortalUrl(res.portalUrl);
         setAudioReady(res.audioReady);
         setPhase("sent");
+      } else if (res.code === "limit_reached") {
+        // Peak intent: they just tried to send a real quote. Offer the
+        // fix right here, not a trip through Settings.
+        setLimitHit(true);
       } else {
         setError(res.reason);
       }
@@ -111,6 +134,7 @@ export function SendModal({
   function handleClose() {
     setPhase("compose");
     setError(null);
+    setLimitHit(false);
     setSentPortalUrl(null);
     onClose();
   }
@@ -239,6 +263,37 @@ export function SendModal({
                   </Row>
                 </div>
 
+                {limitHit && (
+                  <div className="anim-enter-fade mt-4 rounded-xl border border-accent-200 bg-accent-50 p-4">
+                    <div className="flex items-start gap-2.5">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-600 text-white">
+                        <Zap className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-accent-900">
+                          You&apos;ve used all 3 free proposals this month
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-accent-800/80">
+                          Pro sends unlimited proposals. Upgrade takes a
+                          minute — come right back and hit send again.
+                        </p>
+                        <div className="mt-3 flex items-center gap-3">
+                          <Button size="sm" onClick={upgrade} disabled={upgrading}>
+                            {upgrading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Zap className="h-4 w-4" />
+                            )}
+                            Upgrade to Pro
+                          </Button>
+                          <span className="text-[11px] text-accent-800/60">
+                            or your free sends reset next month
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {error && (
                   <div className="anim-enter-fade mt-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
