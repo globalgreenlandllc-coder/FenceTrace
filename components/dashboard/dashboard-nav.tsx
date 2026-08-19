@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { AnnouncementBanner } from "@/components/announcements/announcement-banner";
 import { usePathname, useRouter } from "next/navigation";
 import { getNavCounts, type NavCounts } from "@/app/actions/dashboard";
+import { getMyBilling, type MyBilling } from "@/app/actions/billing";
 import {
   CalendarDays,
   ChevronsUpDown,
@@ -30,12 +31,13 @@ import {
   X,
   ChevronsLeft,
   ChevronsRight,
+  Send,
 } from "lucide-react";
 import { useClerk } from "@clerk/nextjs";
 import { Logo } from "@/components/ui/logo";
 import { Avatar } from "@/components/ui/avatar";
 import { BrandMark } from "@/components/ui/brand-mark";
-import { CreditsChip } from "./credits-chip";
+import { PlanChip } from "./plan-chip";
 import { NotificationsBell } from "./notifications-bell";
 import { useSession } from "@/lib/auth-mock";
 import { cn } from "@/lib/utils";
@@ -192,24 +194,37 @@ function NavItem({
   );
 }
 
-/** Slim credits gauge for the sidebar footer — the wallet the CreditsChip
- *  shows in the topbar, restyled for the dark rail. */
-function CreditsMeter() {
+/** Sidebar allowance gauge — the same real limit the topbar PlanChip
+ *  shows: proposal SENDS left this month on the free plan. The old
+ *  "Takeoff credits" wallet it replaced was never debited by anything
+ *  and couldn't be topped up, so it counted down a limit that didn't
+ *  exist. Pro and admin have nothing to meter, so it hides itself. */
+function SendsMeter() {
   const { session } = useSession();
+  const [billing, setBilling] = useState<MyBilling | null>(null);
+  useEffect(() => {
+    getMyBilling().then(setBilling).catch(() => undefined);
+  }, []);
   if (!session || session.user.role === "SUPER_ADMIN") return null;
-  const total = session.credits.included + session.credits.bonus;
-  if (total <= 0) return null;
-  const left = Math.max(total - session.credits.used, 0);
-  const pct = Math.round((left / total) * 100);
-  const low = left <= 3 && left < total;
+  if (!billing || billing.plan?.status === "ACTIVE") return null;
+  const cap = billing.freeSendCap;
+  if (cap <= 0) return null;
+  const left = Math.max(0, cap - billing.sentThisMonth);
+  const pct = Math.round((left / cap) * 100);
+  const low = left <= 1;
   return (
-    <div className="rounded-xl bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.06]">
+    <Link
+      href="/dashboard/settings"
+      className="ring-focus block rounded-xl bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.06] transition-smooth hover:bg-white/[0.07]"
+    >
       <div className="flex items-center justify-between text-[11px] font-medium">
         <span className="flex items-center gap-1.5 text-zinc-400">
-          <Sparkles className={cn("h-3 w-3", low ? "text-amber-400" : "text-accent-300")} />
-          Takeoff credits
+          <Send className={cn("h-3 w-3", low ? "text-amber-400" : "text-accent-300")} />
+          Proposal sends
         </span>
-        <span className={low ? "text-amber-300" : "text-zinc-200"}>{left} left</span>
+        <span className={low ? "text-amber-300" : "text-zinc-200"}>
+          {left} of {cap} left
+        </span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
@@ -222,7 +237,10 @@ function CreditsMeter() {
           style={{ width: `${pct}%` }}
         />
       </div>
-    </div>
+      <p className="mt-2 text-[10px] leading-snug text-zinc-500">
+        Scans &amp; takeoffs are free and unlimited.
+      </p>
+    </Link>
   );
 }
 
@@ -418,7 +436,7 @@ function MobileNavDrawer({
           ))}
         </nav>
         <div className="px-3 pb-3">
-          <CreditsMeter />
+          <SendsMeter />
         </div>
         <div className="border-t border-white/[0.06] p-3">
           <AccountMenu align="up" />
@@ -586,7 +604,7 @@ export function DashboardShell({
         {!collapsed && (
           <>
             <div className="px-3 pb-3">
-              <CreditsMeter />
+              <SendsMeter />
             </div>
             <div className="border-t border-white/[0.06] p-3">
               <AccountMenu align="up" />
@@ -631,7 +649,7 @@ export function DashboardShell({
               <Logo showSubtitle={false} />
             </Link>
             <div className="flex flex-1 items-center justify-end gap-2">
-              <CreditsChip />
+              <PlanChip />
               <NotificationsBell />
               <AccountMenu align="down" />
             </div>
@@ -665,7 +683,7 @@ export function DashboardShell({
               <Plus className="h-4 w-4" />
               New Proposal
             </Link>
-            <CreditsChip />
+            <PlanChip />
             <NotificationsBell />
             <AccountMenu align="down" />
           </div>

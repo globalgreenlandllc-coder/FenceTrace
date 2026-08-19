@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Sparkles, Image as ImageIcon, DraftingCompass, Box } from "lucide-react";
+import {
+  Box,
+  DraftingCompass,
+  Image as ImageIcon,
+  Pencil,
+  Ruler,
+} from "lucide-react";
 import { lineLengthFt } from "@/components/estimate/aerial-canvas";
 import { AerialReadonly } from "@/components/estimate/aerial-shared";
 import { GutterDiagram } from "@/components/estimate/gutter-diagram";
@@ -409,7 +415,7 @@ export function AerialSection({
           )}
           {hasRealTakeoff && !showDiagram && (
             <div className="anim-enter-fade pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-accent-600/90 px-2.5 py-1 text-[10px] font-medium text-white ring-1 ring-inset ring-white/20">
-              <Sparkles className="h-3 w-3" />
+              <Ruler className="h-3 w-3" />
               Live from the takeoff
             </div>
           )}

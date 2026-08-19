@@ -5,24 +5,24 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  MapPin,
+  Camera,
+  Check,
+  CheckCircle2,
   Clock,
+  CreditCard,
   Download,
   FileText,
-  User,
-  Phone,
-  Check,
-  X,
-  CheckCircle2,
+  Info,
   Loader2,
+  MapPin,
+  Phone,
   Play,
   Plus,
   Receipt,
   Ruler,
-  Camera,
-  CreditCard,
+  User,
   Wallet,
-  Sparkles,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -574,7 +574,7 @@ function ExpensesCard({ jobId }: { jobId: string }) {
         </div>
         {autoFilled && (
           <p className="flex items-center gap-1 text-[11px] text-accent-700">
-            <Sparkles className="h-3 w-3" />
+            <Info className="h-3 w-3" />
             Read off your receipt — correct it if it&apos;s wrong.
           </p>
         )}

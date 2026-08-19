@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Loader2, Sparkles, CheckCircle2, Circle, Send } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  Loader2,
+  PencilLine,
+  Send,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   adminReplyToTicket,
@@ -210,7 +216,7 @@ export function SupportInbox({ initial }: { initial: AdminTicket[] }) {
                   {aiBusy ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Sparkles className="h-4 w-4" />
+                    <PencilLine className="h-4 w-4" />
                   )}
                   Draft with AI
                 </button>

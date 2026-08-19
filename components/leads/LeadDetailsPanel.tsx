@@ -5,25 +5,25 @@ import { LeadStatus, InteractionStatus } from "@prisma/client";
 import { useEffect, useMemo, useState } from "react";
 import { SPRING, fadeInUp, staggerContainer } from "@/lib/motion";
 import {
-  X,
-  MapPin,
-  DollarSign,
-  Calendar,
-  Navigation,
-  Copy,
-  Check,
-  Sparkles,
   Building2,
-  HardHat,
+  Calendar,
+  Check,
+  Clock,
+  Copy,
+  DollarSign,
   ExternalLink,
+  FileText,
   Flame,
+  Gauge,
+  Hammer,
+  HardHat,
+  Home,
+  MapPin,
+  Navigation,
+  Ruler,
   User,
   Wrench,
-  Hammer,
-  Home,
-  Ruler,
-  Gauge,
-  Clock,
+  X,
 } from "lucide-react";
 import type { GutterScore } from "@/lib/leads/gutter-score";
 
@@ -327,7 +327,7 @@ export default function LeadDetailsPanel({ lead, score, mapsApiKey, onClose, onU
             )}
             {lead.categorizedTrade && lead.categorizedTrade !== "Other" && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent-500/10 text-accent-300 text-xs font-medium ring-1 ring-accent-500/30">
-                <Sparkles size={12} />
+                <FileText size={12} />
                 {lead.categorizedTrade}
               </span>
             )}
@@ -575,7 +575,7 @@ export default function LeadDetailsPanel({ lead, score, mapsApiKey, onClose, onU
               className="bg-accent-500/10 border border-accent-500/30 p-3 rounded-xl"
             >
               <div className="flex items-center gap-1.5 font-label text-[10px] text-accent-300 mb-1">
-                <Sparkles size={11} /> Permit Summary
+                <FileText size={11} /> Permit Summary
               </div>
               <p className="text-sm text-zinc-200 leading-relaxed">{lead.aiSummary}</p>
             </motion.div>

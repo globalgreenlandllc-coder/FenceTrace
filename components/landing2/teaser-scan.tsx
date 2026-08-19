@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, Loader2, Lock, MapPin, ScanLine, Sparkles } from "lucide-react";
+import {
+  ArrowRight,
+  Loader2,
+  Lock,
+  MapPin,
+  ScanLine,
+} from "lucide-react";
 import { ExampleScanPanel } from "@/components/landing2/example-scan";
 import { EXAMPLE_SCAN } from "@/components/landing2/example-scan-data";
 import { walkPostPositions, type Pt } from "@/lib/fence/geo";
@@ -485,7 +491,7 @@ export function TeaserScan() {
           onClick={() => setShowExample(true)}
           className="transition-smooth ring-focus group mt-3 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-accent-700 hover:text-accent-800"
         >
-          <Sparkles className="h-3.5 w-3.5" />
+          <MapPin className="h-3.5 w-3.5" />
           No address handy? See a finished example — {EXAMPLE_SCAN.address}
           <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
         </button>

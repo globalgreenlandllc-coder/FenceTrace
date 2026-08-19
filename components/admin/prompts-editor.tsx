@@ -5,9 +5,9 @@ import {
   AlertTriangle,
   Check,
   Loader2,
+  PencilLine,
   RotateCcw,
   Save,
-  Sparkles,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -131,7 +131,7 @@ function PromptCard({ row }: { row: PromptRow }) {
           <div className="flex items-center gap-2">
             <h3 className="font-medium text-zinc-900">{row.label}</h3>
             <Badge tone="neutral" className="gap-1">
-              <Sparkles className="h-3 w-3" />
+              <PencilLine className="h-3 w-3" />
               {row.model}
             </Badge>
             {customized && <Badge tone="amber">Customized</Badge>}

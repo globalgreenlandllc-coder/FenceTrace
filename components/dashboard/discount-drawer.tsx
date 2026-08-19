@@ -9,8 +9,8 @@ import {
   Clock,
   Handshake,
   Loader2,
-  Sparkles,
   TrendingDown,
+  TrendingUp,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -326,7 +326,7 @@ function RespondPanel({
         )}
       >
         <div className="flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-accent-600" />
+          <TrendingUp className="h-3.5 w-3.5 text-accent-600" />
           <span className="font-label text-[11px] text-zinc-500">
             Margin coach · at their {fmt(req.currentCents)} ask
           </span>

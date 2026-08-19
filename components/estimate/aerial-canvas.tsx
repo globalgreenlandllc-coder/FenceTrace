@@ -12,7 +12,7 @@ import {
   MousePointer2,
   PenLine,
   Ruler,
-  Sparkles,
+  ScanLine,
   Sun,
   SunDim,
   Trash2,
@@ -2447,7 +2447,7 @@ function Toolbar({
             : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
         )}
       >
-        <Sparkles className="h-4 w-4" />
+        <ScanLine className="h-4 w-4" />
       </button>
       {roofStructureAvailable && (
         <button

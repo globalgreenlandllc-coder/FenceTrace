@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  X,
+  AlertTriangle,
   DollarSign,
   FileText,
+  Info,
+  Loader2,
   Percent,
   Send,
-  AlertTriangle,
-  Loader2,
   Upload,
-  Sparkles,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -334,7 +334,7 @@ export function AssignJobModal({
             proposal has one and no invoice file has overridden it. */}
         {baseSource === "estimate" && proposalBaseCents != null && (
           <div className="flex items-start gap-2 rounded-xl bg-accent-50 px-3 py-2.5 text-xs text-accent-900 ring-1 ring-accent-200">
-            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-600" />
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-600" />
             <span>
               Basing pay on this proposal&apos;s{" "}
               <strong>{SOURCE_LABEL[proposalSource ?? "estimate"]}</strong> of{" "}

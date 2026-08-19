@@ -14,7 +14,7 @@ import {
   PenLine,
   Ruler,
   Satellite,
-  Sparkles,
+  ScanLine,
   Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -505,7 +505,7 @@ function SatelliteTakeoffCard() {
             disabled={!value.trim() || submitting}
             className="bg-cta-gradient ring-focus press-scale ![transition:transform_150ms_ease,box-shadow_200ms_ease,opacity_150ms_ease] motion-reduce:![transition:none] group mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-white shadow-sm hover:shadow-glow disabled:cursor-not-allowed disabled:bg-none disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none"
           >
-            <Sparkles className="h-4 w-4" />
+            <ScanLine className="h-4 w-4" />
             {submitting ? "Starting…" : "Run smart takeoff"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </button>

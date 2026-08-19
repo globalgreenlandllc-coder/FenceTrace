@@ -2,7 +2,14 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Fence, FileText, Loader2, Send, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  Fence,
+  FileText,
+  Loader2,
+  Send,
+  TrendingUp,
+} from "lucide-react";
 import { DUR, EASE, fadeInUp, staggerContainer } from "@/lib/motion";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
@@ -110,7 +117,7 @@ export function Summary({
               {ai.busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Sparkles className="h-3.5 w-3.5" />
+                <TrendingUp className="h-3.5 w-3.5" />
               )}
               Market price
             </button>

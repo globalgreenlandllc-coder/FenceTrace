@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { PencilLine, Sparkles, TrendingUp, Undo2 } from "lucide-react";
+import {
+  PencilLine,
+  TrendingUp,
+  Undo2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
@@ -107,7 +111,7 @@ export function ProfitPanel({
             {usingManual ? (
               <PencilLine className="h-3 w-3 text-zinc-500" />
             ) : (
-              <Sparkles className="h-3 w-3 text-accent-600" />
+              <TrendingUp className="h-3 w-3 text-accent-600" />
             )}
             Your cost
             <span

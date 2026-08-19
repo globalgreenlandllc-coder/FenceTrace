@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+} from "lucide-react";
 import { getAiPriceQuotes } from "@/app/actions/ai-pricing";
 import {
   markupPctForTarget,
@@ -249,7 +252,7 @@ export function AiPriceSwitch({
           {ai.busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <Sparkles className="h-3.5 w-3.5" />
+            <TrendingUp className="h-3.5 w-3.5" />
           )}
           Market price
         </button>

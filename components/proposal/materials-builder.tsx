@@ -4,15 +4,16 @@ import { useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   Layers,
+  ListChecks,
   Loader2,
   MapPin,
   Plus,
   Receipt,
   RefreshCw,
   RotateCcw,
-  Sparkles,
   Tag,
   Trash2,
+  TrendingUp,
   X,
 } from "lucide-react";
 import { DUR, EASE, SPRING } from "@/lib/motion";
@@ -306,7 +307,7 @@ export function MaterialsBuilder({
             <div className="text-[11px] text-zinc-500">
               {pricingMode === "ai" ? (
                 <span className="inline-flex items-center gap-1 font-medium text-accent-700">
-                  <Sparkles className="h-3 w-3" /> Market price
+                  <TrendingUp className="h-3 w-3" /> Market price
                 </span>
               ) : (
                 `${pkg.markupPct.toFixed(1)}% markup`
@@ -390,7 +391,7 @@ export function MaterialsBuilder({
           </Section>
 
           <Section
-            icon={Sparkles}
+            icon={ListChecks}
             title="What's included"
             sub="The bullet list the client reads under this package."
           >
@@ -810,7 +811,7 @@ export function MaterialsBuilder({
               <div className="flex items-center justify-between bg-zinc-50/60 px-3 py-2 text-xs font-semibold">
                 <span className="inline-flex items-center gap-1.5 text-zinc-700">
                   {pricingMode === "ai" && (
-                    <Sparkles className="h-3 w-3 text-accent-600" />
+                    <TrendingUp className="h-3 w-3 text-accent-600" />
                   )}
                   Client price before discount &amp; tax
                 </span>
@@ -929,7 +930,7 @@ export function MaterialsBuilder({
                   {aiBusy ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <TrendingUp className="h-3.5 w-3.5" />
                   )}
                   Market price
                 </button>
@@ -1036,7 +1037,7 @@ export function MaterialsBuilder({
                   className="ring-focus flex w-full items-center justify-between rounded-xl border border-dashed border-accent-300 bg-accent-50/40 px-3 py-2 text-left text-xs transition-smooth hover:border-accent-400"
                 >
                   <span className="inline-flex items-center gap-1.5 text-zinc-600">
-                    <Sparkles className="h-3.5 w-3.5 text-accent-600" />
+                    <TrendingUp className="h-3.5 w-3.5 text-accent-600" />
                     Market price for {quote.location}
                   </span>
                   <span className="font-semibold tabular-nums text-zinc-900">

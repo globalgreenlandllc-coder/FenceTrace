@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Loader2, Mail, Plus, Sparkles, Trash2, Send, Pencil } from "lucide-react";
+import {
+  Loader2,
+  Mail,
+  Pencil,
+  PencilLine,
+  Plus,
+  Send,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   saveAnnouncement,
@@ -144,7 +152,7 @@ export function AnnouncementsManager({
           {/* AI draft */}
           <div className="rounded-xl border border-accent-200 bg-accent-50/50 p-3">
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-accent-800">
-              <Sparkles className="h-3.5 w-3.5" /> Draft with AI
+              <PencilLine className="h-3.5 w-3.5" /> Draft with AI
             </label>
             <div className="flex gap-2">
               <input
@@ -163,7 +171,7 @@ export function AnnouncementsManager({
                 {aiBusy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Sparkles className="h-4 w-4" />
+                  <PencilLine className="h-4 w-4" />
                 )}
                 Write
               </button>
