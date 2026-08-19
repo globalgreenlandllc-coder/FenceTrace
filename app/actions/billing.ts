@@ -137,7 +137,13 @@ async function ensureStripeCustomer(
   return customer.id;
 }
 
-export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
+export async function createSubscriptionCheckout(
+  interval: "month" | "year" = "month",
+): Promise<CheckoutResult> {
+  // Yearly is DERIVED, not configured: 10× the admin-set monthly price,
+  // i.e. two months free by construction — it can never drift out of
+  // sync when the monthly price is edited at /admin/pricing.
+  const billingInterval = interval === "year" ? "year" : "month";
   try {
     const me = await getMe();
     if (!me) return { ok: false, reason: "Not signed in" };
@@ -172,10 +178,16 @@ export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
           quantity: 1,
           price_data: {
             currency: "usd",
-            unit_amount: pricing.pro.priceCents,
-            recurring: { interval: "month" },
+            unit_amount:
+              billingInterval === "year"
+                ? pricing.pro.priceCents * 10
+                : pricing.pro.priceCents,
+            recurring: { interval: billingInterval },
             product_data: {
-              name: pricing.pro.name,
+              name:
+                billingInterval === "year"
+                  ? `${pricing.pro.name} (annual — 2 months free)`
+                  : pricing.pro.name,
               description:
                 "Unlimited proposals · e-sign, scheduling, payments & crew tools",
             },
@@ -183,7 +195,7 @@ export async function createSubscriptionCheckout(): Promise<CheckoutResult> {
         },
       ],
       subscription_data: { metadata: { userId: me.user.id } },
-      metadata: { userId: me.user.id, kind: "subscription" },
+      metadata: { userId: me.user.id, kind: "subscription", interval: billingInterval },
       allow_promotion_codes: true,
       success_url: `${base}/dashboard/settings?billing=success`,
       cancel_url: `${base}/dashboard/settings?billing=cancelled`,

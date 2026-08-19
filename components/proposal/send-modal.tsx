@@ -72,10 +72,10 @@ export function SendModal({
     });
   }
 
-  async function upgrade() {
+  async function upgrade(interval: "month" | "year" = "month") {
     setUpgrading(true);
     try {
-      const res = await createSubscriptionCheckout();
+      const res = await createSubscriptionCheckout(interval);
       if (res.ok) {
         window.location.href = res.url;
         return;
@@ -278,7 +278,7 @@ export function SendModal({
                           minute — come right back and hit send again.
                         </p>
                         <div className="mt-3 flex items-center gap-3">
-                          <Button size="sm" onClick={upgrade} disabled={upgrading}>
+                          <Button size="sm" onClick={() => upgrade("month")} disabled={upgrading}>
                             {upgrading ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
@@ -286,9 +286,17 @@ export function SendModal({
                             )}
                             Upgrade to Pro
                           </Button>
-                          <span className="text-[11px] text-accent-800/60">
-                            or your free sends reset next month
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => upgrade("year")}
+                            disabled={upgrading}
+                            className="ring-focus rounded text-[11px] font-medium text-accent-800 underline-offset-2 hover:underline"
+                          >
+                            or yearly — 2 months free
+                          </button>
+                        </div>
+                        <div className="mt-1.5 text-[11px] text-accent-800/60">
+                          Not now? Your free sends reset next month.
                         </div>
                       </div>
                     </div>

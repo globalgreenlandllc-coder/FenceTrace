@@ -79,7 +79,7 @@ function BillingSection() {
     // Capture the buying intent BEFORE the redirect, so the admin live feed
     // sees the attempt even if checkout later fails. "portal" is an existing
     // subscriber managing their plan, not a purchase — skip it.
-    if (key === "subscribe") trackEvent("subscribe_click");
+    if (key.startsWith("subscribe")) trackEvent("subscribe_click");
     setBusy(key);
     setError(null);
     try {
@@ -266,18 +266,36 @@ function BillingSection() {
               Manage plan
             </Button>
           ) : (
-            <Button
-              size="sm"
-              disabled={busy !== null || (billing !== null && !billing.configured)}
-              onClick={() => go("subscribe", createSubscriptionCheckout)}
-            >
-              {busy === "subscribe" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Zap className="h-3.5 w-3.5" />
-              )}
-              Upgrade to Pro
-            </Button>
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy !== null || (billing !== null && !billing.configured)}
+                  onClick={() => go("subscribe-year", () => createSubscriptionCheckout("year"))}
+                >
+                  {busy === "subscribe-year" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : null}
+                  Yearly · {formatCurrency((billing.proPriceCents * 10) / 100)}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy !== null || (billing !== null && !billing.configured)}
+                  onClick={() => go("subscribe", () => createSubscriptionCheckout("month"))}
+                >
+                  {busy === "subscribe" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="h-3.5 w-3.5" />
+                  )}
+                  Upgrade to Pro
+                </Button>
+              </div>
+              <span className="text-[11px] text-zinc-400">
+                Yearly = 2 months free
+              </span>
+            </div>
           )}
         </div>
       </div>

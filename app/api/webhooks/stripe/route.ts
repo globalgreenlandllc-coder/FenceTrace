@@ -266,6 +266,13 @@ async function handleInvoicePaid(stripe: Stripe, inv: Stripe.Invoice) {
     inv.billing_reason === "subscription_create" ||
     inv.billing_reason === "subscription_cycle";
   if (!already && cycleInvoice) {
+    // The wallet refreshes MONTHLY regardless of billing interval — a
+    // yearly subscriber's periodEnd is a year out, and pinning resetsAt
+    // to it would hand them one credit refresh per YEAR. Cap at the
+    // month boundary; the lazy rollover in getMe() takes it from there.
+    const walletReset = new Date(
+      Math.min(periodEnd.getTime(), nextMonthBoundary().getTime()),
+    );
     await db.creditWallet.upsert({
       where: { userId },
       create: {
@@ -273,12 +280,12 @@ async function handleInvoicePaid(stripe: Stripe, inv: Stripe.Invoice) {
         included: pricing.pro.includedCredits,
         used: 0,
         bonus: 0,
-        resetsAt: periodEnd,
+        resetsAt: walletReset,
       },
       update: {
         included: pricing.pro.includedCredits,
         used: 0,
-        resetsAt: periodEnd,
+        resetsAt: walletReset,
       },
     });
   }
