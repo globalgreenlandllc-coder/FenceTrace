@@ -45,31 +45,34 @@ type NavEntry = {
   /** Tint the row in brand green even when it isn't the active route —
    *  reserved for the estimator, the one entry that starts real work. */
   featured?: boolean;
+  /** Resting icon color — one muted hue per destination so the nav
+   *  scans by color, not just by word. Active/featured rows override. */
+  tint?: string;
 };
 
 const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Work",
     items: [
-      { href: "/dashboard", label: "Overview", Icon: LayoutGrid },
-      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText },
+      { href: "/dashboard", label: "Overview", Icon: LayoutGrid, tint: "text-indigo-500" },
+      { href: "/dashboard/proposals", label: "Proposals", Icon: FileText, tint: "text-sky-600" },
       // Tape-measure proposals — no plans, address won't scan; the
       // contractor measured on site, types the numbers in, and sends
       // the proposal from the same page (separate from the AI builder).
-      { href: "/dashboard/measure", label: "Manual proposal", Icon: Ruler },
+      { href: "/dashboard/measure", label: "Manual proposal", Icon: Ruler, tint: "text-cyan-600" },
       // Fully-paid jobs — the proposals list pre-filtered to Done.
-      { href: "/dashboard/proposals?filter=done", label: "Done jobs", Icon: PartyPopper },
-      { href: "/dashboard/leads", label: "Leads", Icon: MapPin },
-      { href: "/dashboard/clients", label: "Clients", Icon: Users },
+      { href: "/dashboard/proposals?filter=done", label: "Done jobs", Icon: PartyPopper, tint: "text-amber-500" },
+      { href: "/dashboard/leads", label: "Leads", Icon: MapPin, tint: "text-rose-500" },
+      { href: "/dashboard/clients", label: "Clients", Icon: Users, tint: "text-violet-500" },
       // Overhead + per-job profit — the contractor's own P&L, never client-facing.
-      { href: "/dashboard/financials", label: "Financials", Icon: Wallet },
+      { href: "/dashboard/financials", label: "Financials", Icon: Wallet, tint: "text-emerald-600" },
     ],
   },
   {
     label: "Delivery",
     items: [
-      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays },
-      { href: "/dashboard/workers", label: "Workers", Icon: HardHat },
+      { href: "/dashboard/calendar", label: "Calendar", Icon: CalendarDays, tint: "text-blue-600" },
+      { href: "/dashboard/workers", label: "Workers", Icon: HardHat, tint: "text-orange-500" },
     ],
   },
   {
@@ -83,8 +86,8 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   {
     label: "Account",
     items: [
-      { href: "/dashboard/settings", label: "Settings", Icon: Settings },
-      { href: "/dashboard/support", label: "Help & support", Icon: LifeBuoy },
+      { href: "/dashboard/settings", label: "Settings", Icon: Settings, tint: "text-zinc-500" },
+      { href: "/dashboard/support", label: "Help & support", Icon: LifeBuoy, tint: "text-teal-600" },
     ],
   },
 ];
@@ -101,6 +104,7 @@ function NavItem({
   Icon,
   active,
   featured,
+  tint,
   collapsed = false,
 }: NavEntry & {
   active: boolean;
@@ -115,19 +119,24 @@ function NavItem({
         "transition-smooth ring-focus flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",
         collapsed && "justify-center px-0 py-2",
         active
-          ? "bg-accent-50 text-accent-800"
+          ? // The route you're on reads as a solid brand-green pill.
+            "bg-gradient-to-b from-accent-500 to-accent-600 text-white shadow-sm shadow-accent-600/25"
           : featured
             ? // Resting state still reads green, with a hairline so the row
               //  has an edge against the plain items above it.
               "bg-accent-50/60 text-accent-800 ring-1 ring-inset ring-accent-100 hover:bg-accent-50 hover:ring-accent-200"
             : "text-zinc-600 hover:bg-zinc-100/70 hover:text-zinc-900",
-        featured && "font-semibold",
+        featured && !active && "font-semibold",
       )}
     >
       <Icon
         className={cn(
           "transition-smooth h-4 w-4",
-          active || featured ? "text-accent-700" : "text-zinc-400",
+          active
+            ? "text-white"
+            : featured
+              ? "text-accent-700"
+              : (tint ?? "text-zinc-400"),
         )}
       />
       {!collapsed && label}
@@ -294,7 +303,7 @@ function MobileNavDrawer({
         >
           <Link
             href="/dashboard/proposals/new"
-            className="ring-focus transition-smooth press-scale mb-4 flex h-10 items-center justify-center gap-1.5 rounded-lg bg-accent-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-accent-700"
+            className="ring-focus transition-smooth press-scale mb-4 flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-accent-500 to-accent-600 px-3.5 text-[13px] font-semibold text-white shadow-sm shadow-accent-600/25 hover:from-accent-600 hover:to-accent-700"
           >
             <Plus className="h-4 w-4" />
             New Proposal
@@ -410,6 +419,21 @@ export function DashboardShell({
             )}
           </Link>
         </div>
+        {/* The one main action lives at the top of the rail too — a
+            proposal is always one click away. */}
+        <div className={cn("shrink-0 pt-4", collapsed ? "px-2" : "px-3")}>
+          <Link
+            href="/dashboard/proposals/new"
+            title={collapsed ? "New Proposal" : undefined}
+            className={cn(
+              "ring-focus transition-smooth press-scale flex items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-accent-500 to-accent-600 text-[13px] font-semibold text-white shadow-sm shadow-accent-600/25 hover:from-accent-600 hover:to-accent-700",
+              collapsed ? "mx-auto h-10 w-10 rounded-xl" : "h-9 w-full px-3.5",
+            )}
+          >
+            <Plus className="h-4 w-4" />
+            {!collapsed && "New Proposal"}
+          </Link>
+        </div>
         <nav className={cn("flex-1 overflow-y-auto py-4", collapsed ? "px-2" : "px-3")}>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mt-5 first:mt-0">
@@ -442,7 +466,7 @@ export function DashboardShell({
           onClick={toggleSidebar}
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          className="ring-focus transition-smooth absolute -right-3 top-1/2 z-50 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border border-zinc-200 bg-white text-zinc-400 shadow-sm hover:text-zinc-700 hover:shadow"
+          className="ring-focus transition-smooth absolute -right-3 top-1/2 z-50 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border border-zinc-200 bg-white text-zinc-400 shadow-sm hover:border-accent-200 hover:text-accent-700 hover:shadow"
         >
           {collapsed ? (
             <ChevronsRight className="h-3.5 w-3.5" />
@@ -499,7 +523,7 @@ export function DashboardShell({
             <CompanyChip />
             <Link
               href="/dashboard/proposals/new"
-              className="ring-focus transition-smooth press-scale inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-accent-700"
+              className="ring-focus transition-smooth press-scale inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-b from-accent-500 to-accent-600 px-3.5 text-[13px] font-semibold text-white shadow-sm shadow-accent-600/25 hover:from-accent-600 hover:to-accent-700"
             >
               <Plus className="h-4 w-4" />
               New Proposal
