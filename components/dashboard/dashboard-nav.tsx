@@ -94,8 +94,10 @@ const NAV_GROUPS: { label: string; items: NavEntry[] }[] = [
   },
 ];
 
-/** The sidebar's dark forest surface — brand ink with a green cast. */
-const SIDEBAR_SURFACE = "bg-gradient-to-b from-accent-950 to-ink";
+/** The sidebar's dark surface — graphite gray, so the brand green only
+ *  appears where it means something (CTA, active tick, badges). The
+ *  `antialiased` keeps light-on-dark type crisp. */
+const SIDEBAR_SURFACE = "bg-gradient-to-b from-zinc-900 to-zinc-950 antialiased";
 /** Main-action button: bright brand gradient that glows on the dark rail. */
 const CTA_CLASSES =
   "bg-gradient-to-b from-accent-500 to-accent-600 text-white ring-1 ring-inset ring-white/15 shadow-lg shadow-accent-950/50 hover:from-accent-400 hover:to-accent-500";
@@ -138,7 +140,7 @@ function NavItem({
           : featured
             ? // Resting state still reads green against the dark rail.
               "bg-accent-400/10 text-accent-100 ring-1 ring-inset ring-accent-400/25 hover:bg-accent-400/15"
-            : "text-white/55 hover:bg-white/[0.05] hover:text-white",
+            : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-100",
         featured && !active && "font-semibold",
       )}
     >
@@ -159,11 +161,12 @@ function NavItem({
         </motion.span>
       )}
       <Icon
+        strokeWidth={1.75}
         className={cn(
           "transition-smooth relative h-4 w-4",
           active || featured
             ? "text-accent-300"
-            : "text-white/40 group-hover:text-white/75",
+            : "text-zinc-500 group-hover:text-zinc-300",
         )}
       />
       {!collapsed && <span className="relative min-w-0 flex-1 truncate">{label}</span>}
@@ -182,7 +185,7 @@ function NavItem({
       {collapsed && count > 0 && (
         <span
           aria-hidden
-          className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent-400 ring-2 ring-accent-950"
+          className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent-400 ring-2 ring-zinc-950"
         />
       )}
     </Link>
@@ -202,11 +205,11 @@ function CreditsMeter() {
   return (
     <div className="rounded-xl bg-white/[0.04] p-3 ring-1 ring-inset ring-white/[0.06]">
       <div className="flex items-center justify-between text-[11px] font-medium">
-        <span className="flex items-center gap-1.5 text-white/60">
+        <span className="flex items-center gap-1.5 text-zinc-400">
           <Sparkles className={cn("h-3 w-3", low ? "text-amber-400" : "text-accent-300")} />
           Takeoff credits
         </span>
-        <span className={low ? "text-amber-300" : "text-white/80"}>{left} left</span>
+        <span className={low ? "text-amber-300" : "text-zinc-200"}>{left} left</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
         <div
@@ -256,14 +259,14 @@ function AccountMenu({ align = "up" }: { align?: "up" | "down" }) {
             className="ring-1 ring-white/20"
           />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium text-white">
+            <div className="truncate text-[13px] font-medium text-zinc-100">
               {session?.user.name ?? "—"}
             </div>
-            <div className="truncate text-[11px] text-white/45">
+            <div className="truncate text-[11px] text-zinc-500">
               {session?.profile.company ?? ""}
             </div>
           </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-white/35" />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
         </button>
       )}
       {open && (
@@ -376,7 +379,7 @@ function MobileNavDrawer({
           <button
             onClick={onClose}
             aria-label="Close menu"
-            className="ring-focus transition-smooth grid h-10 w-10 place-items-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white"
+            className="ring-focus transition-smooth grid h-10 w-10 place-items-center rounded-lg text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
           >
             <X className="h-5 w-5" />
           </button>
@@ -399,7 +402,7 @@ function MobileNavDrawer({
           </Link>
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="mt-5 first:mt-0">
-              <div className="microlabel mb-1.5 px-2.5 text-white/30">{group.label}</div>
+              <div className="microlabel mb-1.5 px-2.5 text-zinc-500">{group.label}</div>
               <div className="space-y-0.5">
                 {group.items.map((n) => (
                   <NavItem
@@ -523,7 +526,7 @@ export function DashboardShell({
         {/* Soft brand glow bleeding down from the logo — depth, not decor. */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(70%_100%_at_50%_0%,rgba(52,141,81,0.28),transparent)]"
+          className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(70%_100%_at_50%_0%,rgba(52,141,81,0.08),transparent)]"
         />
         <div
           className={cn(
@@ -563,7 +566,7 @@ export function DashboardShell({
               {collapsed ? (
                 <div className="mx-2 mb-1.5 border-t border-white/[0.07] first:hidden" />
               ) : (
-                <div className="microlabel mb-1.5 px-2.5 text-white/30">{group.label}</div>
+                <div className="microlabel mb-1.5 px-2.5 text-zinc-500">{group.label}</div>
               )}
               <div className="space-y-0.5">
                 {group.items.map((n) => (
