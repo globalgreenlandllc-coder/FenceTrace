@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { consumeLimit, requestIp } from "@/lib/abuse/rate-limit";
 import { POLICIES } from "@/lib/abuse/policies";
+import { fetchBuildingFootprints } from "@/lib/fence/buildings-core";
 import { fenceScanCore } from "@/lib/fence/scan-core";
 import { teaserPayloadFromScan } from "@/lib/fence/teaser";
 
@@ -68,8 +69,18 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    // The house footprint anchors the demo fence layout (returns tying
+    // the house into the side lines). Tight budget — two mirrors, 5 s
+    // each — because the scan already took ~8 s and a landing-page
+    // preview can't wait 20; a miss just means boundary-only fence.
+    const buildings = scan.parcelRings.length
+      ? await fetchBuildingFootprints(
+          { center: scan.center, zoom: scan.zoom },
+          { timeoutMs: 5_000, maxMirrors: 2 },
+        )
+      : [];
     return NextResponse.json(
-      { ok: true, teaser: teaserPayloadFromScan(scan) },
+      { ok: true, teaser: teaserPayloadFromScan(scan, buildings) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {

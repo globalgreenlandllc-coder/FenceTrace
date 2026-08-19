@@ -21,24 +21,32 @@ function scanWith(
   };
 }
 
+// Closed rectangle: (100,100) → (700,100) → (700,480) → (100,480).
+const RECT_RING = [
+  { x: 100, y: 100 },
+  { x: 700, y: 100 },
+  { x: 700, y: 480 },
+  { x: 100, y: 480 },
+  { x: 100, y: 100 }, // closing duplicate
+];
+
 test("closed rectangle ring: 4 sides, 4 corners, redacted payload", () => {
-  const ring = [
-    { x: 100, y: 100 },
-    { x: 700, y: 100 },
-    { x: 700, y: 480 },
-    { x: 100, y: 480 },
-    { x: 100, y: 100 }, // closing duplicate
-  ];
-  const t = teaserPayloadFromScan(scanWith([{ id: "parcel-0", points: ring }]));
+  const t = teaserPayloadFromScan(scanWith([{ id: "parcel-0", points: RECT_RING }]));
   assert.equal(t.sides, 4);
   assert.equal(t.corners, 4);
   assert.equal(t.parcelFound, true);
   assert.equal(t.acres, 0.28);
   assert.equal(t.runs.length, 1);
   assert.equal(t.runs[0]!.points.length, 5);
+  // no house known: the demo fences the whole ring
+  assert.equal(t.house, null);
+  assert.equal(t.fence.length, 1);
+  assert.equal(t.fence[0]!.kind, "boundary");
+  assert.equal(t.fence[0]!.points.length, 5);
   // no measurement fields leak
   assert.ok(!("canvasPxPerFt" in t));
   assert.ok(!("lf" in (t.runs[0] as object)));
+  assert.ok(!("lf" in (t.fence[0] as object)));
 });
 
 test("unclosed chain counts every vertex as a corner", () => {
@@ -55,6 +63,7 @@ test("unclosed chain counts every vertex as a corner", () => {
 test("no parcel: empty runs, parcelFound false, null acres", () => {
   const t = teaserPayloadFromScan(scanWith([], null));
   assert.equal(t.runs.length, 0);
+  assert.equal(t.fence.length, 0);
   assert.equal(t.sides, 0);
   assert.equal(t.parcelFound, false);
   assert.equal(t.acres, null);
@@ -94,4 +103,89 @@ test("coordinates round to 0.1 px (payload size hygiene)", () => {
     { x: 10.1, y: 21 },
     { x: 30.6, y: 40.4 },
   ]);
+});
+
+test("house near an edge: that side stays open, returns tie into the side lines", () => {
+  // House sits near the bottom (y=480) edge → that's the street side.
+  const house = [
+    { x: 250, y: 360 },
+    { x: 550, y: 360 },
+    { x: 550, y: 440 },
+    { x: 250, y: 440 },
+  ];
+  const t = teaserPayloadFromScan(
+    scanWith([{ id: "parcel-0", points: RECT_RING }]),
+    // buildings arg: a neighbor outside the ring must lose to the subject
+    [
+      [
+        { x: 800, y: 50 },
+        { x: 880, y: 50 },
+        { x: 880, y: 120 },
+        { x: 800, y: 120 },
+      ],
+      house,
+    ],
+  );
+  assert.deepEqual(t.house, house);
+
+  const boundary = t.fence.filter((f) => f.kind === "boundary");
+  assert.equal(boundary.length, 1);
+  // Left + top + right stay fenced; the bottom edge is gone.
+  assert.deepEqual(boundary[0]!.points, [
+    { x: 100, y: 480 },
+    { x: 100, y: 100 },
+    { x: 700, y: 100 },
+    { x: 700, y: 480 },
+  ]);
+
+  const returns = t.fence.filter((f) => f.kind === "return");
+  assert.equal(returns.length, 2);
+  for (const r of returns) {
+    assert.equal(r.points.length, 2);
+    const [from, to] = r.points as [{ x: number; y: number }, { x: number; y: number }];
+    // starts on a house wall corner, lands on a side line
+    assert.ok(house.some((v) => v.x === from.x && v.y === from.y));
+    assert.ok(to.x === 100 || to.x === 700);
+    assert.equal(Math.hypot(to.x - from.x, to.y - from.y), 150);
+  }
+
+  // 3 boundary segments + 2 returns
+  assert.equal(t.sides, 5);
+  assert.equal(t.corners, 8);
+});
+
+test("building outside the parcel is ignored — whole ring fenced", () => {
+  const t = teaserPayloadFromScan(
+    scanWith([{ id: "parcel-0", points: RECT_RING }]),
+    [
+      [
+        { x: 750, y: 50 },
+        { x: 850, y: 50 },
+        { x: 850, y: 120 },
+        { x: 750, y: 120 },
+      ],
+    ],
+  );
+  assert.equal(t.house, null);
+  assert.equal(t.fence.length, 1);
+  assert.equal(t.fence[0]!.kind, "boundary");
+  assert.equal(t.sides, 4);
+});
+
+test("house hugging the side line: degenerate return is skipped", () => {
+  // Western house wall sits 4px off the west property line — a 4px
+  // return would be a stub, so only the far side gets one.
+  const house = [
+    { x: 104, y: 360 },
+    { x: 560, y: 360 },
+    { x: 560, y: 440 },
+    { x: 104, y: 440 },
+  ];
+  const t = teaserPayloadFromScan(
+    scanWith([{ id: "parcel-0", points: RECT_RING }]),
+    [house],
+  );
+  const returns = t.fence.filter((f) => f.kind === "return");
+  assert.equal(returns.length, 1);
+  assert.equal(returns[0]!.points[1]!.x, 700);
 });
