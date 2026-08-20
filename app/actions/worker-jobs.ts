@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { getMe } from "@/app/actions/me";
 import { toWorkerJobDTO, type WorkerJobDTO } from "@/lib/worker-dto";
 import { safeBlobUrl } from "@/lib/blob";
+import { MAX_JOB_DAYS } from "@/lib/job-span";
+import { computeTeamEarnings, type PayoutDTO } from "@/lib/team-balance";
 import type { JobAssignmentStatus } from "@prisma/client";
 
 /**
@@ -83,6 +85,9 @@ export type WorkerAppointmentDTO = {
   notes: string | null;
   clientName: string | null;
   clientPhone: string | null;
+  /** This worker's answer to the stop — PENDING means the office is
+   *  waiting on a confirm. Null on rows predating the feature. */
+  workerResponse: "PENDING" | "CONFIRMED" | "DECLINED" | null;
 };
 
 /** The owner assigns appointments (visits/meetings) to crew — this is how a
@@ -92,13 +97,15 @@ export type WorkerAppointmentDTO = {
 export async function listMyAppointments(): Promise<WorkerAppointmentDTO[]> {
   const me = await getMe();
   if (!me) return [];
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // Coarse floor with a 24h margin: "today" in the WORKER's timezone can
+  // start up to a day before the server's (UTC) midnight. The schedule UI
+  // does the precise today-cut in the browser's own zone.
+  const floor = new Date(Date.now() - 24 * 3_600_000);
   const rows = await db.appointment.findMany({
     where: {
       worker: { userId: me.user.id },
       status: { not: "CANCELLED" },
-      startsAt: { gte: todayStart },
+      startsAt: { gte: floor },
     },
     orderBy: { startsAt: "asc" },
     take: 200,
@@ -112,6 +119,7 @@ export async function listMyAppointments(): Promise<WorkerAppointmentDTO[]> {
       notes: true,
       clientName: true,
       clientPhone: true,
+      workerResponse: true,
     },
   });
   return rows.map((a) => ({
@@ -124,7 +132,186 @@ export async function listMyAppointments(): Promise<WorkerAppointmentDTO[]> {
     notes: a.notes,
     clientName: a.clientName,
     clientPhone: a.clientPhone,
+    workerResponse: a.workerResponse,
   }));
+}
+
+/**
+ * The worker's answer to a stop the office scheduled — Confirm or "can't
+ * make it". Only the assigned worker may answer, and only while the stop
+ * is PENDING (a moved time resets to PENDING, so a confirm always refers
+ * to the CURRENT slot). The caller echoes the slot it RENDERED so a
+ * confirm from a stale tab can never bind to a time the worker didn't
+ * see; the guarded updateMany makes answer + slot check one atomic write.
+ */
+export async function respondToAppointment(
+  appointmentId: string,
+  response: "confirm" | "decline",
+  /** The startsAt ISO the worker's screen showed when they tapped. */
+  expectedStartsAtIso: string,
+  declineReason?: string,
+): Promise<Result<{ response: "CONFIRMED" | "DECLINED" }>> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  // Server actions are public POST endpoints — the response value is
+  // whitelisted, never coerced (junk must not count as a decline).
+  if (response !== "confirm" && response !== "decline")
+    return { ok: false, reason: "Invalid response" };
+  const expectedStartsAt = new Date(expectedStartsAtIso);
+  if (Number.isNaN(expectedStartsAt.getTime()))
+    return { ok: false, reason: "Reload and try again" };
+  const next = response === "confirm" ? ("CONFIRMED" as const) : ("DECLINED" as const);
+  const res = await db.appointment.updateMany({
+    where: {
+      id: appointmentId,
+      worker: { userId: me.user.id, status: { not: "DISABLED" } },
+      status: { not: "CANCELLED" },
+      workerResponse: "PENDING",
+      startsAt: expectedStartsAt,
+    },
+    data: {
+      workerResponse: next,
+      workerRespondedAt: new Date(),
+      workerDeclineReason:
+        response === "decline" ? declineReason?.trim().slice(0, 300) || null : null,
+    },
+  });
+  if (res.count === 0)
+    return {
+      ok: false,
+      reason: "This stop changed or is no longer awaiting your answer — reload to see the latest time",
+    };
+  revalidatePath("/worker");
+  revalidatePath("/worker/schedule");
+  // The owner's calendar polls and their bell reads workerRespondedAt —
+  // both pick this up without a revalidate from the worker's session.
+  return { ok: true, response: next };
+}
+
+/**
+ * "How long will this take you?" — the crew's own day count for the job.
+ * Moves endsAt by the whole-day DELTA: calendar days are timezone-
+ * dependent, so the client sends both the target and the span as ITS
+ * browser computed it, and the server never recomputes days in UTC.
+ *
+ * Two invariants the server DOES enforce (the delta inputs are
+ * client-claimed and this is the lower-trust principal):
+ *   - compare-and-set on endsAt — a stale tab's delta is rejected, not
+ *     silently composed with someone else's edit;
+ *   - the RESULTING span is bounded (~MAX_JOB_DAYS, with a day of slack
+ *     so no legitimate timezone edit is ever rejected).
+ */
+export async function setMyJobDuration(
+  jobId: string,
+  days: number,
+  currentDays: number,
+  /** The endsAt ISO the client computed its day count from. */
+  expectedEndsAtIso: string,
+): Promise<VoidResult> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const d = Math.round(days);
+  const cur = Math.round(currentDays);
+  if (!Number.isFinite(d) || d < 1 || d > MAX_JOB_DAYS)
+    return { ok: false, reason: `Days must be between 1 and ${MAX_JOB_DAYS}` };
+  if (!Number.isFinite(cur) || cur < 1 || cur > MAX_JOB_DAYS)
+    return { ok: false, reason: "Reload and try again" };
+  const expectedEndsAt = new Date(expectedEndsAtIso);
+  if (Number.isNaN(expectedEndsAt.getTime()))
+    return { ok: false, reason: "Reload and try again" };
+  const job = await db.jobAssignment.findFirst({
+    where: {
+      id: jobId,
+      worker: { userId: me.user.id, status: { not: "DISABLED" } },
+      status: { in: ["OFFERED", "ACCEPTED", "IN_PROGRESS"] },
+    },
+    select: { id: true, startsAt: true, endsAt: true },
+  });
+  if (!job) return { ok: false, reason: "This job can no longer be changed" };
+  if (job.endsAt.getTime() !== expectedEndsAt.getTime())
+    return { ok: false, reason: "The schedule changed under you — reload and try again" };
+  const endsAt = new Date(job.endsAt);
+  endsAt.setUTCDate(endsAt.getUTCDate() + (d - cur)); // whole-day shift, tz-free
+  if (endsAt <= job.startsAt)
+    return { ok: false, reason: "That would end before the job starts" };
+  if (endsAt.getTime() - job.startsAt.getTime() > (MAX_JOB_DAYS + 1) * 86_400_000)
+    return { ok: false, reason: `Jobs can't run longer than ${MAX_JOB_DAYS} days` };
+  // CAS write: only applies if endsAt is still what the client saw.
+  const res = await db.jobAssignment.updateMany({
+    where: { id: job.id, endsAt: expectedEndsAt },
+    data: { endsAt },
+  });
+  if (res.count === 0)
+    return { ok: false, reason: "The schedule changed under you — reload and try again" };
+  revalidatePath("/worker");
+  revalidatePath("/worker/schedule");
+  revalidatePath(`/worker/jobs/${jobId}`);
+  // Owner's calendar/workers views are client-fetched + polled — they pick
+  // up the new span on their own.
+  return { ok: true };
+}
+
+export type PayStubDTO = {
+  workerId: string;
+  /** Whose crew this stub is with (a person can be on several). */
+  company: string;
+  /** Finished work only. */
+  earnedCents: number;
+  /** Promised on not-yet-completed work. */
+  pendingCents: number;
+  /** Approved out-of-pocket expenses awaiting reimbursement. */
+  expensesOwedCents: number;
+  /** See lib/team-balance.ts pay policy: settled on completion. */
+  paidCents: number;
+  owedCents: number;
+  payouts: PayoutDTO[];
+};
+
+/** One stub per contractor the signed-in worker is active with — the SAME
+ *  math the owner's Workers page shows, so "when am I getting paid?" always
+ *  agrees on both sides. Stubs with no money activity at all are dropped. */
+export async function getMyPayStubs(): Promise<PayStubDTO[]> {
+  const me = await getMe();
+  if (!me) return [];
+  const links = await db.worker.findMany({
+    where: { userId: me.user.id, status: "ACTIVE" },
+    select: {
+      id: true,
+      ownerId: true,
+      owner: {
+        select: {
+          name: true,
+          email: true,
+          contractorProfile: { select: { company: true } },
+        },
+      },
+    },
+  });
+  const stubs: PayStubDTO[] = [];
+  for (const link of links) {
+    const members = await computeTeamEarnings(link.ownerId);
+    const mine = members.find((m) => m.workerId === link.id);
+    if (!mine) continue;
+    if (
+      mine.earnedCents === 0 &&
+      mine.pendingCents === 0 &&
+      mine.paidCents === 0 &&
+      mine.expensesOwedCents === 0
+    )
+      continue;
+    stubs.push({
+      workerId: link.id,
+      company:
+        link.owner.contractorProfile?.company || link.owner.name || link.owner.email,
+      earnedCents: mine.earnedCents,
+      pendingCents: mine.pendingCents,
+      expensesOwedCents: mine.expensesOwedCents,
+      paidCents: mine.paidCents,
+      owedCents: mine.owedCents,
+      payouts: mine.payouts.slice(0, 6),
+    });
+  }
+  return stubs;
 }
 
 export async function getMyJob(jobId: string): Promise<WorkerJobDTO | null> {
@@ -157,7 +344,8 @@ export async function respondToJob(
     data: {
       status,
       respondedAt: new Date(),
-      declineReason: response === "decline" ? (declineReason?.trim() || null) : null,
+      declineReason:
+        response === "decline" ? declineReason?.trim().slice(0, 300) || null : null,
     },
   });
   revalidatePath("/worker");

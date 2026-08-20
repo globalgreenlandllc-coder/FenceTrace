@@ -6,7 +6,13 @@ import { db } from "@/lib/db";
 import { getMe } from "@/app/actions/me";
 import { appBaseUrl } from "@/lib/base-url";
 import { sendEmailViaResend } from "@/lib/email/resend";
-import { renderWorkerInviteEmail, renderJobOfferEmail } from "@/lib/email/worker-templates";
+import {
+  renderWorkerInviteEmail,
+  renderJobOfferEmail,
+  renderJobRescheduledEmail,
+} from "@/lib/email/worker-templates";
+import { MAX_JOB_DAYS } from "@/lib/job-span";
+import { computeTeamEarnings, type TeamMemberEarnings } from "@/lib/team-balance";
 import { buildWorkerRoofSnapshot, JOB_KIND_LABEL } from "@/lib/worker-dto";
 import { deriveTotalCentsFromData } from "@/lib/proposal-mock";
 import {
@@ -15,7 +21,15 @@ import {
   type EstimateSource,
 } from "@/lib/worker-pay";
 import { checkUserEmailBudget } from "@/lib/abuse/guards";
-import type { JobKind, JobAssignmentStatus, WorkerStatus, WorkerKind } from "@prisma/client";
+import type {
+  JobKind,
+  JobAssignmentStatus,
+  WorkerStatus,
+  WorkerKind,
+  PaymentMethod,
+} from "@prisma/client";
+
+export type { TeamMemberEarnings };
 
 /**
  * workers.ts — OWNER-side crew management + job assignment. Every query is
@@ -603,7 +617,13 @@ export type WorkerActivityDTO = {
   jobId: string;
   jobTitle: string;
   workerName: string;
-  event: "ACCEPTED" | "DECLINED" | "STARTED" | "COMPLETED";
+  event:
+    | "ACCEPTED"
+    | "DECLINED"
+    | "STARTED"
+    | "COMPLETED"
+    | "VISIT_CONFIRMED"
+    | "VISIT_DECLINED";
   declineReason: string | null;
   at: string;
 };
@@ -612,20 +632,34 @@ export async function listWorkerActivity(): Promise<WorkerActivityDTO[]> {
   const me = await getMe();
   if (!me) return [];
   const since = new Date(Date.now() - 14 * 24 * 3600_000);
-  const jobs = await db.jobAssignment.findMany({
-    where: {
-      ownerId: me.user.id,
-      OR: [
-        { respondedAt: { gte: since }, status: { in: ["ACCEPTED", "DECLINED", "IN_PROGRESS"] } },
-        { startedAt: { gte: since }, status: "IN_PROGRESS" },
-        { completedAt: { gte: since }, status: "COMPLETED" },
-      ],
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 12,
-    include: { worker: { select: { name: true, email: true } } },
-  });
-  return jobs.map((j) => {
+  const [jobs, appts] = await Promise.all([
+    db.jobAssignment.findMany({
+      where: {
+        ownerId: me.user.id,
+        OR: [
+          { respondedAt: { gte: since }, status: { in: ["ACCEPTED", "DECLINED", "IN_PROGRESS"] } },
+          { startedAt: { gte: since }, status: "IN_PROGRESS" },
+          { completedAt: { gte: since }, status: "COMPLETED" },
+        ],
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 12,
+      include: { worker: { select: { name: true, email: true } } },
+    }),
+    // Appointment confirms/declines land in the same feed — the office is
+    // waiting on those answers just like job responses.
+    db.appointment.findMany({
+      where: {
+        userId: me.user.id,
+        workerRespondedAt: { gte: since },
+        workerResponse: { in: ["CONFIRMED", "DECLINED"] },
+      },
+      orderBy: { workerRespondedAt: "desc" },
+      take: 12,
+      include: { worker: { select: { name: true, email: true } } },
+    }),
+  ]);
+  const jobEvents: WorkerActivityDTO[] = jobs.map((j) => {
     const completed = j.status === "COMPLETED";
     const started = j.status === "IN_PROGRESS" && j.startedAt != null;
     const at =
@@ -636,24 +670,46 @@ export async function listWorkerActivity(): Promise<WorkerActivityDTO[]> {
       jobTitle: j.title,
       workerName: j.worker.name || j.worker.email,
       event: completed
-        ? "COMPLETED"
+        ? ("COMPLETED" as const)
         : started
-          ? "STARTED"
+          ? ("STARTED" as const)
           : j.status === "DECLINED"
-            ? "DECLINED"
-            : "ACCEPTED",
+            ? ("DECLINED" as const)
+            : ("ACCEPTED" as const),
       declineReason: j.status === "DECLINED" ? j.declineReason : null,
       at: at.toISOString(),
     };
   });
+  const apptEvents: WorkerActivityDTO[] = appts.map((a) => ({
+    id: `appt:${a.id}:${a.workerResponse}`,
+    jobId: a.id,
+    jobTitle: a.title,
+    workerName: a.worker ? a.worker.name || a.worker.email : "—",
+    event: a.workerResponse === "CONFIRMED" ? "VISIT_CONFIRMED" : "VISIT_DECLINED",
+    declineReason: a.workerResponse === "DECLINED" ? a.workerDeclineReason : null,
+    at: (a.workerRespondedAt ?? a.updatedAt).toISOString(),
+  }));
+  return [...jobEvents, ...apptEvents]
+    .sort((x, y) => (x.at < y.at ? 1 : -1))
+    .slice(0, 12);
 }
 
-/** Drag-to-move on the owner's calendar. Moves the whole window; the worker
- *  sees the new time in their portal (no re-offer — same job, new slot). */
+/**
+ * Drag-to-move on the owner's calendar. Moves the whole window — and an
+ * ACCEPTED job whose time moves goes back to OFFERED: the crew agreed to
+ * a slot, not to the job in the abstract, and a drag that silently keeps
+ * a stale "yes" is how a truck ends up somewhere on the wrong day.
+ * IN_PROGRESS is left alone (they're on site already). rescheduledAt +
+ * previousStartsAt let the portal say "same job, new time" instead of
+ * the reopened offer masquerading as new work.
+ */
 export async function rescheduleJob(
   jobId: string,
   startsAtIso: string,
   endsAtIso: string,
+  /** The caller's IANA timezone — email times read in the OFFICE's clock,
+   *  not the server's UTC. Optional so older callers keep working. */
+  callerTimeZone?: string,
 ): Promise<VoidResult> {
   const me = await getMe();
   if (!me) return { ok: false, reason: "Not signed in" };
@@ -662,17 +718,227 @@ export async function rescheduleJob(
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime()))
     return { ok: false, reason: "Invalid schedule dates" };
   if (endsAt <= startsAt) return { ok: false, reason: "End time must be after the start time" };
-  const res = await db.jobAssignment.updateMany({
+  const before = await db.jobAssignment.findFirst({
     where: { id: jobId, ownerId: me.user.id, status: { notIn: ["COMPLETED", "CANCELLED"] } },
-    data: { startsAt, endsAt },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      startsAt: true,
+      worker: { select: { email: true } },
+    },
   });
-  if (res.count === 0) return { ok: false, reason: "Job can't be rescheduled" };
+  if (!before) return { ok: false, reason: "Job can't be rescheduled" };
+  // A start that didn't move (pure resize / same-slot drop) is not a
+  // reschedule — no reopen, no stamps, no email.
+  if (before.startsAt.getTime() === startsAt.getTime()) {
+    await db.jobAssignment.updateMany({
+      where: { id: before.id, status: { notIn: ["COMPLETED", "CANCELLED"] } },
+      data: { startsAt, endsAt },
+    });
+  } else {
+    // A moved ACCEPTED job reopens (the crew agreed to a slot, not the job
+    // in the abstract); a moved DECLINED one re-offers too — dragging a
+    // declined job to a new day IS the office's counter-proposal.
+    const reopen = before.status === "ACCEPTED" || before.status === "DECLINED";
+    // Re-assert the status the reopen decision was based on — a crew tap
+    // (start/complete) racing this drag must not get clobbered to OFFERED.
+    const res = await db.jobAssignment.updateMany({
+      where: { id: before.id, status: before.status },
+      data: {
+        startsAt,
+        endsAt,
+        rescheduledAt: new Date(),
+        previousStartsAt: before.startsAt,
+        ...(reopen ? { status: "OFFERED", respondedAt: null, declineReason: null } : {}),
+      },
+    });
+    if (res.count === 0) {
+      // Lost the race — the job changed state mid-drag. Move the window
+      // only, without touching the (new) status.
+      const fallback = await db.jobAssignment.updateMany({
+        where: { id: before.id, status: { notIn: ["COMPLETED", "CANCELLED"] } },
+        data: { startsAt, endsAt, rescheduledAt: new Date(), previousStartsAt: before.startsAt },
+      });
+      if (fallback.count === 0) return { ok: false, reason: "Job can't be rescheduled" };
+    }
+    // Best-effort "same job, new time" email naming BOTH times, in the
+    // office's clock. Validate the zone — it came off the wire.
+    let timeZone: string | undefined;
+    if (callerTimeZone) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: callerTimeZone });
+        timeZone = callerTimeZone;
+      } catch {
+        timeZone = undefined;
+      }
+    }
+    const fmt = (d: Date) =>
+      d.toLocaleString("en-US", {
+        timeZone,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    void sendEmailViaResend({
+      to: before.worker.email,
+      fromName: me.profile.company || "FenceScan",
+      replyTo: me.user.email,
+      ...renderJobRescheduledEmail({
+        company: me.profile.company || "Your contractor",
+        jobTitle: before.title,
+        oldWhen: fmt(before.startsAt),
+        newWhen: fmt(startsAt),
+        reconfirm: reopen,
+        portalUrl: `${appBaseUrl()}/worker/jobs/${before.id}`,
+      }),
+    });
+  }
   revalidatePath("/dashboard/workers");
   revalidatePath("/dashboard/calendar");
   // The worker sees the new time in their portal — bust their cache too.
   revalidatePath("/worker");
   revalidatePath("/worker/schedule");
   revalidatePath(`/worker/jobs/${jobId}`);
+  return { ok: true };
+}
+
+/**
+ * Owner's mirror of the worker's setMyJobDuration — "this will take the
+ * crew N days". Same delta rule: the client computes both day counts in
+ * ITS timezone and the server shifts endsAt by whole days, never
+ * recomputing calendar days in UTC. Same guards too: compare-and-set on
+ * endsAt (a stale tab's delta is rejected, not composed with someone
+ * else's edit) and a bound on the RESULTING span.
+ */
+export async function setJobDurationDays(
+  jobId: string,
+  days: number,
+  currentDays: number,
+  /** The endsAt ISO the client computed its day count from. */
+  expectedEndsAtIso: string,
+): Promise<VoidResult> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const d = Math.round(days);
+  const cur = Math.round(currentDays);
+  if (!Number.isFinite(d) || d < 1 || d > MAX_JOB_DAYS)
+    return { ok: false, reason: `Days must be between 1 and ${MAX_JOB_DAYS}` };
+  if (!Number.isFinite(cur) || cur < 1 || cur > MAX_JOB_DAYS)
+    return { ok: false, reason: "Reload and try again" };
+  const expectedEndsAt = new Date(expectedEndsAtIso);
+  if (Number.isNaN(expectedEndsAt.getTime()))
+    return { ok: false, reason: "Reload and try again" };
+  const job = await db.jobAssignment.findFirst({
+    where: {
+      id: jobId,
+      ownerId: me.user.id,
+      status: { in: ACTIVE_JOB_STATUSES },
+    },
+    select: { id: true, startsAt: true, endsAt: true },
+  });
+  if (!job) return { ok: false, reason: "This job can no longer be changed" };
+  if (job.endsAt.getTime() !== expectedEndsAt.getTime())
+    return { ok: false, reason: "The schedule changed under you — reload and try again" };
+  const endsAt = new Date(job.endsAt);
+  endsAt.setUTCDate(endsAt.getUTCDate() + (d - cur)); // whole-day shift, tz-free
+  if (endsAt <= job.startsAt)
+    return { ok: false, reason: "That would end before the job starts" };
+  if (endsAt.getTime() - job.startsAt.getTime() > (MAX_JOB_DAYS + 1) * 86_400_000)
+    return { ok: false, reason: `Jobs can't run longer than ${MAX_JOB_DAYS} days` };
+  const res = await db.jobAssignment.updateMany({
+    where: { id: job.id, endsAt: expectedEndsAt },
+    data: { endsAt },
+  });
+  if (res.count === 0)
+    return { ok: false, reason: "The schedule changed under you — reload and try again" };
+  revalidatePath("/dashboard/workers");
+  revalidatePath("/dashboard/calendar");
+  revalidatePath("/worker");
+  revalidatePath("/worker/schedule");
+  revalidatePath(`/worker/jobs/${jobId}`);
+  return { ok: true };
+}
+
+// ── Team earnings & payouts ─────────────────────────────────────────────────
+
+/** Per-worker earnings/owed for the Workers page — the same
+ *  lib/team-balance.ts math the worker's own pay stub reads. */
+export async function listTeamEarnings(): Promise<TeamMemberEarnings[]> {
+  const me = await getMe();
+  if (!me) return [];
+  return computeTeamEarnings(me.user.id);
+}
+
+/** Record a payment made to a worker (crew pay, reimbursement, advance).
+ *  With `settlesExpenses`, the same transaction stamps the worker's
+ *  approved unreimbursed out-of-pocket expenses as paid back — the debt
+ *  the pay stub shows actually clears when the payment that covers it is
+ *  recorded. */
+export async function recordTeamPayout(input: {
+  workerId: string;
+  amountCents: number;
+  method?: PaymentMethod | null;
+  note?: string | null;
+  /** True when this payment covers the worker's open expense balance. */
+  settlesExpenses?: boolean;
+}): Promise<VoidResult> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const cents = Math.round(input.amountCents);
+  if (!Number.isFinite(cents) || cents <= 0)
+    return { ok: false, reason: "Enter an amount above zero" };
+  if (cents > 100_000_000) return { ok: false, reason: "That amount looks like a typo" };
+  const worker = await db.worker.findFirst({
+    where: { id: input.workerId, ownerId: me.user.id },
+    select: { id: true },
+  });
+  if (!worker) return { ok: false, reason: "Worker not found" };
+  const METHODS: PaymentMethod[] = ["CARD", "CASH", "CHECK", "BANK_TRANSFER", "OTHER"];
+  await db.$transaction([
+    db.workerPayout.create({
+      data: {
+        ownerId: me.user.id,
+        workerId: worker.id,
+        amountCents: cents,
+        method: input.method && METHODS.includes(input.method) ? input.method : null,
+        note: input.note?.trim().slice(0, 300) || null,
+      },
+    }),
+    ...(input.settlesExpenses
+      ? [
+          db.jobExpense.updateMany({
+            where: {
+              ownerId: me.user.id,
+              workerId: worker.id,
+              source: "WORKER",
+              paidBy: "OUT_OF_POCKET",
+              status: "APPROVED",
+              reimbursedAt: null,
+            },
+            data: { reimbursedAt: new Date() },
+          }),
+        ]
+      : []),
+  ]);
+  revalidatePath("/dashboard/workers");
+  revalidatePath("/dashboard/financials");
+  revalidatePath("/worker");
+  return { ok: true };
+}
+
+/** Remove a mis-recorded payout (fat-fingered amount, wrong person). */
+export async function deleteTeamPayout(payoutId: string): Promise<VoidResult> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const r = await db.workerPayout.deleteMany({
+    where: { id: payoutId, ownerId: me.user.id },
+  });
+  if (r.count === 0) return { ok: false, reason: "Payout not found" };
+  revalidatePath("/dashboard/workers");
+  revalidatePath("/worker");
   return { ok: true };
 }
 

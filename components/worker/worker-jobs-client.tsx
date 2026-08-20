@@ -43,6 +43,15 @@ export function WorkerJobsClient({
 
   const jobs = groups[filter];
 
+  // Precise today-cut in the browser's zone: the server floors the list
+  // at now-24h (timezone margin), so yesterday's finished stops would
+  // otherwise linger in "Next stops" until UTC catches up.
+  const upcoming = useMemo(() => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return appointments.filter((a) => new Date(a.endsAt) >= todayStart);
+  }, [appointments]);
+
   return (
     <div className="space-y-5">
       <div>
@@ -50,7 +59,7 @@ export function WorkerJobsClient({
         <p className="mt-0.5 text-sm text-zinc-500">Jobs your contractor assigned you. Tap a job to see the fence layout and respond.</p>
       </div>
 
-      {appointments.length > 0 && (
+      {upcoming.length > 0 && (
         <section>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
@@ -61,14 +70,14 @@ export function WorkerJobsClient({
               className="transition-smooth ring-focus rounded-md text-xs font-medium text-accent-700 hover:text-accent-800"
             >
               Full schedule
-              {appointments.length > NEXT_STOPS_PREVIEW
-                ? ` (+${appointments.length - NEXT_STOPS_PREVIEW} more)`
+              {upcoming.length > NEXT_STOPS_PREVIEW
+                ? ` (+${upcoming.length - NEXT_STOPS_PREVIEW} more)`
                 : ""}{" "}
               →
             </Link>
           </div>
           <div className="space-y-2">
-            {appointments.slice(0, NEXT_STOPS_PREVIEW).map((a) => (
+            {upcoming.slice(0, NEXT_STOPS_PREVIEW).map((a) => (
               <Link
                 key={a.id}
                 href="/worker/schedule"
@@ -84,6 +93,9 @@ export function WorkerJobsClient({
                     <Badge tone="sky">
                       {(APPOINTMENT_TYPE_LABEL as Record<string, string>)[a.type] ?? "Appointment"}
                     </Badge>
+                    {/* Nudge toward the schedule tab, where Confirm lives. */}
+                    {a.workerResponse === "PENDING" && <Badge tone="amber">Confirm</Badge>}
+                    {a.workerResponse === "DECLINED" && <Badge tone="rose">Declined</Badge>}
                   </div>
                   {(a.address || a.clientName) && (
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
@@ -155,6 +167,11 @@ export function WorkerJobsClient({
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Badge tone={STATUS_META[j.status].tone}>{STATUS_META[j.status].label}</Badge>
+                      {/* A reopened offer after a move must not masquerade
+                          as new work — same job, new time. */}
+                      {j.status === "OFFERED" && j.rescheduledAt && (
+                        <Badge tone="amber">Rescheduled</Badge>
+                      )}
                       <span className="text-xs text-zinc-400">{j.kindLabel}</span>
                     </div>
                     <h3 className="mt-1.5 truncate font-semibold text-ink">{j.title}</h3>
@@ -166,7 +183,13 @@ export function WorkerJobsClient({
                     <div className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" /> {j.clientName}</div>
                   )}
                   <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> {j.address}</div>
-                  <div className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {fmtWhen(j.startsAt)}</div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" />
+                    {j.status === "OFFERED" && j.rescheduledAt && j.previousStartsAt && (
+                      <s className="text-zinc-400">{fmtWhen(j.previousStartsAt)}</s>
+                    )}{" "}
+                    {fmtWhen(j.startsAt)}
+                  </div>
                 </div>
                 <div className="mt-auto flex items-center justify-between border-t border-zinc-100 bg-zinc-50/60 px-4 py-2.5">
                   <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">Your pay</span>

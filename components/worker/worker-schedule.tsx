@@ -9,11 +9,20 @@ import { fmtDay, fmtTime, fmtMoney, STATUS_META } from "./format";
 import { APPOINTMENT_TYPE_LABEL, type WorkerJobDTO } from "@/lib/worker-dto";
 import type { WorkerAppointmentDTO } from "@/app/actions/worker-jobs";
 import { WorkerAvailability } from "./worker-availability";
+import { AppointmentResponse } from "./appointment-response";
+import { jobSpanDays } from "@/lib/job-span";
 
 const APPT_TYPE_LABEL: Record<string, string> = APPOINTMENT_TYPE_LABEL;
 
 type DayEntry =
-  | { kind: "job"; startsAt: string; job: WorkerJobDTO }
+  | {
+      kind: "job";
+      startsAt: string;
+      job: WorkerJobDTO;
+      /** "Day 2 of 3" position when the job spans several days. */
+      dayIdx: number;
+      spanDays: number;
+    }
   | { kind: "appt"; startsAt: string; appt: WorkerAppointmentDTO };
 
 export function WorkerSchedule({
@@ -24,16 +33,43 @@ export function WorkerSchedule({
   appointments: WorkerAppointmentDTO[];
 }) {
   const reduce = useReducedMotion();
+  // Precise today-cut in the browser's own timezone (the server floors
+  // with a 24h margin — see listMyAppointments).
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  // A multi-day install shows once per covered day ("Day 2 of 3") — the
+  // crew's Tuesday plan must include a job that started Monday.
+  const jobEntries: DayEntry[] = [];
+  for (const j of jobs) {
+    if (j.status !== "ACCEPTED" && j.status !== "IN_PROGRESS" && j.status !== "OFFERED")
+      continue;
+    const spanDays = jobSpanDays(j.startsAt, j.endsAt);
+    const s = new Date(j.startsAt);
+    for (let d = 0; d < spanDays; d++) {
+      const day = new Date(
+        s.getFullYear(),
+        s.getMonth(),
+        s.getDate() + d,
+        s.getHours(),
+        s.getMinutes(),
+      );
+      if (day < todayStart) continue; // past days live on My jobs, not the plan
+      jobEntries.push({
+        kind: "job",
+        startsAt: day.toISOString(),
+        job: j,
+        dayIdx: d + 1,
+        spanDays,
+      });
+    }
+  }
+
   const entries: DayEntry[] = [
-    ...jobs
-      .filter(
-        (j) =>
-          j.status === "ACCEPTED" || j.status === "IN_PROGRESS" || j.status === "OFFERED",
-      )
-      .map((j): DayEntry => ({ kind: "job", startsAt: j.startsAt, job: j })),
-    ...appointments.map(
-      (a): DayEntry => ({ kind: "appt", startsAt: a.startsAt, appt: a }),
-    ),
+    ...jobEntries,
+    ...appointments
+      .filter((a) => new Date(a.endsAt) >= todayStart)
+      .map((a): DayEntry => ({ kind: "appt", startsAt: a.startsAt, appt: a })),
   ].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   // Group by calendar day.
@@ -86,7 +122,7 @@ export function WorkerSchedule({
                 {dayEntries.map((e) =>
                   e.kind === "job" ? (
                     <Link
-                      key={`j-${e.job.id}`}
+                      key={`j-${e.job.id}-${e.dayIdx}`}
                       href={`/worker/jobs/${e.job.id}`}
                       className="group surface flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-4 py-3 hover-lift press-scale ring-focus"
                     >
@@ -101,6 +137,11 @@ export function WorkerSchedule({
                           <Badge tone={STATUS_META[e.job.status].tone}>
                             {STATUS_META[e.job.status].label}
                           </Badge>
+                          {e.spanDays > 1 && (
+                            <Badge tone="neutral">
+                              Day {e.dayIdx} of {e.spanDays}
+                            </Badge>
+                          )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500">
                           <MapPin className="h-3 w-3" /> {e.job.address}
@@ -154,9 +195,18 @@ export function WorkerSchedule({
                           </div>
                         )}
                       </div>
-                      <span className="text-xs text-zinc-400">
-                        until {fmtTime(e.appt.endsAt)}
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-xs text-zinc-400">
+                          until {fmtTime(e.appt.endsAt)}
+                        </span>
+                        {/* The office is waiting on this answer. */}
+                        <AppointmentResponse
+                          key={`${e.appt.id}:${e.appt.workerResponse}:${e.appt.startsAt}`}
+                          appointmentId={e.appt.id}
+                          response={e.appt.workerResponse}
+                          startsAt={e.appt.startsAt}
+                        />
+                      </div>
                     </div>
                   ),
                 )}

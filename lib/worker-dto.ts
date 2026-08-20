@@ -74,6 +74,8 @@ export type JobAssignmentRow = {
   attachmentType: string | null;
   startsAt: Date;
   endsAt: Date;
+  rescheduledAt: Date | null;
+  previousStartsAt: Date | null;
   declineReason: string | null;
   respondedAt: Date | null;
   startedAt: Date | null;
@@ -104,6 +106,11 @@ export type WorkerJobDTO = {
   attachmentType: string | null;
   startsAt: string;
   endsAt: string;
+  /** Set when the office moved a scheduled job — previousStartsAt is the
+   *  slot it came from, so a reopened offer reads as "same job, new
+   *  time" instead of masquerading as new work. */
+  rescheduledAt: string | null;
+  previousStartsAt: string | null;
   declineReason: string | null;
   respondedAt: string | null;
   startedAt: string | null;
@@ -132,6 +139,8 @@ export function toWorkerJobDTO(row: JobAssignmentRow): WorkerJobDTO {
     attachmentType: row.attachmentType ?? null,
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
+    rescheduledAt: row.rescheduledAt ? row.rescheduledAt.toISOString() : null,
+    previousStartsAt: row.previousStartsAt ? row.previousStartsAt.toISOString() : null,
     declineReason: row.declineReason,
     respondedAt: row.respondedAt ? row.respondedAt.toISOString() : null,
     startedAt: row.startedAt ? row.startedAt.toISOString() : null,

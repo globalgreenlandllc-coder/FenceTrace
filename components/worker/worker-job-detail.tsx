@@ -6,6 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft,
   Camera,
+  CalendarClock,
   Check,
   CheckCircle2,
   Clock,
@@ -15,6 +16,7 @@ import {
   Info,
   Loader2,
   MapPin,
+  Minus,
   Phone,
   Play,
   Plus,
@@ -33,10 +35,12 @@ import {
   respondToJob,
   markJobStarted,
   markJobComplete,
+  setMyJobDuration,
   submitJobExpense,
   listMyJobExpenses,
   type WorkerExpenseDTO,
 } from "@/app/actions/worker-jobs";
+import { jobSpanDays, MAX_JOB_DAYS } from "@/lib/job-span";
 import type { WorkerJobDTO } from "@/lib/worker-dto";
 
 export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
@@ -90,6 +94,20 @@ export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
       >
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5 motion-reduce:transition-none" /> All jobs
       </Link>
+
+      {/* "Same job, new time" — a reopened offer after an office move must
+          never read like brand-new work. */}
+      {job.status === "OFFERED" && job.rescheduledAt && job.previousStartsAt && (
+        <div className="anim-enter flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <strong>Same job — the office moved it.</strong> It was{" "}
+            <s>{fmtWhen(job.previousStartsAt)}</s>, now{" "}
+            <strong>{fmtWhen(job.startsAt)}</strong>. Please confirm the new
+            time below.
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -176,6 +194,8 @@ export function WorkerJobDetail({ job }: { job: WorkerJobDTO }) {
           )}
         </div>
       </div>
+
+      <DurationCard job={job} />
 
       {(job.status === "ACCEPTED" ||
         job.status === "IN_PROGRESS" ||
@@ -298,6 +318,76 @@ const EXPENSE_STATUS_META: Record<
  * here close the loop so the crew knows what got covered.
  */
 type ReceiptFile = { url: string; name: string; mimeType: string };
+
+/** "How long will this take you?" — the crew's own day count. Moves the
+ *  job's end date by whole days; the office calendar re-spans live. */
+function DurationCard({ job }: { job: WorkerJobDTO }) {
+  const router = useRouter();
+  // Derived from the prop every render — the row is the truth; only a
+  // transient optimistic value shows while a request is in flight.
+  const [pendingDays, setPendingDays] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const days = jobSpanDays(job.startsAt, job.endsAt);
+  const shown = pendingDays ?? days;
+  if (!["OFFERED", "ACCEPTED", "IN_PROGRESS"].includes(job.status)) return null;
+
+  async function bump(delta: number) {
+    const target = days + delta;
+    if (busy || target < 1 || target > MAX_JOB_DAYS) return;
+    setBusy(true);
+    setErr(null);
+    setPendingDays(target);
+    // The browser computes BOTH day counts; the server applies the delta —
+    // calendar days must never be recomputed in the server's UTC zone.
+    // job.endsAt rides along as a compare-and-set fingerprint.
+    const r = await setMyJobDuration(job.id, target, days, job.endsAt);
+    setBusy(false);
+    setPendingDays(null);
+    if (!r.ok) return setErr(r.reason);
+    router.refresh(); // pull the re-spanned row so the next bump has a fresh base
+  }
+
+  return (
+    <div className="surface flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white p-4">
+      <div>
+        <h3 className="font-label text-zinc-500">How long will this take you?</h3>
+        <p className="mt-0.5 text-xs text-zinc-400">
+          The office plans around your answer — days show on both calendars.
+        </p>
+        {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void bump(-1)}
+          disabled={busy || shown <= 1}
+          className="ring-focus press-scale transition-smooth grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 disabled:opacity-40"
+          aria-label="One day fewer"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <div className="w-16 text-center">
+          <div className="text-xl font-semibold tabular-nums text-ink">
+            {shown}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-zinc-400">
+            day{shown === 1 ? "" : "s"}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void bump(1)}
+          disabled={busy || shown >= MAX_JOB_DAYS}
+          className="ring-focus press-scale transition-smooth grid h-10 w-10 place-items-center rounded-xl border border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-800 disabled:opacity-40"
+          aria-label="One day more"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ExpensesCard({ jobId }: { jobId: string }) {
   const [rows, setRows] = useState<WorkerExpenseDTO[] | null>(null);

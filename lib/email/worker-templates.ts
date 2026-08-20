@@ -59,6 +59,36 @@ export function renderAppointmentAssignedEmail(args: {
   return { subject, html, text };
 }
 
+/** "Same job, new time." Names BOTH times — "moved to Friday" alone reads
+ *  like a second job on top of the one they agreed to; "moved FROM Thursday
+ *  TO Friday" can only be the same job. */
+export function renderJobRescheduledEmail(args: {
+  company: string;
+  jobTitle: string;
+  oldWhen: string;
+  newWhen: string;
+  /** True when the move reopened an accepted job — ask to confirm again. */
+  reconfirm: boolean;
+  portalUrl: string;
+}): RenderedEmail {
+  const subject = `Schedule change from ${args.company}: ${args.jobTitle}`;
+  const html = WRAP(
+    `<p style="margin:0 0 14px;font-size:16px;font-weight:700">Same job — new time</p>
+     <p style="margin:0 0 6px;font-size:15px;color:#3a3f4a"><strong>${args.jobTitle}</strong></p>
+     <p style="margin:0 0 20px;font-size:14px;color:#3a3f4a">Moved from ${args.oldWhen} to <strong>${args.newWhen}</strong>.</p>
+     <p style="margin:0 0 22px">${BTN(args.portalUrl, args.reconfirm ? "Confirm the new time" : "View the job")}</p>
+     <p style="margin:0;font-size:13px;color:#9aa0ac">${
+       args.reconfirm
+         ? "You accepted the old slot, so this job is waiting on your confirmation again."
+         : "Nothing else about the job changed."
+     }</p>`,
+  );
+  const text = `Schedule change from ${args.company}: ${args.jobTitle}\nMoved from ${args.oldWhen} to ${args.newWhen}.\n${
+    args.reconfirm ? "Please confirm the new time: " : "Details: "
+  }${args.portalUrl}\n`;
+  return { subject, html, text };
+}
+
 export function renderJobOfferEmail(args: {
   company: string;
   jobTitle: string;

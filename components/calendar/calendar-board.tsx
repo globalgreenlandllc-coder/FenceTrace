@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CalendarRange,
   Check,
+  Clock3,
   ChevronLeft,
   ChevronRight,
   Columns3,
@@ -55,6 +56,7 @@ import {
 } from "@/app/actions/availability";
 import { cn } from "@/lib/utils";
 import { dayKey } from "@/lib/day-key";
+import { jobSpanDays } from "@/lib/job-span";
 
 /* ------------------------------------------------------------------ */
 /*  Time + grid constants                                             */
@@ -293,7 +295,48 @@ function minutesFromDayStart(d: Date): number {
 
 type DayTile =
   | { kind: "appt"; key: string; start: Date; end: Date; appt: AppointmentDTO }
-  | { kind: "job"; key: string; start: Date; end: Date; job: JobCalendarEventDTO };
+  | {
+      kind: "job";
+      key: string;
+      start: Date;
+      end: Date;
+      job: JobCalendarEventDTO;
+      /** 1-based "Day N of M" position when the job spans several days. */
+      dayIdx?: number;
+      spanDays?: number;
+    };
+
+/**
+ * A multi-day job's slice for one calendar day: the job's daily clock
+ * window repeated on every covered day ("crew on site 8–4, Mon–Wed"),
+ * with an overlap clamp for overnight-shaped windows. Null when the day
+ * is outside the span.
+ */
+function jobSegmentForDay(
+  j: { startsAt: string; endsAt: string },
+  day: Date,
+): { start: Date; end: Date; dayIdx: number; spanDays: number } | null {
+  const s = new Date(j.startsAt);
+  const e = new Date(j.endsAt);
+  const spanDays = jobSpanDays(s, e);
+  const dayMid = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  const sMid = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const dayIdx = Math.round((dayMid.getTime() - sMid.getTime()) / 86_400_000) + 1;
+  if (dayIdx < 1 || dayIdx > spanDays) return null;
+  let segStart = new Date(dayMid);
+  segStart.setHours(s.getHours(), s.getMinutes(), 0, 0);
+  let segEnd = new Date(dayMid);
+  segEnd.setHours(e.getHours(), e.getMinutes(), 0, 0);
+  if (segEnd <= segStart) {
+    // End clock earlier than start clock — clamp to the real overlap.
+    // Calendar-constructor midnight, not +24h, so DST days stay aligned.
+    const nextMid = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+    segStart = s > dayMid ? s : dayMid;
+    segEnd = e < nextMid ? e : nextMid;
+    if (segEnd <= segStart) return null;
+  }
+  return { start: segStart, end: segEnd, dayIdx, spanDays };
+}
 
 type PositionedTile = { tile: DayTile; col: number; cols: number };
 
@@ -611,7 +654,14 @@ export function CalendarBoard({
     | { kind: "item"; item: SchedulableItem }
     | { kind: "appt-move"; appt: AppointmentDTO; grabOffsetMin: number }
     | { kind: "appt-resize"; appt: AppointmentDTO }
-    | { kind: "job-move"; job: JobCalendarEventDTO; grabOffsetMin: number }
+    | {
+        kind: "job-move";
+        job: JobCalendarEventDTO;
+        grabOffsetMin: number;
+        /** 0-based day of the grabbed segment inside a multi-day job —
+         *  dropping Day 2 on Tuesday must land Day 1 on Monday. */
+        dayOffset: number;
+      }
     | null
   >(null);
 
@@ -645,7 +695,7 @@ export function CalendarBoard({
     setDragSource("appt");
   }
 
-  function startDragJob(e: DragEvent, job: JobCalendarEventDTO) {
+  function startDragJob(e: DragEvent, job: JobCalendarEventDTO, dayIdx?: number) {
     const grab =
       ((e.clientY -
         (e.currentTarget as HTMLElement).getBoundingClientRect().top) /
@@ -655,6 +705,7 @@ export function CalendarBoard({
       kind: "job-move",
       job,
       grabOffsetMin: Math.round(grab / SLOT_MINUTES) * SLOT_MINUTES,
+      dayOffset: (dayIdx ?? 1) - 1,
     };
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", job.id);
@@ -709,14 +760,24 @@ export function CalendarBoard({
       };
     } else if (d.kind === "appt-move" || d.kind === "job-move") {
       const src = d.kind === "appt-move" ? d.appt : d.job;
-      const dur =
+      let dur =
         (new Date(src.endsAt).getTime() - new Date(src.startsAt).getTime()) / 60000;
+      let label = src.title;
+      if (d.kind === "job-move") {
+        // A multi-day job's ghost shows its DAILY window, not a tile
+        // flooding the column for 72 hours; the day count rides the label.
+        const seg = jobSegmentForDay(d.job, new Date(d.job.startsAt));
+        if (seg) {
+          dur = (seg.end.getTime() - seg.start.getTime()) / 60000;
+          if (seg.spanDays > 1) label = `${src.title} · ${seg.spanDays} days`;
+        }
+      }
       const slotShift = Math.round(d.grabOffsetMin / SLOT_MINUTES);
       preview = {
         dayIndex: target.dayIndex,
         slotIndex: Math.max(0, target.slotIndex - slotShift),
         durationMin: dur,
-        label: src.title,
+        label,
       };
     }
     setDropPreview((prev) =>
@@ -755,6 +816,8 @@ export function CalendarBoard({
     if (d.kind === "job-move") {
       const newStart = dateForSlot(weekStart, target.dayIndex, target.slotIndex);
       newStart.setMinutes(newStart.getMinutes() - d.grabOffsetMin);
+      // Dropping a Day-N segment keeps that day AS Day N.
+      newStart.setDate(newStart.getDate() - d.dayOffset);
       const duration =
         new Date(d.job.endsAt).getTime() - new Date(d.job.startsAt).getTime();
       const newEnd = new Date(newStart.getTime() + duration);
@@ -765,7 +828,7 @@ export function CalendarBoard({
             : j,
         ),
       );
-      const r = await rescheduleJob(d.job.id, newStart.toISOString(), newEnd.toISOString());
+      const r = await rescheduleJob(d.job.id, newStart.toISOString(), newEnd.toISOString(), Intl.DateTimeFormat().resolvedOptions().timeZone);
       if (!r.ok) refresh();
       return;
     }
@@ -859,6 +922,8 @@ export function CalendarBoard({
       const duration = new Date(d.job.endsAt).getTime() - oldStart.getTime();
       const newStart = new Date(day);
       newStart.setHours(oldStart.getHours(), oldStart.getMinutes(), 0, 0);
+      // Dropping a Day-N chip keeps that day AS Day N.
+      newStart.setDate(newStart.getDate() - d.dayOffset);
       const newEnd = new Date(newStart.getTime() + duration);
       setJobEvents((prev) =>
         prev.map((j) =>
@@ -867,7 +932,7 @@ export function CalendarBoard({
             : j,
         ),
       );
-      const r = await rescheduleJob(d.job.id, newStart.toISOString(), newEnd.toISOString());
+      const r = await rescheduleJob(d.job.id, newStart.toISOString(), newEnd.toISOString(), Intl.DateTimeFormat().resolvedOptions().timeZone);
       if (!r.ok) refresh();
     }
   }
@@ -1219,10 +1284,17 @@ function DayAgenda({
           out.push({ kind: "appt", key: `a-${a.id}`, start, end, appt: a });
       }
       for (const j of jobEvents) {
-        const start = new Date(j.startsAt);
-        const end = new Date(j.endsAt);
-        if (overlaps(start, end))
-          out.push({ kind: "job", key: `j-${j.id}`, start, end, job: j });
+        const seg = jobSegmentForDay(j, day);
+        if (seg)
+          out.push({
+            kind: "job",
+            key: `j-${j.id}`,
+            start: seg.start,
+            end: seg.end,
+            job: j,
+            dayIdx: seg.dayIdx,
+            spanDays: seg.spanDays,
+          });
       }
       return out.sort((x, y) => x.start.getTime() - y.start.getTime());
     },
@@ -1402,6 +1474,11 @@ function DayAgenda({
                       {tile.job.workerName} · {tile.job.kindLabel}
                     </span>
                     <JobStatusPill status={tile.job.status} />
+                    {(tile.spanDays ?? 1) > 1 && (
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 py-px text-[10px] font-semibold text-zinc-600">
+                        Day {tile.dayIdx} of {tile.spanDays}
+                      </span>
+                    )}
                   </div>
                   {tile.job.address && (
                     <div className="mt-0.5 flex items-center gap-1 truncate text-xs text-zinc-500">
@@ -1723,7 +1800,7 @@ function WeekGrid({
   onApptClick: (a: AppointmentDTO) => void;
   onApptDragStart: (e: DragEvent, a: AppointmentDTO) => void;
   onApptResizeStart: (e: DragEvent, a: AppointmentDTO) => void;
-  onJobDragStart: (e: DragEvent, j: JobCalendarEventDTO) => void;
+  onJobDragStart: (e: DragEvent, j: JobCalendarEventDTO, dayIdx?: number) => void;
   onDragOver: (e: DragEvent, container: HTMLElement) => void;
   onDrop: (e: DragEvent, container: HTMLElement) => void;
   onDragEnd: () => void;
@@ -1754,13 +1831,18 @@ function WeekGrid({
         }
       }
       for (const j of jobEvents) {
-        if (sameDay(new Date(j.startsAt), days[i])) {
+        // Multi-day fence jobs repeat their daily clock window on every
+        // covered day instead of one giant tile on the start day.
+        const seg = jobSegmentForDay(j, days[i]);
+        if (seg) {
           tiles.push({
             kind: "job",
-            key: `j-${j.id}`,
-            start: new Date(j.startsAt),
-            end: new Date(j.endsAt),
+            key: `j-${j.id}-${i}`,
+            start: seg.start,
+            end: seg.end,
             job: j,
+            dayIdx: seg.dayIdx,
+            spanDays: seg.spanDays,
           });
         }
       }
@@ -1933,6 +2015,10 @@ function WeekGrid({
                   <JobTile
                     key={p.tile.key}
                     job={p.tile.job}
+                    start={p.tile.start}
+                    end={p.tile.end}
+                    dayIdx={p.tile.dayIdx}
+                    spanDays={p.tile.spanDays}
                     col={p.col}
                     cols={p.cols}
                     dim={
@@ -1940,7 +2026,11 @@ function WeekGrid({
                       p.tile.job.workerId !== selectedWorkerId
                     }
                     onDragStart={(e) =>
-                      onJobDragStart(e, (p.tile as Extract<DayTile, { kind: "job" }>).job)
+                      onJobDragStart(
+                        e,
+                        (p.tile as Extract<DayTile, { kind: "job" }>).job,
+                        (p.tile as Extract<DayTile, { kind: "job" }>).dayIdx,
+                      )
                     }
                   />
                 ),
@@ -2071,6 +2161,36 @@ function EventTile({
         >
           <UserRound className="h-2.5 w-2.5 shrink-0" />
           <span className="truncate">{appt.workerName}</span>
+          {/* The worker's answer — the office shouldn't have to call to
+              ask "did you see Tuesday?". */}
+          {appt.workerResponse === "CONFIRMED" && (
+            <span
+              title={`${appt.workerName} confirmed`}
+              className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-100 px-1 py-px text-[9px] font-semibold text-emerald-700"
+            >
+              <Check className="h-2.5 w-2.5" /> OK
+            </span>
+          )}
+          {appt.workerResponse === "DECLINED" && (
+            <span
+              title={
+                appt.workerDeclineReason
+                  ? `Can't make it: ${appt.workerDeclineReason}`
+                  : "Can't make it"
+              }
+              className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-rose-100 px-1 py-px text-[9px] font-semibold text-rose-700"
+            >
+              <X className="h-2.5 w-2.5" /> Can&apos;t
+            </span>
+          )}
+          {appt.workerResponse === "PENDING" && (
+            <span
+              title="Awaiting the worker's confirmation"
+              className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-amber-100 px-1 py-px text-[9px] font-semibold text-amber-700"
+            >
+              <Clock3 className="h-2.5 w-2.5" /> ?
+            </span>
+          )}
         </div>
       )}
       {/* Bottom resize handle */}
@@ -2093,23 +2213,41 @@ function EventTile({
  *  shows offered / accepted / declined / done. */
 function JobTile({
   job,
+  start: segStart,
+  end: segEnd,
+  dayIdx,
+  spanDays,
   col,
   cols,
   dim,
   onDragStart,
 }: {
   job: JobCalendarEventDTO;
+  /** This day's slice of the job (jobSegmentForDay) — a 3-day install
+   *  renders one clock-window tile per covered day, not one giant tile. */
+  start: Date;
+  end: Date;
+  dayIdx?: number;
+  spanDays?: number;
   col: number;
   cols: number;
   dim?: boolean;
   onDragStart: (e: DragEvent) => void;
 }) {
-  const start = new Date(job.startsAt);
-  const end = new Date(job.endsAt);
-  const topMin = minutesFromDayStart(start);
-  const durMin = Math.max(SLOT_MINUTES, (end.getTime() - start.getTime()) / 60000);
+  const start = segStart;
+  const end = segEnd;
+  // Clamp to the visible band: a midnight-anchored middle-day segment
+  // must not paint above 6 AM or push past the grid's bottom edge.
+  const rawTop = minutesFromDayStart(start);
+  const rawDur = (end.getTime() - start.getTime()) / 60000;
+  const topMin = Math.max(0, rawTop);
+  const durMin = Math.min(
+    Math.max(SLOT_MINUTES, rawDur - (topMin - rawTop)),
+    TOTAL_SLOTS * SLOT_MINUTES - topMin,
+  );
   const tone = workerTone(job.workerId);
   const dimmed = job.status === "DECLINED" || job.status === "COMPLETED";
+  const multiDay = (spanDays ?? 1) > 1;
 
   return (
     <a
@@ -2140,8 +2278,20 @@ function JobTile({
         <span className="truncate">{job.workerName}</span>
         <JobStatusPill status={job.status} />
       </div>
-      <div className={cn("truncate pl-3 pr-2 pb-1 text-[10px] opacity-70", tone.text)}>
-        {fmtTime(start)} – {fmtTime(end)}
+      <div className={cn("flex items-center gap-1 truncate pl-3 pr-2 pb-1 text-[10px] opacity-70", tone.text)}>
+        <span>
+          {fmtTime(start)} – {fmtTime(end)}
+        </span>
+        {multiDay && (
+          <span
+            className={cn(
+              "shrink-0 rounded-full px-1 py-px text-[9px] font-semibold ring-1 ring-inset",
+              tone.ring,
+            )}
+          >
+            Day {dayIdx} of {spanDays}
+          </span>
+        )}
       </div>
     </a>
   );
@@ -2184,7 +2334,7 @@ function MonthGrid({
   onDragEnd: () => void;
   onApptClick: (a: AppointmentDTO) => void;
   onApptDragStart: (e: DragEvent, a: AppointmentDTO) => void;
-  onJobDragStart: (e: DragEvent, j: JobCalendarEventDTO) => void;
+  onJobDragStart: (e: DragEvent, j: JobCalendarEventDTO, dayIdx?: number) => void;
   onDayOpen: (d: Date) => void;
   onEmptyClick: (d: Date) => void;
 }) {
@@ -2195,23 +2345,28 @@ function MonthGrid({
   const today = new Date();
 
   const byDay = useMemo(() => {
-    const map = new Map<
-      string,
-      { appts: AppointmentDTO[]; jobs: JobCalendarEventDTO[] }
-    >();
+    type MonthJobChip = { job: JobCalendarEventDTO; dayIdx: number; spanDays: number };
+    const map = new Map<string, { appts: AppointmentDTO[]; jobs: MonthJobChip[] }>();
     const keyOf = (d: Date) => d.toDateString();
     for (const d of days) map.set(keyOf(d), { appts: [], jobs: [] });
     for (const a of appointments) {
       const k = keyOf(new Date(a.startsAt));
       map.get(k)?.appts.push(a);
     }
+    // A multi-day job drops one chip on EVERY covered day — a 3-day
+    // install visibly blocks Tue AND Wed, not just its start morning.
     for (const j of jobEvents) {
-      const k = keyOf(new Date(j.startsAt));
-      map.get(k)?.jobs.push(j);
+      for (const d of days) {
+        const seg = jobSegmentForDay(j, d);
+        if (seg)
+          map
+            .get(keyOf(d))
+            ?.jobs.push({ job: j, dayIdx: seg.dayIdx, spanDays: seg.spanDays });
+      }
     }
     for (const v of map.values()) {
       v.appts.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-      v.jobs.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+      v.jobs.sort((a, b) => a.job.startsAt.localeCompare(b.job.startsAt));
     }
     return map;
   }, [appointments, jobEvents, days]);
@@ -2335,16 +2490,16 @@ function MonthGrid({
                     </div>
                   );
                 })}
-                {shownJobs.map((j) => {
+                {shownJobs.map(({ job: j, dayIdx, spanDays }) => {
                   const tone = workerTone(j.workerId);
                   return (
                     <a
-                      key={j.id}
+                      key={`${j.id}-${dayIdx}`}
                       href="/dashboard/workers"
                       draggable
                       onDragStart={(e) => {
                         e.stopPropagation();
-                        onJobDragStart(e, j);
+                        onJobDragStart(e, j, dayIdx);
                       }}
                       onClick={(e) => e.stopPropagation()}
                       className={cn(
@@ -2355,10 +2510,11 @@ function MonthGrid({
                         (j.status === "DECLINED" || j.status === "COMPLETED") && "opacity-45",
                         selectedWorkerId != null && j.workerId !== selectedWorkerId && "opacity-35",
                       )}
-                      title={`${j.title} — ${j.workerName} (${JOB_STATUS_META[j.status].label}) — drag to reschedule`}
+                      title={`${j.title} — ${j.workerName} (${JOB_STATUS_META[j.status].label})${spanDays > 1 ? ` — day ${dayIdx} of ${spanDays}` : ""} — drag to reschedule`}
                     >
                       <Hammer className="h-2.5 w-2.5 shrink-0" />
                       <span className="truncate">
+                        {spanDays > 1 ? `D${dayIdx}/${spanDays} · ` : ""}
                         {j.workerName.split(" ")[0]} · {j.title}
                       </span>
                       {j.status === "IN_PROGRESS" ? (

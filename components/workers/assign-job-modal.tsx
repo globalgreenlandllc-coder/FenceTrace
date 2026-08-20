@@ -533,6 +533,32 @@ export function AssignJobModal({
             />
           </Field>
         </div>
+        {/* Fence installs are day-scale — one tap sets the whole window
+            (start day + N−1, 8-hour working day). The end field stays
+            editable for odd cases. */}
+        <div className="-mt-1.5 flex items-center gap-1.5">
+          <span className="text-[11px] text-zinc-400">Days on site:</span>
+          {[1, 2, 3, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => {
+                const s = new Date(start);
+                if (Number.isNaN(s.getTime())) return;
+                const e = new Date(s);
+                e.setDate(e.getDate() + (n - 1));
+                e.setHours(Math.min(s.getHours() + 8, 23), s.getMinutes());
+                const pad = (x: number) => String(x).padStart(2, "0");
+                setEnd(
+                  `${e.getFullYear()}-${pad(e.getMonth() + 1)}-${pad(e.getDate())}T${pad(e.getHours())}:${pad(e.getMinutes())}`,
+                );
+              }}
+              className="ring-focus transition-smooth rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-600 hover:border-accent-300 hover:text-accent-700"
+            >
+              {n === 1 ? "1 day" : `${n} days`}
+            </button>
+          ))}
+        </div>
 
         <Field label="What needs to be done">
           <textarea

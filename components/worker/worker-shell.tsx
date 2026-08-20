@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk } from "@clerk/nextjs";
-import { HardHat, CalendarDays, LogOut, Briefcase } from "lucide-react";
+import { HardHat, CalendarDays, LogOut, Briefcase, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/worker", label: "My jobs", Icon: Briefcase },
   { href: "/worker/schedule", label: "Schedule", Icon: CalendarDays },
+  { href: "/worker/pay", label: "Pay", Icon: Wallet },
 ];
 
 export function WorkerShell({

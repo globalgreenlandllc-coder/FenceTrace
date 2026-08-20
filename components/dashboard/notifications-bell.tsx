@@ -239,14 +239,20 @@ export function NotificationsBell() {
                     <span
                       className={cn(
                         "mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full",
-                        i.event === "ACCEPTED" && "bg-emerald-50 text-emerald-600",
-                        i.event === "DECLINED" && "bg-rose-50 text-rose-600",
+                        (i.event === "ACCEPTED" || i.event === "VISIT_CONFIRMED") &&
+                          "bg-emerald-50 text-emerald-600",
+                        (i.event === "DECLINED" || i.event === "VISIT_DECLINED") &&
+                          "bg-rose-50 text-rose-600",
                         i.event === "STARTED" && "bg-sky-50 text-sky-600",
                         i.event === "COMPLETED" && "bg-accent-50 text-accent-700",
                       )}
                     >
-                      {i.event === "ACCEPTED" && <Check className="h-3.5 w-3.5" />}
-                      {i.event === "DECLINED" && <X className="h-3.5 w-3.5" />}
+                      {(i.event === "ACCEPTED" || i.event === "VISIT_CONFIRMED") && (
+                        <Check className="h-3.5 w-3.5" />
+                      )}
+                      {(i.event === "DECLINED" || i.event === "VISIT_DECLINED") && (
+                        <X className="h-3.5 w-3.5" />
+                      )}
                       {i.event === "STARTED" && <Play className="h-3.5 w-3.5" />}
                       {i.event === "COMPLETED" && <CheckCircle2 className="h-3.5 w-3.5" />}
                     </span>
@@ -258,7 +264,11 @@ export function NotificationsBell() {
                           ? "declined"
                           : i.event === "STARTED"
                             ? "started"
-                            : "completed"}{" "}
+                            : i.event === "VISIT_CONFIRMED"
+                              ? "confirmed the visit"
+                              : i.event === "VISIT_DECLINED"
+                                ? "can't make the visit"
+                                : "completed"}{" "}
                       <span className="text-zinc-500">“{i.jobTitle}”</span>
                       {i.declineReason && (
                         <span className="mt-0.5 block truncate text-xs text-rose-600">

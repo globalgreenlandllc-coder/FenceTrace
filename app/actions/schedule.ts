@@ -1,7 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { AppointmentStatus, AppointmentType } from "@prisma/client";
+import type {
+  AppointmentStatus,
+  AppointmentType,
+  AppointmentWorkerResponse,
+} from "@prisma/client";
 import { db } from "@/lib/db";
 import { getMe } from "./me";
 import { appBaseUrl } from "@/lib/base-url";
@@ -26,6 +30,11 @@ export type AppointmentDTO = {
   proposalId: string | null;
   workerId: string | null;
   workerName: string | null;
+  /** The assigned worker's answer (PENDING/CONFIRMED/DECLINED). Null on
+   *  unassigned stops and rows predating the feature. Reset to PENDING
+   *  whenever the time moves or the assignee changes. */
+  workerResponse: AppointmentWorkerResponse | null;
+  workerDeclineReason: string | null;
 };
 
 const apptInclude = {
@@ -48,6 +57,8 @@ function toDTO(row: {
   leadId: string | null;
   proposalId: string | null;
   workerId: string | null;
+  workerResponse: AppointmentWorkerResponse | null;
+  workerDeclineReason: string | null;
   worker: { name: string | null; email: string } | null;
 }): AppointmentDTO {
   return {
@@ -67,7 +78,17 @@ function toDTO(row: {
     proposalId: row.proposalId,
     workerId: row.workerId,
     workerName: row.worker ? row.worker.name || row.worker.email : null,
+    workerResponse: row.workerResponse,
+    workerDeclineReason: row.workerDeclineReason,
   };
+}
+
+/** Local midnight — the "is this stop still answerable" boundary shared
+ *  by the confirm-arming rules below. */
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 /** A workerId supplied by the client is only trusted after this check — the
@@ -230,6 +251,11 @@ export async function createAppointment(
         leadId: input.leadId || null,
         proposalId: input.proposalId || null,
         workerId: workerCheck.workerId,
+        // An assigned stop starts life awaiting the worker's confirm —
+        // but only future stops: a back-dated entry (logging a visit that
+        // already happened) is a record, not a question.
+        workerResponse:
+          workerCheck.workerId && start >= startOfToday() ? "PENDING" : null,
       },
       include: apptInclude,
     });
@@ -282,7 +308,7 @@ export async function updateAppointment(
 
     const existing = await db.appointment.findFirst({
       where: { id, userId: me.user.id },
-      select: { id: true, workerId: true },
+      select: { id: true, workerId: true, startsAt: true },
     });
     if (!existing) return { ok: false, reason: "Appointment not found" };
 
@@ -317,6 +343,31 @@ export async function updateAppointment(
       return { ok: false, reason: "End time must be after start" };
     }
 
+    // Confirm state machine: the worker agreed to a SLOT, not to the stop
+    // in the abstract. A moved time or a different assignee re-arms the
+    // confirm; unassigning clears it entirely. Past stops never arm —
+    // there is nothing left to confirm about yesterday.
+    const finalWorkerId =
+      patch.workerId !== undefined ? ((data.workerId as string | null) ?? null) : existing.workerId;
+    const assigneeChanged =
+      patch.workerId !== undefined && finalWorkerId !== existing.workerId;
+    const timeMoved =
+      data.startsAt instanceof Date &&
+      (data.startsAt as Date).getTime() !== existing.startsAt.getTime();
+    const effectiveStart =
+      data.startsAt instanceof Date ? (data.startsAt as Date) : existing.startsAt;
+    if (!finalWorkerId) {
+      if (patch.workerId !== undefined) {
+        data.workerResponse = null;
+        data.workerRespondedAt = null;
+        data.workerDeclineReason = null;
+      }
+    } else if (assigneeChanged || timeMoved) {
+      data.workerResponse = effectiveStart >= startOfToday() ? "PENDING" : null;
+      data.workerRespondedAt = null;
+      data.workerDeclineReason = null;
+    }
+
     // Scope the write itself to the owner (defense-in-depth — don't rely
     // only on the findFirst check above surviving future refactors).
     const row = await db.appointment.update({
@@ -330,6 +381,20 @@ export async function updateAppointment(
         newlyAssigned,
         row,
       );
+    } else if (timeMoved && finalWorkerId) {
+      // Same stop, new slot — the assigned worker's confirm was just
+      // re-armed, so tell them the time changed (best-effort).
+      const w = await db.worker.findFirst({
+        where: { id: finalWorkerId, ownerId: me.user.id },
+        select: { email: true },
+      });
+      if (w) {
+        await notifyWorkerOfAppointment(
+          { company: me.profile.company ?? null, replyTo: me.user.email },
+          w,
+          row,
+        );
+      }
     }
     // Any change touching an assigned worker (time move, reassign, unassign)
     // must reach their portal pages too.

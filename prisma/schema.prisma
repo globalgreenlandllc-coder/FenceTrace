@@ -118,6 +118,7 @@ model User {
   workerLinks       Worker[]               @relation("WorkerAccount")
   // Jobs this user (as owner) has assigned out to workers.
   jobsOwned         JobAssignment[]        @relation("JobOwner")
+  payoutsRecorded   WorkerPayout[]         @relation("PayoutOwner")
   // Admin accuracy-lab runs (SUPER_ADMIN only in practice).
   testLabRuns       TestLabRun[]
   // Contractor money OS: recurring overhead + per-job expenses + CRM notes.
@@ -917,6 +918,16 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+// The assigned crew member's answer to a scheduled stop. Null on
+// unassigned appointments and on rows created before this existed;
+// reset to PENDING whenever the time moves or the assignee changes —
+// they agreed to a slot, not to the stop in the abstract.
+enum AppointmentWorkerResponse {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
 // Calendar entry. Powers /dashboard/calendar — lead site visits, gutter
 // installs scheduled off a sent proposal, and ad-hoc follow-ups all
 // share this table. leadId / proposalId are optional links back to the
@@ -944,6 +955,11 @@ model Appointment {
   proposalId String?
   // Crew member (worker/contractor) this appointment is assigned to.
   workerId   String?
+
+  // The assigned worker's confirm/decline (see AppointmentWorkerResponse).
+  workerResponse      AppointmentWorkerResponse?
+  workerRespondedAt   DateTime?
+  workerDeclineReason String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1148,6 +1164,7 @@ model Worker {
   expenses     JobExpense[]
   availability WorkerAvailability[]
   appointments Appointment[]        @relation("AppointmentWorker")
+  payouts      WorkerPayout[]
 
   @@unique([ownerId, email])
   @@index([ownerId])
@@ -1162,6 +1179,26 @@ model Worker {
 enum WorkerKind {
   CREW
   SALES
+}
+
+// A payment the owner recorded against a worker's balance (crew pay for
+// finished jobs, expense reimbursements, advances). History ledger for
+// the pay stubs both sides read — recording one never changes a job row.
+model WorkerPayout {
+  id          String         @id @default(cuid())
+  ownerId     String
+  workerId    String
+  amountCents Int
+  method      PaymentMethod?
+  note        String?
+  createdAt   DateTime       @default(now())
+
+  owner  User   @relation("PayoutOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([workerId])
+  @@map("worker_payouts")
 }
 
 enum AvailabilityStatus {
@@ -1225,6 +1262,11 @@ model JobAssignment {
   payBasis     String? // 'estimate' | 'invoice' (server-whitelisted) | null
   startsAt       DateTime
   endsAt         DateTime
+  // Stamped when the owner moves a scheduled job. previousStartsAt keeps
+  // the slot it came from so the crew portal can say "same job, new
+  // time" instead of the reopened offer masquerading as new work.
+  rescheduledAt    DateTime?
+  previousStartsAt DateTime?
   status         JobAssignmentStatus @default(OFFERED)
   declineReason  String?             @db.Text
   respondedAt    DateTime?
