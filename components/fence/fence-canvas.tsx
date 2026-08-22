@@ -216,6 +216,13 @@ export function FenceCanvas({
   const [gateKind, setGateKind] = useState<"single" | "double" | "custom">("single");
   const [customGateFt, setCustomGateFt] = useState(6);
   const [selectedRun, setSelectedRun] = useState<string | null>(null);
+  // One BAY of a run — points[index] → points[index+1] — picked by the
+  // click that selected the run. Delete removes just this piece (the
+  // "end of the driveway" case); the Delete-run button still clears all.
+  const [selectedSeg, setSelectedSeg] = useState<{
+    runId: string;
+    index: number;
+  } | null>(null);
   const [draft, setDraft] = useState<Pt[]>([]);
   const [houseDraft, setHouseDraft] = useState<Pt[]>([]);
   const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
@@ -512,8 +519,81 @@ export function FenceCanvas({
         sections: (layout.sections ?? []).filter((s) => s.runId !== runId),
       });
       setSelectedRun(null);
+      setSelectedSeg(null);
     },
     [layout, onChange],
+  );
+
+  /** Arc distance + gap of the nearest point on a run to `p`. */
+  const projectOnRun = (pt: Pt, run: FenceRun): { dist: number; arc: number } => {
+    let best = { dist: Infinity, arc: 0 };
+    let walked = 0;
+    for (let i = 1; i < run.points.length; i++) {
+      const a = run.points[i - 1];
+      const b = run.points[i];
+      const abx = b.x - a.x, aby = b.y - a.y;
+      const len = Math.hypot(abx, aby);
+      const len2 = len * len || 1;
+      const t = Math.max(0, Math.min(1, ((pt.x - a.x) * abx + (pt.y - a.y) * aby) / len2));
+      const d = Math.hypot(a.x + t * abx - pt.x, a.y + t * aby - pt.y);
+      if (d < best.dist) best = { dist: d, arc: walked + t * len };
+      walked += len;
+    }
+    return best;
+  };
+
+  /**
+   * Remove ONE bay of a run. End bays trim the line; a middle bay splits
+   * it into two runs. Gates riding the removed bay go with it; marked
+   * sections re-anchor onto whichever surviving piece still holds both
+   * their endpoints, and drop when the deleted bay cut through them.
+   */
+  const removeSegment = useCallback(
+    (runId: string, index: number) => {
+      const run = layout.runs.find((r) => r.id === runId);
+      if (!run || index < 0 || index >= run.points.length - 1) return;
+      if (run.points.length <= 2) {
+        removeRun(runId);
+        return;
+      }
+      const segA = run.points[index];
+      const segB = run.points[index + 1];
+      const removed: FenceRun = { ...run, id: `${runId}-removed`, points: [segA, segB] };
+
+      const pieces: FenceRun[] = [];
+      if (index === 0) {
+        pieces.push({ ...run, points: run.points.slice(1) });
+      } else if (index === run.points.length - 2) {
+        pieces.push({ ...run, points: run.points.slice(0, -1) });
+      } else {
+        pieces.push({ ...run, id: `${run.id}~a`, points: run.points.slice(0, index + 1) });
+        pieces.push({ ...run, id: `${run.id}~b`, points: run.points.slice(index + 1) });
+      }
+
+      const newRuns = layout.runs.flatMap((r) => (r.id === runId ? pieces : [r]));
+      // Gates: only the ones sitting ON the removed bay disappear.
+      const newGates = layout.gates.filter((g) => distToRun(g, removed) > 14);
+      // Sections: keep where both endpoints still land on one piece.
+      const newSections = (layout.sections ?? []).flatMap((sec) => {
+        if (sec.runId !== runId) return [sec];
+        for (const piece of pieces) {
+          const pa = projectOnRun(sec.a, piece);
+          const pb = projectOnRun(sec.b, piece);
+          if (pa.dist <= 14 && pb.dist <= 14) {
+            const lo = Math.min(pa.arc, pb.arc);
+            const hi = Math.max(pa.arc, pb.arc);
+            if (hi - lo < 4) return [];
+            return [{ ...sec, runId: piece.id, aArc: lo, bArc: hi }];
+          }
+        }
+        return [];
+      });
+
+      onChange({ runs: newRuns, gates: newGates, sections: newSections });
+      setSelectedSeg(null);
+      setSelectedRun(null);
+    },
+    [layout, onChange, removeRun],
   );
 
   useEffect(() => {
@@ -524,6 +604,7 @@ export function FenceCanvas({
         setDraft([]);
         setHouseDraft([]);
         setSectionStart(null);
+        setSelectedSeg(null);
       }
       if (e.key === "Enter") {
         if (draft.length >= 2) finishDraft();
@@ -538,6 +619,8 @@ export function FenceCanvas({
         } else if (houseDraft.length > 0) {
           e.preventDefault();
           setHouseDraft((d) => d.slice(0, -1));
+        } else if (selectedSeg) {
+          removeSegment(selectedSeg.runId, selectedSeg.index);
         } else if (selectedRun) {
           removeRun(selectedRun);
         } else if (selectedHouse !== null && onBuildingsChange) {
@@ -548,7 +631,7 @@ export function FenceCanvas({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [draft.length, houseDraft.length, finishDraft, finishHouse, selectedRun, removeRun, selectedHouse, buildings, onBuildingsChange]);
+  }, [draft.length, houseDraft.length, finishDraft, finishHouse, selectedRun, removeRun, selectedSeg, removeSegment, selectedHouse, buildings, onBuildingsChange]);
 
   /* ---- gate tool: nearest point on any run segment ---- */
 
@@ -958,6 +1041,22 @@ export function FenceCanvas({
             Use property line
           </button>
         )}
+        {selectedSeg && (() => {
+          const run = layout.runs.find((r) => r.id === selectedSeg.runId);
+          const a = run?.points[selectedSeg.index];
+          const b = run?.points[selectedSeg.index + 1];
+          const ft = a && b ? Math.round(Math.hypot(b.x - a.x, b.y - a.y) / pxPerFt) : 0;
+          return (
+            <button
+              type="button"
+              onClick={() => removeSegment(selectedSeg.runId, selectedSeg.index)}
+              className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-3.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 sm:h-7 sm:px-3"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete section{ft > 0 ? ` (${ft} ft)` : ""}
+            </button>
+          );
+        })()}
         {selectedRun && (
           <button
             type="button"
@@ -1190,22 +1289,13 @@ export function FenceCanvas({
             </g>
           )}
 
-          {/* Neighbouring parcels — context lines, deliberately quieter
-              than the subject: same dash, no white core, low opacity.
-              Double/triple lots and shared side lines read at a glance,
-              and each ring carries the county's address (or APN) so the
-              contractor can tell WHOSE line they're looking at. */}
+          {/* Neighbouring parcels — context lines only, deliberately
+              quieter than the subject. No labels: the chips read as
+              clutter on the photo (the county record for the SUBJECT
+              lot is spelled out under the canvas instead). */}
           {(scan.neighborRings ?? []).map((ring, i) => {
             if (ring.length < 3) return null;
             const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
-            const label = scan.neighborLabels?.[i] ?? null;
-            // Label at the ring's visual centre; skip when it would land
-            // outside the frame (most neighbour centroids are off-canvas).
-            let cx = 0, cy = 0;
-            for (const p of ring) { cx += p.x; cy += p.y; }
-            cx /= ring.length; cy /= ring.length;
-            const labelVisible =
-              label !== null && cx > 30 && cx < 870 && cy > 20 && cy < 560;
             return (
               <g key={`nbr-${i}`} className="pointer-events-none">
                 <polygon
@@ -1224,29 +1314,6 @@ export function FenceCanvas({
                   vectorEffect="non-scaling-stroke"
                   strokeDasharray="4 5"
                 />
-                {labelVisible && (
-                  <g>
-                    <rect
-                      x={cx - Math.min(label.length, 28) * 2.7 - 6}
-                      y={cy - 8}
-                      width={Math.min(label.length, 28) * 5.4 + 12}
-                      height={15}
-                      rx={7.5}
-                      fill="rgba(15,23,20,0.55)"
-                    />
-                    <text
-                      x={cx}
-                      y={cy + 3.5}
-                      textAnchor="middle"
-                      fontSize={9}
-                      fontWeight={600}
-                      fill="rgba(255,255,255,0.85)"
-                      fontFamily="Inter, sans-serif"
-                    >
-                      {label.length > 28 ? label.slice(0, 27) + "…" : label}
-                    </text>
-                  </g>
-                )}
               </g>
             );
           })}
@@ -1301,10 +1368,37 @@ export function FenceCanvas({
                       e.stopPropagation();
                       if (consumePan()) return;
                       setSelectedRun(run.id);
+                      // Remember WHICH bay was clicked — Delete removes
+                      // just that piece, not the whole line.
+                      const pt = toCanvas(e);
+                      let bestI = 0, bestD = Infinity;
+                      for (let i = 1; i < run.points.length; i++) {
+                        const a = run.points[i - 1], b = run.points[i];
+                        const abx = b.x - a.x, aby = b.y - a.y;
+                        const len2 = abx * abx + aby * aby || 1;
+                        const t = Math.max(0, Math.min(1, ((pt.x - a.x) * abx + (pt.y - a.y) * aby) / len2));
+                        const d = Math.hypot(a.x + t * abx - pt.x, a.y + t * aby - pt.y);
+                        if (d < bestD) { bestD = d; bestI = i - 1; }
+                      }
+                      setSelectedSeg({ runId: run.id, index: bestI });
                       setTool("select");
                     }
                   }}
                 />
+                {selected &&
+                  selectedSeg?.runId === run.id &&
+                  run.points[selectedSeg.index + 1] && (
+                    <polyline
+                      points={`${run.points[selectedSeg.index].x},${run.points[selectedSeg.index].y} ${run.points[selectedSeg.index + 1].x},${run.points[selectedSeg.index + 1].y}`}
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth={6}
+                      vectorEffect="non-scaling-stroke"
+                      strokeLinecap="round"
+                      pointerEvents="none"
+                      style={{ filter: "drop-shadow(0 0 5px rgba(245,158,11,0.8))" }}
+                    />
+                  )}
                 {run.points.map((p, i) => (
                   <circle key={i} cx={p.x} cy={p.y} r={3 * ui} fill="#fff" stroke="#0891b2" vectorEffect="non-scaling-stroke" />
                 ))}
@@ -1608,7 +1702,7 @@ export function FenceCanvas({
                 ? `${touch ? "Tap" : "Click"} anywhere on a fence line to place the gate. ${touch ? "Tap" : "Click"} a gate to remove it.`
                 : touch
                   ? "Drag the photo to move around, pinch to zoom. Tap a fence run or the house outline to select it."
-                  : "Drag the photo to move around, scroll or pinch to zoom. Click a fence run or the house outline to select — Delete removes it."}
+                  : "Drag the photo to move around, scroll or pinch to zoom. Click a fence line to pick the piece under your cursor — Delete removes that piece; the Delete run button clears the whole line."}
       </p>
     </div>
   );
