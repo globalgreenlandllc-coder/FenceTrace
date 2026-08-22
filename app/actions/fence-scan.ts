@@ -6,6 +6,7 @@ import { consumeLimit } from "@/lib/abuse/rate-limit";
 import { POLICIES } from "@/lib/abuse/policies";
 import {
   fenceScanCore,
+  fetchAerialTile,
   reframeScanCore,
   type FenceRunSeed,
   type FenceScanError,
@@ -85,4 +86,26 @@ export async function reframeFenceScan(
     if (!rl.ok) return { ok: false, reason: rl.reason };
   }
   return reframeScanCore(args);
+}
+
+/**
+ * Movable map: fresh imagery for a panned center. Cheap (one static
+ * tile, no parcel calls) — rides the generous topo bucket, owner
+ * exempt like the other scan actions.
+ */
+export async function refetchAerialTile(args: {
+  center: { lat: number; lng: number };
+  zoom: number;
+}): Promise<{ ok: true; imageDataUrl: string } | FenceScanError> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  if (me.user.role !== "SUPER_ADMIN") {
+    const rl = await consumeLimit({
+      policy: POLICIES.fenceTopo,
+      key: `aerial-pan:${me.user.id}`,
+      context: { userId: me.user.id, route: "fence-scan-pan" },
+    });
+    if (!rl.ok) return { ok: false, reason: rl.reason };
+  }
+  return fetchAerialTile(args.center, args.zoom);
 }

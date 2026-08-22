@@ -22,7 +22,7 @@ import {
   removeLocalRecent,
 } from "@/lib/recent-addresses";
 import { cn } from "@/lib/utils";
-import { reframeFenceScan, runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
+import { refetchAerialTile, reframeFenceScan, runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
 import { saveDraftFromEstimate } from "@/app/actions/proposals";
 import {
   FenceCanvas,
@@ -49,7 +49,7 @@ import {
 import { computeFenceTakeoff } from "@/lib/fence/takeoff";
 import { addShot, suggestShots } from "@/lib/fence/viewpoints";
 import { fenceTiers, priceFence } from "@/lib/fence/pricing";
-import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, countCornersAndEnds, walkPostPositions } from "@/lib/fence/geo";
+import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, countCornersAndEnds, latLngToCanvas, walkPostPositions } from "@/lib/fence/geo";
 import { contoursFromGrid } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getMyFenceRates } from "@/app/actions/fence-rates";
@@ -167,6 +167,41 @@ export function FenceEstimator() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const ranFor = useRef<string | null>(null);
 
+
+  /** The map was panned off-center — buy a fresh tile there and
+   *  re-plot every overlay around the new center. County lines, pin
+   *  and neighbours re-project from their lat/lng twins; the drawn
+   *  fence/houses re-project through old-frame -> lat/lng -> new-frame
+   *  so nothing the contractor drew moves an inch on the ground. */
+  async function recenterMap(canvasCenter: { x: number; y: number }) {
+    if (!scan) return;
+    const old = scan;
+    const centerLL = canvasToLatLng(canvasCenter, old.center, old.zoom);
+    const res = await refetchAerialTile({ center: centerLL, zoom: old.zoom });
+    if (!res.ok) return; // stay on the current tile — panning is best-effort
+    const re = (p: { x: number; y: number }) =>
+      latLngToCanvas(canvasToLatLng(p, old.center, old.zoom), centerLL, old.zoom);
+    const reLL = (ll: { lat: number; lng: number }) => latLngToCanvas(ll, centerLL, old.zoom);
+    setScan({
+      ...old,
+      center: centerLL,
+      aerial: { ...old.aerial, imageDataUrl: res.imageDataUrl },
+      parcelRings: (old.parcelRingsLL ?? []).map((ring) => ring.map(reLL)),
+      suggestedRuns: old.suggestedRuns.map((r) => ({ ...r, points: r.points.map(re) })),
+      neighborRings: (old.neighborInfo ?? []).map((n) => n.ringLL.map(reLL)),
+      pin: old.pinLL ? reLL(old.pinLL) : re(old.pin),
+    });
+    setLayout((l) => ({
+      runs: l.runs.map((r) => ({ ...r, points: r.points.map(re) })),
+      gates: l.gates.map((g) => ({ ...g, ...re(g) })),
+      sections: (l.sections ?? []).map((sec) => ({ ...sec, a: re(sec.a), b: re(sec.b) })),
+    }));
+    setBuildings((b) => b.map((ring) => ring.map(re)));
+    // Terrain was sampled for the old frame — clear it; the topo effect
+    // resamples for the new center automatically.
+    setTopoGrid(null);
+    setRunElevRaw(null);
+  }
 
   /** A neighbour ring was clicked — rebuild the scan around THAT
    *  parcel. Same reset discipline as a fresh scan: stale topo or
@@ -779,6 +814,7 @@ export function FenceEstimator() {
                   buildings={buildings}
                   onBuildingsChange={setBuildings}
                   onPickNeighbor={pickNeighbor}
+                  onRecenter={recenterMap}
                 />
               )}
               {scan.parcel && (

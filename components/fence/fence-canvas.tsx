@@ -24,16 +24,17 @@ import {
 import type { FenceScanResult } from "@/app/actions/fence-scan";
 import type { ContourLine } from "@/lib/fence/contours";
 
-/** Keep the camera inside the aerial: zoom 1–5×, center clamped so the
- *  view never shows past the image edge. */
+/** Camera limits: zoom 1–5×, and the center may travel up to half a
+ *  frame PAST each image edge — that overscroll (a strip of void) is
+ *  how the map moves: pan-end refetches imagery at the new center and
+ *  the world recenters around it. */
 function clampCam(c: { cx: number; cy: number; k: number }) {
   const k = Math.min(5, Math.max(1, c.k));
-  const vw = CANVAS_W / k;
-  const vh = CANVAS_H / k;
+  const over = 0.5;
   return {
     k,
-    cx: Math.min(CANVAS_W - vw / 2, Math.max(vw / 2, c.cx)),
-    cy: Math.min(CANVAS_H - vh / 2, Math.max(vh / 2, c.cy)),
+    cx: Math.min(CANVAS_W * (1 + over) - CANVAS_W / k / 2, Math.max(CANVAS_W / k / 2 - CANVAS_W * over, c.cx)),
+    cy: Math.min(CANVAS_H * (1 + over) - CANVAS_H / k / 2, Math.max(CANVAS_H / k / 2 - CANVAS_H * over, c.cy)),
   };
 }
 
@@ -196,6 +197,7 @@ export function FenceCanvas({
   buildings = [],
   onBuildingsChange,
   onPickNeighbor,
+  onRecenter,
   className,
 }: {
   scan: FenceScanResult;
@@ -211,6 +213,9 @@ export function FenceCanvas({
   /** Click on a neighbour's dashed ring — the estimator switches the
    *  whole scan onto that parcel. Absent = rings are decoration only. */
   onPickNeighbor?: (index: number) => void;
+  /** Pan settled meaningfully off-center — the estimator refetches the
+   *  tile at this canvas point and re-plots everything around it. */
+  onRecenter?: (canvasCenter: Pt) => void;
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -354,6 +359,41 @@ export function FenceCanvas({
     if (k <= 1.05) return;
     setCam(clampCam({ k, cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 }));
   }, [pxRatio, scan.parcelRings, scan.address]);
+
+  // Movable map: once the camera settles meaningfully off the tile's
+  // center, ask the estimator for fresh imagery there. Debounced so a
+  // long drag or wheel flick fires exactly one refetch, and gated on a
+  // real displacement (a third of the visible frame) so nudges while
+  // drawing never cost a tile.
+  const recenterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onRecenterRef = useRef(onRecenter);
+  onRecenterRef.current = onRecenter;
+  useEffect(() => {
+    if (!onRecenterRef.current) return;
+    const dx = Math.abs(cam.cx - CANVAS_W / 2);
+    const dy = Math.abs(cam.cy - CANVAS_H / 2);
+    const vw = CANVAS_W / cam.k;
+    const vh = CANVAS_H / cam.k;
+    if (dx < vw / 3 && dy < vh / 3) return;
+    if (recenterTimer.current) clearTimeout(recenterTimer.current);
+    const at = { x: cam.cx, y: cam.cy };
+    recenterTimer.current = setTimeout(() => {
+      onRecenterRef.current?.(at);
+    }, 550);
+    return () => {
+      if (recenterTimer.current) clearTimeout(recenterTimer.current);
+    };
+  }, [cam]);
+
+  // A fresh tile means a fresh world — snap the camera back to center
+  // (same zoom) the moment new imagery lands.
+  const lastTile = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastTile.current && lastTile.current !== scan.aerial.imageDataUrl) {
+      setCam((c) => clampCam({ k: c.k, cx: CANVAS_W / 2, cy: CANVAS_H / 2 }));
+    }
+    lastTile.current = scan.aerial.imageDataUrl;
+  }, [scan.aerial.imageDataUrl]);
 
   const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
     const svg = svgRef.current;
@@ -1353,22 +1393,38 @@ export function FenceCanvas({
               // White reads on any imagery because it rides a soft dark
               // casing — crisp over bright driveways AND dark tree cover.
               <g key={`parcel-${i}`}>
+                {/* Heavier casing + emerald core: the old thin white dash
+                    vanished over bright driveways and dark tree cover
+                    alike. Corner dots pin the vertices the line snaps to. */}
                 <polygon
                   points={pts}
-                  fill="rgba(255,255,255,0.05)"
-                  stroke="rgba(15,23,20,0.55)"
-                  strokeWidth={3}
+                  fill="rgba(74,222,128,0.05)"
+                  stroke="rgba(6,18,10,0.8)"
+                  strokeWidth={4.6}
                   vectorEffect="non-scaling-stroke"
-                  strokeDasharray="6 4"
+                  strokeDasharray="8 5"
                 />
                 <polygon
                   points={pts}
                   fill="none"
-                  stroke="#FFFFFF"
-                  strokeWidth={1.5}
+                  stroke="#4ADE80"
+                  strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
-                  strokeDasharray="6 4"
+                  strokeDasharray="8 5"
+                  style={{ filter: "drop-shadow(0 0 3px rgba(74,222,128,0.55))" }}
                 />
+                {ring.map((p, vi) => (
+                  <circle
+                    key={vi}
+                    cx={p.x}
+                    cy={p.y}
+                    r={3 * ui}
+                    fill="#0D1B12"
+                    stroke="#4ADE80"
+                    strokeWidth={1.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
               </g>
             );
           })}

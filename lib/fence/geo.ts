@@ -58,7 +58,7 @@ export function latLngToCanvas(p: LatLng, center: LatLng, zoom: number): Pt {
 
 /** Pick the tightest integer zoom that fits the bbox in the map with ~12%
  *  margin. Clamped to residential-useful range. */
-export function zoomToFit(points: LatLng[], fallback = 19): number {
+export function zoomToFit(points: LatLng[], fallback = 19, margin = 1.24): number {
   if (points.length < 2) return fallback;
   let minX = Infinity,
     maxX = -Infinity,
@@ -71,7 +71,6 @@ export function zoomToFit(points: LatLng[], fallback = 19): number {
     minY = Math.min(minY, w.y);
     maxY = Math.max(maxY, w.y);
   }
-  const margin = 1.24;
   const spanX = (maxX - minX) * margin;
   const spanY = (maxY - minY) * margin;
   for (let z = 21; z >= 15; z--) {

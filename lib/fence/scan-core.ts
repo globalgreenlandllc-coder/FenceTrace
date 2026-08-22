@@ -70,6 +70,11 @@ export type FenceScanResult = {
   /** The geocoded address point in canvas coords — the little pin that
    *  shows WHICH property the address resolved to. */
   pin: Pt;
+  /** Lat/lng twins of pin + parcel rings — the client reprojects all
+   *  overlay geometry from these when the map is panned to a new
+   *  center (the imagery refetches; the county lines just re-plot). */
+  pinLL: LatLng;
+  parcelRingsLL: LatLng[][];
   /** Local pricing market resolved from the geocoded state + ZIP.
    *  Frozen here and carried through takeoff → proposal so a quote
    *  never reprices itself when the market table is revised. */
@@ -254,7 +259,7 @@ export async function fenceScanCore(
     }
     center = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
   }
-  const zoom = allPts.length >= 3 ? zoomToFit(allPts) : 19;
+  const zoom = allPts.length >= 3 ? zoomToFit(allPts, 19, 1.8) : 19;
 
   // Neighbour parcels for the VISIBLE frame. The canvas is 900x580 at
   // this center/zoom, so its own corners define the box — every lot the
@@ -342,6 +347,8 @@ export async function fenceScanCore(
       })),
     ),
     pin: latLngToCanvas(geo.loc, center, zoom),
+    pinLL: geo.loc,
+    parcelRingsLL: parcel?.rings ?? [],
     neighborLabels: neighbors.flatMap((n) => {
       const cleaned = (n.address ?? "")
         .replace(/\bunknown\b/gi, "")
@@ -409,7 +416,7 @@ export async function reframeScanCore(
     minLng = Math.min(minLng, pt.lng); maxLng = Math.max(maxLng, pt.lng);
   }
   const center: LatLng = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
-  const zoom = zoomToFit(ring);
+  const zoom = zoomToFit(ring, 19, 1.8);
   const ctr = centroid(ring);
 
   // Neighbours of the NEW frame, same viewport-box rule as the scan.
@@ -487,8 +494,44 @@ export async function reframeScanCore(
       return n.rings.map(() => label);
     }),
     pin: latLngToCanvas(ctr, center, zoom),
+    pinLL: ctr,
+    parcelRingsLL: [ring],
     buildings: [],
     parcel: { acres: args.acres, apn: args.apn, address: args.address },
     market: args.market,
   };
+}
+
+/**
+ * Just the satellite tile for a center+zoom — the movable-map refetch.
+ * No geocode, no parcel spend: panning re-plots the county lines the
+ * scan already paid for and only buys fresh pixels (~a fifth of a
+ * cent per pan).
+ */
+export async function fetchAerialTile(
+  center: LatLng,
+  zoom: number,
+): Promise<{ ok: true; imageDataUrl: string } | FenceScanError> {
+  const keys = await googleMapsKeys();
+  if (keys.length === 0)
+    return { ok: false, reason: "Google Maps key missing — add it in Admin → API keys." };
+  const z = Math.max(15, Math.min(21, Math.round(zoom)));
+  for (const key of keys) {
+    const mapUrl = new URL("https://maps.googleapis.com/maps/api/staticmap");
+    mapUrl.searchParams.set("center", `${center.lat},${center.lng}`);
+    mapUrl.searchParams.set("zoom", String(z));
+    mapUrl.searchParams.set("size", `${MAP_W}x${MAP_H}`);
+    mapUrl.searchParams.set("scale", String(MAP_SCALE));
+    mapUrl.searchParams.set("maptype", "satellite");
+    mapUrl.searchParams.set("key", key);
+    try {
+      const img = await fetch(mapUrl, { signal: AbortSignal.timeout(15_000) });
+      if (!img.ok) continue;
+      const buf = Buffer.from(await img.arrayBuffer());
+      return { ok: true, imageDataUrl: `data:image/png;base64,${buf.toString("base64")}` };
+    } catch (e) {
+      console.error("[fence-scan] tile refetch failed", e);
+    }
+  }
+  return { ok: false, reason: "Couldn't fetch satellite imagery there." };
 }
