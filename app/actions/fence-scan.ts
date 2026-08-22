@@ -6,9 +6,11 @@ import { consumeLimit } from "@/lib/abuse/rate-limit";
 import { POLICIES } from "@/lib/abuse/policies";
 import {
   fenceScanCore,
+  reframeScanCore,
   type FenceRunSeed,
   type FenceScanError,
   type FenceScanResult,
+  type ReframeParcelArgs,
 } from "@/lib/fence/scan-core";
 
 /**
@@ -57,4 +59,24 @@ export async function runFenceScan(
   }
 
   return result;
+}
+
+/**
+ * Switch the scan to a parcel the contractor clicked on the canvas —
+ * the recovery path for a wrong-lot geocode and the way onto the lot
+ * next door. Costs an aerial fetch + a neighbour box, so it shares the
+ * scan rate limit.
+ */
+export async function reframeFenceScan(
+  args: ReframeParcelArgs,
+): Promise<FenceScanResult | FenceScanError> {
+  const me = await getMe();
+  if (!me) return { ok: false, reason: "Not signed in" };
+  const rl = await consumeLimit({
+    policy: POLICIES.estimateRun,
+    key: `fence-scan:${me.user.id}`,
+    context: { userId: me.user.id, route: "fence-scan-reframe" },
+  });
+  if (!rl.ok) return { ok: false, reason: rl.reason };
+  return reframeScanCore(args);
 }

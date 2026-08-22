@@ -22,7 +22,7 @@ import {
   removeLocalRecent,
 } from "@/lib/recent-addresses";
 import { cn } from "@/lib/utils";
-import { runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
+import { reframeFenceScan, runFenceScan, type FenceScanResult } from "@/app/actions/fence-scan";
 import { saveDraftFromEstimate } from "@/app/actions/proposals";
 import {
   FenceCanvas,
@@ -166,6 +166,45 @@ export function FenceEstimator() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const ranFor = useRef<string | null>(null);
+
+
+  /** A neighbour ring was clicked — rebuild the scan around THAT
+   *  parcel. Same reset discipline as a fresh scan: stale topo or
+   *  drawn runs must never survive a frame change. */
+  async function pickNeighbor(index: number) {
+    if (!scan) return;
+    const info = scan.neighborInfo?.[index];
+    if (!info) return;
+    setScanState("loading");
+    setScanError(null);
+    const res = await reframeFenceScan({
+      ringLL: info.ringLL,
+      address: info.address,
+      apn: info.apn,
+      acres: info.acres,
+      market: scan.market,
+      displayAddress: scan.address,
+    });
+    if (!res.ok) {
+      setScanState("error");
+      setScanError(res.reason);
+      return;
+    }
+    setScan(res);
+    setLayout({ runs: [], gates: [] });
+    setBuildings(res.buildings ?? []);
+    setSlope(null);
+    setSlopeError(null);
+    setRunElevRaw(null);
+    setTerrainAuto(true);
+    setWallTop(false);
+    setWallLfInput(null);
+    // The PREVIOUS property's contours must never paint over the new
+    // photo while the fresh lattice loads.
+    setTopoGrid(null);
+    setTopoError(null);
+    setScanState("idle");
+  }
 
   async function scanAddress(addr: string) {
     setScanState("loading");
@@ -739,6 +778,7 @@ export function FenceEstimator() {
                   topo={showTopo ? topoContours : null}
                   buildings={buildings}
                   onBuildingsChange={setBuildings}
+                  onPickNeighbor={pickNeighbor}
                 />
               )}
               {scan.parcel && (

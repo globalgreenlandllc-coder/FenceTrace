@@ -59,6 +59,17 @@ export type FenceScanResult = {
   /** One label per neighbour ring: street address when the county
    *  record carries one, else the parcel number, else null. */
   neighborLabels: (string | null)[];
+  /** Per-ring metadata for the click-to-switch flow: the ring in
+   *  lat/lng plus the county record, aligned with neighborRings. */
+  neighborInfo: {
+    ringLL: LatLng[];
+    address: string | null;
+    apn: string | null;
+    acres: number | null;
+  }[];
+  /** The geocoded address point in canvas coords — the little pin that
+   *  shows WHICH property the address resolved to. */
+  pin: Pt;
   /** Local pricing market resolved from the geocoded state + ZIP.
    *  Frozen here and carried through takeoff → proposal so a quote
    *  never reprices itself when the market table is revised. */
@@ -195,18 +206,34 @@ export async function fenceScanCore(
   const BOX_M = 90;
   const dLat = BOX_M / 111_320;
   const dLng = BOX_M / (111_320 * Math.cos((geo.loc.lat * Math.PI) / 180));
-  const nearby = await lookupParcelsInBox(
-    { lat: geo.loc.lat - dLat, lng: geo.loc.lng - dLng },
-    { lat: geo.loc.lat + dLat, lng: geo.loc.lng + dLng },
-    12,
-  );
-  let parcel: RegridParcel | null = pickSubjectParcel(nearby, geo.loc, address);
+  // Two candidate sources in parallel: parcels AROUND the pin, and the
+  // provider's own situs-address match — the county's index knows that
+  // "24 Mira Loma Ln" is THIS lot even when the rooftop pin drifts onto
+  // the neighbour (or my string compare loses to a county formatting
+  // quirk). The address hit goes first so ties break its way.
+  const [boxHits, addrHit] = await Promise.all([
+    lookupParcelsInBox(
+      { lat: geo.loc.lat - dLat, lng: geo.loc.lng - dLng },
+      { lat: geo.loc.lat + dLat, lng: geo.loc.lng + dLng },
+      12,
+    ),
+    lookupParcelByAddress(geo.formatted),
+  ]);
+  const candidates: RegridParcel[] = [
+    ...(addrHit ? [addrHit] : []),
+    ...boxHits.filter(
+      (b) =>
+        !addrHit ||
+        (b.apn && addrHit.apn
+          ? b.apn !== addrHit.apn
+          : metersBetween(centroid(b.rings.flat()), centroid(addrHit.rings.flat())) > 3),
+    ),
+  ];
+  let parcel: RegridParcel | null = pickSubjectParcel(candidates, geo.loc, address);
   // Providers without box support (or a thin county) fall back to the
   // old single-parcel path — never lose a scan that used to work.
   if (!parcel) {
-    parcel =
-      (await lookupParcelByPoint(geo.loc)) ??
-      (await lookupParcelByAddress(geo.formatted));
+    parcel = await lookupParcelByPoint(geo.loc);
   }
   if (parcel) {
     const ring0 = parcel.rings.flat();
@@ -306,6 +333,15 @@ export async function fenceScanCore(
     neighborRings: neighbors.flatMap((n) =>
       n.rings.map((ring) => ring.map((pt) => latLngToCanvas(pt, center, zoom))),
     ),
+    neighborInfo: neighbors.flatMap((n) =>
+      n.rings.map((ringLL) => ({
+        ringLL,
+        address: n.address,
+        apn: n.apn,
+        acres: n.acres,
+      })),
+    ),
+    pin: latLngToCanvas(geo.loc, center, zoom),
     neighborLabels: neighbors.flatMap((n) => {
       const cleaned = (n.address ?? "")
         .replace(/\bunknown\b/gi, "")
@@ -328,5 +364,131 @@ export async function fenceScanCore(
       zip: geo.zip,
       address: geo.formatted,
     }),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Reframe — switch the scan to a parcel the contractor clicked       */
+/* ------------------------------------------------------------------ */
+
+export type ReframeParcelArgs = {
+  /** The chosen parcel's outer ring, lat/lng (from neighborInfo). */
+  ringLL: LatLng[];
+  address: string | null;
+  apn: string | null;
+  acres: number | null;
+  /** Market rides through from the original scan — same state + ZIP. */
+  market: MarketSnapshot;
+  /** The address the contractor TYPED — the job keeps this name in the
+   *  header and the proposal no matter which ring was clicked; the
+   *  chosen parcel's own county record shows in the note instead. */
+  displayAddress: string;
+};
+
+/**
+ * Rebuild the scan AROUND a specific parcel — the recovery path when
+ * the address resolved onto the wrong lot (or the job is the lot next
+ * door). One aerial fetch + one neighbour box; no geocode, no parcel
+ * re-match, because the caller is literally pointing at the ring.
+ */
+export async function reframeScanCore(
+  args: ReframeParcelArgs,
+): Promise<FenceScanResult | FenceScanError> {
+  const ring = (args.ringLL ?? []).filter(
+    (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lng),
+  );
+  if (ring.length < 3) return { ok: false, reason: "That parcel has no usable boundary" };
+
+  const keys = await googleMapsKeys();
+  if (keys.length === 0)
+    return { ok: false, reason: "Google Maps key missing — add it in Admin → API keys." };
+
+  let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
+  for (const pt of ring) {
+    minLat = Math.min(minLat, pt.lat); maxLat = Math.max(maxLat, pt.lat);
+    minLng = Math.min(minLng, pt.lng); maxLng = Math.max(maxLng, pt.lng);
+  }
+  const center: LatLng = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
+  const zoom = zoomToFit(ring);
+  const ctr = centroid(ring);
+
+  // Neighbours of the NEW frame, same viewport-box rule as the scan.
+  const nw = canvasToLatLng({ x: 0, y: 0 }, center, zoom);
+  const se = canvasToLatLng({ x: CANVAS_W, y: CANVAS_H }, center, zoom);
+  const inView = await lookupParcelsInBox(
+    { lat: Math.min(nw.lat, se.lat), lng: Math.min(nw.lng, se.lng) },
+    { lat: Math.max(nw.lat, se.lat), lng: Math.max(nw.lng, se.lng) },
+    24,
+  );
+  const neighbors = inView.filter((n) => {
+    if (n.apn && args.apn && n.apn === args.apn) return false;
+    const r = n.rings.flat();
+    return !(r.length >= 3 && metersBetween(centroid(r), ctr) < 3);
+  });
+
+  let imageDataUrl: string | null = null;
+  for (const key of keys) {
+    const mapUrl = new URL("https://maps.googleapis.com/maps/api/staticmap");
+    mapUrl.searchParams.set("center", `${center.lat},${center.lng}`);
+    mapUrl.searchParams.set("zoom", String(zoom));
+    mapUrl.searchParams.set("size", `${MAP_W}x${MAP_H}`);
+    mapUrl.searchParams.set("scale", String(MAP_SCALE));
+    mapUrl.searchParams.set("maptype", "satellite");
+    mapUrl.searchParams.set("key", key);
+    try {
+      const img = await fetch(mapUrl, { signal: AbortSignal.timeout(15_000) });
+      if (!img.ok) continue;
+      const buf = Buffer.from(await img.arrayBuffer());
+      imageDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+      break;
+    } catch (e) {
+      console.error("[fence-scan] reframe static map failed", e);
+    }
+  }
+  if (!imageDataUrl)
+    return { ok: false, reason: "Couldn't fetch satellite imagery for that parcel." };
+
+  const canvasRing = ring.map((p) => latLngToCanvas(p, center, zoom));
+  const closed =
+    canvasRing.length >= 2 &&
+    Math.hypot(
+      canvasRing[0].x - canvasRing[canvasRing.length - 1].x,
+      canvasRing[0].y - canvasRing[canvasRing.length - 1].y,
+    ) < 1;
+
+  return {
+    ok: true,
+    address: args.displayAddress,
+    center,
+    zoom,
+    canvasPxPerFt: canvasPxPerFt(center.lat, zoom),
+    aerial: { imageDataUrl, width: CANVAS_W, height: CANVAS_H, zoom },
+    parcelRings: [canvasRing],
+    suggestedRuns: [
+      { id: "parcel-0", points: closed ? canvasRing : [...canvasRing, canvasRing[0]] },
+    ],
+    neighborRings: neighbors.flatMap((n) =>
+      n.rings.map((r) => r.map((pt) => latLngToCanvas(pt, center, zoom))),
+    ),
+    neighborInfo: neighbors.flatMap((n) =>
+      n.rings.map((ringLL) => ({
+        ringLL,
+        address: n.address,
+        apn: n.apn,
+        acres: n.acres,
+      })),
+    ),
+    neighborLabels: neighbors.flatMap((n) => {
+      const cleaned = (n.address ?? "")
+        .replace(/\bunknown\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const label = cleaned.length >= 4 ? cleaned : n.apn ? `APN ${n.apn}` : null;
+      return n.rings.map(() => label);
+    }),
+    pin: latLngToCanvas(ctr, center, zoom),
+    buildings: [],
+    parcel: { acres: args.acres, apn: args.apn, address: args.address },
+    market: args.market,
   };
 }

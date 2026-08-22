@@ -195,6 +195,7 @@ export function FenceCanvas({
   topo = null,
   buildings = [],
   onBuildingsChange,
+  onPickNeighbor,
   className,
 }: {
   scan: FenceScanResult;
@@ -207,6 +208,9 @@ export function FenceCanvas({
    *  and editable via the House tool when onBuildingsChange is given. */
   buildings?: Pt[][];
   onBuildingsChange?: (next: Pt[][]) => void;
+  /** Click on a neighbour's dashed ring — the estimator switches the
+   *  whole scan onto that parcel. Absent = rings are decoration only. */
+  onPickNeighbor?: (index: number) => void;
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -1296,8 +1300,32 @@ export function FenceCanvas({
           {(scan.neighborRings ?? []).map((ring, i) => {
             if (ring.length < 3) return null;
             const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
+            const clickable = !!onPickNeighbor && tool === "select";
             return (
-              <g key={`nbr-${i}`} className="pointer-events-none">
+              <g
+                key={`nbr-${i}`}
+                className={clickable ? undefined : "pointer-events-none"}
+                style={clickable ? { cursor: "pointer" } : undefined}
+                onClick={
+                  clickable
+                    ? (e) => {
+                        e.stopPropagation();
+                        if (consumePan()) return;
+                        onPickNeighbor(i);
+                      }
+                    : undefined
+                }
+              >
+                {/* invisible fat hit line so the dashes are easy to tap */}
+                {clickable && (
+                  <polygon
+                    points={pts}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.001)"
+                    strokeWidth={14}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
                 <polygon
                   points={pts}
                   fill="none"
@@ -1344,6 +1372,25 @@ export function FenceCanvas({
               </g>
             );
           })}
+
+          {/* The address pin — a small Google-style droplet at the
+              geocoded point, so it's obvious WHICH lot the typed
+              address resolved to. Decoration only, never in the way. */}
+          {scan.pin && (
+            <g
+              transform={`translate(${scan.pin.x}, ${scan.pin.y}) scale(${ui})`}
+              pointerEvents="none"
+            >
+              <path
+                d="M0 0 C -7 -12, -9 -15, -9 -20 A 9 9 0 1 1 9 -20 C 9 -15, 7 -12, 0 0 Z"
+                fill="#DC2626"
+                stroke="#7F1D1D"
+                strokeWidth={1}
+              />
+              <circle cx={0} cy={-20} r={3.4} fill="#fff" />
+              <ellipse cx={0} cy={1.4} rx={4.6} ry={1.6} fill="rgba(0,0,0,0.35)" />
+            </g>
+          )}
 
           {/* Fence runs */}
           {layout.runs.map((run) => {
@@ -1702,7 +1749,7 @@ export function FenceCanvas({
                 ? `${touch ? "Tap" : "Click"} anywhere on a fence line to place the gate. ${touch ? "Tap" : "Click"} a gate to remove it.`
                 : touch
                   ? "Drag the photo to move around, pinch to zoom. Tap a fence run or the house outline to select it."
-                  : "Drag the photo to move around, scroll or pinch to zoom. Click a fence line to pick the piece under your cursor — Delete removes that piece; the Delete run button clears the whole line."}
+                  : "Drag the photo to move around, scroll or pinch to zoom. Click a fence line to pick the piece under your cursor — Delete removes it. Wrong lot? Click a neighbour's dashed ring to move the scan there."}
       </p>
     </div>
   );
