@@ -31,13 +31,17 @@ export async function runFenceScan(
   if (address.length < 8) return { ok: false, reason: "Enter a full street address" };
 
   // Every scan spends real Google + Regrid money — same hourly budget as
-  // the old satellite pipeline.
-  const rl = await consumeLimit({
-    policy: POLICIES.estimateRun,
-    key: `fence-scan:${me.user.id}`,
-    context: { userId: me.user.id, route: "fence-scan" },
-  });
-  if (!rl.ok) return { ok: false, reason: rl.reason };
+  // the old satellite pipeline. The platform owner is exempt, same as
+  // the proposals cap: being throttled by your own abuse rail while
+  // testing your own product (on your own API keys) helps nobody.
+  if (me.user.role !== "SUPER_ADMIN") {
+    const rl = await consumeLimit({
+      policy: POLICIES.estimateRun,
+      key: `fence-scan:${me.user.id}`,
+      context: { userId: me.user.id, route: "fence-scan" },
+    });
+    if (!rl.ok) return { ok: false, reason: rl.reason };
+  }
 
   const result = await fenceScanCore(address);
 
@@ -72,11 +76,13 @@ export async function reframeFenceScan(
 ): Promise<FenceScanResult | FenceScanError> {
   const me = await getMe();
   if (!me) return { ok: false, reason: "Not signed in" };
-  const rl = await consumeLimit({
-    policy: POLICIES.estimateRun,
-    key: `fence-scan:${me.user.id}`,
-    context: { userId: me.user.id, route: "fence-scan-reframe" },
-  });
-  if (!rl.ok) return { ok: false, reason: rl.reason };
+  if (me.user.role !== "SUPER_ADMIN") {
+    const rl = await consumeLimit({
+      policy: POLICIES.estimateRun,
+      key: `fence-scan:${me.user.id}`,
+      context: { userId: me.user.id, route: "fence-scan-reframe" },
+    });
+    if (!rl.ok) return { ok: false, reason: rl.reason };
+  }
   return reframeScanCore(args);
 }
