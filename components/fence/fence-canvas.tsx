@@ -1190,6 +1190,67 @@ export function FenceCanvas({
             </g>
           )}
 
+          {/* Neighbouring parcels — context lines, deliberately quieter
+              than the subject: same dash, no white core, low opacity.
+              Double/triple lots and shared side lines read at a glance,
+              and each ring carries the county's address (or APN) so the
+              contractor can tell WHOSE line they're looking at. */}
+          {(scan.neighborRings ?? []).map((ring, i) => {
+            if (ring.length < 3) return null;
+            const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
+            const label = scan.neighborLabels?.[i] ?? null;
+            // Label at the ring's visual centre; skip when it would land
+            // outside the frame (most neighbour centroids are off-canvas).
+            let cx = 0, cy = 0;
+            for (const p of ring) { cx += p.x; cy += p.y; }
+            cx /= ring.length; cy /= ring.length;
+            const labelVisible =
+              label !== null && cx > 30 && cx < 870 && cy > 20 && cy < 560;
+            return (
+              <g key={`nbr-${i}`} className="pointer-events-none">
+                <polygon
+                  points={pts}
+                  fill="none"
+                  stroke="rgba(15,23,20,0.4)"
+                  strokeWidth={2.4}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="4 5"
+                />
+                <polygon
+                  points={pts}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.55)"
+                  strokeWidth={1.1}
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="4 5"
+                />
+                {labelVisible && (
+                  <g>
+                    <rect
+                      x={cx - Math.min(label.length, 28) * 2.7 - 6}
+                      y={cy - 8}
+                      width={Math.min(label.length, 28) * 5.4 + 12}
+                      height={15}
+                      rx={7.5}
+                      fill="rgba(15,23,20,0.55)"
+                    />
+                    <text
+                      x={cx}
+                      y={cy + 3.5}
+                      textAnchor="middle"
+                      fontSize={9}
+                      fontWeight={600}
+                      fill="rgba(255,255,255,0.85)"
+                      fontFamily="Inter, sans-serif"
+                    >
+                      {label.length > 28 ? label.slice(0, 27) + "…" : label}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+
           {/* Parcel boundary — the Regrid property line */}
           {scan.parcelRings.map((ring, i) => {
             const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");

@@ -59,9 +59,7 @@ export function ringsFromWkt(wkt: string | null | undefined): LatLng[][] {
   return rings;
 }
 
-function toParcel(body: any): RegridParcel | null {
-  if (body?.status !== "OK") return null;
-  const r = body?.results?.[0];
+function parcelFromResult(r: any): RegridParcel | null {
   if (!r) return null;
   const rings = ringsFromWkt(r.geom_as_wkt);
   if (rings.length === 0) return null;
@@ -74,26 +72,39 @@ function toParcel(body: any): RegridParcel | null {
   };
 }
 
-async function query(params: Record<string, string>): Promise<RegridParcel | null> {
+/** Raw query returning up to `rpp` parcels. ReportAll bills per parcel
+ *  returned, so callers keep rpp as tight as the job allows. */
+async function queryMany(
+  params: Record<string, string>,
+  rpp: number,
+): Promise<RegridParcel[]> {
   const key = await reportallKey();
-  if (!key) return null;
+  if (!key) return [];
   const u = new URL(BASE);
   u.searchParams.set("client", key);
   u.searchParams.set("v", "9");
   u.searchParams.set("returnGeometry", "true");
-  u.searchParams.set("rpp", "1");
+  u.searchParams.set("rpp", String(Math.max(1, Math.min(50, rpp))));
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   try {
-    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(12_000) });
+    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       console.warn(`[reportall] HTTP ${res.status}`);
-      return null;
+      return [];
     }
-    return toParcel(await res.json());
+    const body: any = await res.json();
+    if (body?.status !== "OK" || !Array.isArray(body?.results)) return [];
+    return body.results
+      .map(parcelFromResult)
+      .filter((x: RegridParcel | null): x is RegridParcel => x !== null);
   } catch (e) {
     console.warn("[reportall] fetch failed", e instanceof Error ? e.message : e);
-    return null;
+    return [];
   }
+}
+
+async function query(params: Record<string, string>): Promise<RegridParcel | null> {
+  return (await queryMany(params, 1))[0] ?? null;
 }
 
 /** Look a parcel up by free-form street address. */
@@ -109,4 +120,29 @@ export async function reportallByPoint(p: LatLng): Promise<RegridParcel | null> 
     spatial_intersect: `POINT(${p.lng} ${p.lat})`,
     si_srid: "4326",
   });
+}
+
+/**
+ * Every parcel whose geometry meets the given lat/lng box — the subject
+ * lot AND its neighbours. Used two ways: a tight box around the
+ * geocoded point to pick the RIGHT parcel (a rooftop pin can land a few
+ * feet over the line onto next door), and the map viewport box to draw
+ * the surrounding property lines.
+ */
+export async function reportallParcelsInBox(
+  sw: LatLng,
+  ne: LatLng,
+  max = 24,
+): Promise<RegridParcel[]> {
+  const ring = [
+    `${sw.lng} ${sw.lat}`,
+    `${ne.lng} ${sw.lat}`,
+    `${ne.lng} ${ne.lat}`,
+    `${sw.lng} ${ne.lat}`,
+    `${sw.lng} ${sw.lat}`,
+  ].join(",");
+  return queryMany(
+    { spatial_intersect: `POLYGON((${ring}))`, si_srid: "4326" },
+    max,
+  );
 }

@@ -47,31 +47,39 @@ function ringsFromGeometry(geom: any): LatLng[][] {
   return rings;
 }
 
-async function fetchParcels(url: string): Promise<RegridParcel | null> {
+function parcelFromFeature(f: any): RegridParcel | null {
+  const rings = ringsFromGeometry(f?.geometry);
+  if (rings.length === 0) return null;
+  const props = f?.properties?.fields ?? f?.properties ?? {};
+  return {
+    rings,
+    address: props.address ?? props.mailadd ?? null,
+    acres: typeof props.ll_gisacre === "number" ? props.ll_gisacre : null,
+    apn: props.parcelnumb ?? null,
+  };
+}
+
+async function fetchParcelList(url: string): Promise<RegridParcel[]> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) {
       console.warn(`[regrid] HTTP ${res.status}`);
-      return null;
+      return [];
     }
     const body = (await res.json()) as any;
-    const features: any[] =
-      body?.parcels?.features ?? body?.features ?? [];
-    if (!Array.isArray(features) || features.length === 0) return null;
-    const f = features[0];
-    const rings = ringsFromGeometry(f?.geometry);
-    if (rings.length === 0) return null;
-    const props = f?.properties?.fields ?? f?.properties ?? {};
-    return {
-      rings,
-      address: props.address ?? props.mailadd ?? null,
-      acres: typeof props.ll_gisacre === "number" ? props.ll_gisacre : null,
-      apn: props.parcelnumb ?? null,
-    };
+    const features: any[] = body?.parcels?.features ?? body?.features ?? [];
+    if (!Array.isArray(features)) return [];
+    return features
+      .map(parcelFromFeature)
+      .filter((x): x is RegridParcel => x !== null);
   } catch (e) {
     console.warn("[regrid] fetch failed", e instanceof Error ? e.message : e);
-    return null;
+    return [];
   }
+}
+
+async function fetchParcels(url: string): Promise<RegridParcel | null> {
+  return (await fetchParcelList(url))[0] ?? null;
 }
 
 /** Look a parcel up by street address. */
@@ -95,4 +103,32 @@ export async function parcelByPoint(p: LatLng): Promise<RegridParcel | null> {
   u.searchParams.set("limit", "1");
   u.searchParams.set("token", token);
   return fetchParcels(u.toString());
+}
+
+/** Parcels intersecting a lat/lng box — the subject lot and neighbours. */
+export async function parcelsInBox(
+  sw: LatLng,
+  ne: LatLng,
+  max = 24,
+): Promise<RegridParcel[]> {
+  const token = await regridToken();
+  if (!token) return [];
+  const u = new URL("https://app.regrid.com/api/v2/parcels/query");
+  // Regrid takes a GeoJSON polygon for spatial queries.
+  u.searchParams.set(
+    "geojson",
+    JSON.stringify({
+      type: "Polygon",
+      coordinates: [[
+        [sw.lng, sw.lat],
+        [ne.lng, sw.lat],
+        [ne.lng, ne.lat],
+        [sw.lng, ne.lat],
+        [sw.lng, sw.lat],
+      ]],
+    }),
+  );
+  u.searchParams.set("limit", String(Math.max(1, Math.min(50, max))));
+  u.searchParams.set("token", token);
+  return fetchParcelList(u.toString());
 }

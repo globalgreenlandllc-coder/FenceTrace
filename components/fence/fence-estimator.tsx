@@ -54,7 +54,6 @@ import { contoursFromGrid } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getMyFenceRates } from "@/app/actions/fence-rates";
 import type { RateBook } from "@/lib/fence/rates";
-import { getScanBuildings } from "@/app/actions/fence-buildings";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { Mountain } from "lucide-react";
 import type { Downspout, EditableLine, Measurements } from "@/lib/types";
@@ -230,37 +229,10 @@ export function FenceEstimator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeId]);
 
-  // Building footprints arrive AFTER the scan renders — Overpass takes
-  // 1–9 s and used to block the whole scan. Never clobber a footprint
-  // the contractor already traced by hand.
-  useEffect(() => {
-    if (!scan) return;
-    let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const attempt = (retriesLeft: number) => {
-      void getScanBuildings({ center: scan.center, zoom: scan.zoom }).then(
-        (res) => {
-          if (cancelled) return;
-          if (res.buildings.length > 0) {
-            setBuildings((cur) => (cur.length === 0 ? res.buildings : cur));
-            return;
-          }
-          // Overpass throttles shared cloud IPs — an empty answer is as
-          // often a 429 as a truly houseless lot. One quiet retry; after
-          // that the canvas House tool is the way to trace the home.
-          if (retriesLeft > 0) {
-            retryTimer = setTimeout(() => attempt(retriesLeft - 1), 6_000);
-          }
-        },
-      );
-    };
-    attempt(1);
-    return () => {
-      cancelled = true;
-      if (retryTimer) clearTimeout(retryTimer);
-    };
-  }, [scan]);
+  // Building footprints are DRAWN, never guessed: the OSM auto-detect
+  // that used to seed them misread sheds/neighbours often enough that it
+  // hurt trust, and every wrong footprint became 3D noise. The canvas
+  // House tool traces the real home in seconds when it's wanted.
 
   // Topo lattice: one 18×12 elevation grid per scan (216 points, one
   // batched call) → contour lines drawn over the satellite canvas.
@@ -771,10 +743,20 @@ export function FenceEstimator() {
               )}
               {scan.parcel && (
                 <p className="mt-2 text-xs text-zinc-400">
-                  Property boundary from county records
+                  County record:{" "}
+                  <span className="font-medium text-zinc-600">
+                    {scan.parcel.address ?? "address not on file"}
+                  </span>
+                  {scan.parcel.apn && (
+                    <>
+                      {" · APN "}
+                      <span className="font-mono font-medium text-zinc-600">
+                        {scan.parcel.apn}
+                      </span>
+                    </>
+                  )}
                   {scan.parcel.acres ? ` · ${scan.parcel.acres.toFixed(2)} acres` : ""}
-                  {scan.parcel.apn ? ` · parcel ${scan.parcel.apn}` : ""} — verify
-                  on site before digging.
+                  {" — recently split or merged lots can lag the county map. Verify on site before digging."}
                 </p>
               )}
             </div>

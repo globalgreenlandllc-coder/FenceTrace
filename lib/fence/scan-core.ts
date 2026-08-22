@@ -1,5 +1,10 @@
 import { getActiveApiKey } from "@/lib/api-keys";
-import { lookupParcelByAddress, lookupParcelByPoint } from "@/lib/parcels";
+import {
+  lookupParcelByAddress,
+  lookupParcelByPoint,
+  lookupParcelsInBox,
+  pickSubjectParcel,
+} from "@/lib/parcels";
 import type { RegridParcel } from "@/lib/regrid";
 import {
   CANVAS_H,
@@ -45,7 +50,14 @@ export type FenceScanResult = {
    *  house layer from these so the diagram + 3D show the home the fence
    *  ties into. Empty when OSM has nothing here. */
   buildings: Pt[][];
-  parcel: { acres: number | null; apn: string | null } | null;
+  parcel: { acres: number | null; apn: string | null; address: string | null } | null;
+  /** Neighbouring parcels' outer rings, canvas coords — drawn fainter
+   *  than the subject so shared lines and double lots read at a glance.
+   *  Empty when the provider had nothing (or no key). */
+  neighborRings: Pt[][];
+  /** One label per neighbour ring: street address when the county
+   *  record carries one, else the parcel number, else null. */
+  neighborLabels: (string | null)[];
   /** Local pricing market resolved from the geocoded state + ZIP.
    *  Frozen here and carried through takeoff → proposal so a quote
    *  never reprices itself when the market table is revised. */
@@ -170,21 +182,42 @@ export async function fenceScanCore(
           : "The mapping service is temporarily unavailable — try again in a minute.",
     };
 
-  // Property boundary (best-effort — the canvas works without it). The
-  // geocoded rooftop point sits ON the right parcel, so the point lookup
-  // goes first; the fuzzy address search is only a fallback, and either
-  // result is discarded unless it actually contains/neighbors the
-  // geocoded point (~250 m) — a wrong-county text match must never show
-  // a convincing boundary around the wrong property.
-  let parcel: RegridParcel | null =
-    (await lookupParcelByPoint(geo.loc)) ??
-    (await lookupParcelByAddress(geo.formatted));
+  // Property boundary (best-effort — the canvas works without it).
+  //
+  // A geocoded rooftop pin is only good to a few metres, so a bare
+  // point-intersect regularly lands on the NEIGHBOUR's parcel on tight
+  // lots — the "it scanned the house next door" bug. Instead: pull every
+  // parcel in a ~120 m box around the pin (subject + neighbours in one
+  // provider call) and pick the subject by geometry + address match.
+  // The neighbours aren't waste — they ship in the result so the canvas
+  // can draw the surrounding lines (shared fences, double lots).
+  const BOX_M = 120;
+  const dLat = BOX_M / 111_320;
+  const dLng = BOX_M / (111_320 * Math.cos((geo.loc.lat * Math.PI) / 180));
+  let nearby = await lookupParcelsInBox(
+    { lat: geo.loc.lat - dLat, lng: geo.loc.lng - dLng },
+    { lat: geo.loc.lat + dLat, lng: geo.loc.lng + dLng },
+    24,
+  );
+  let parcel: RegridParcel | null = pickSubjectParcel(nearby, geo.loc, address);
+  // Providers without box support (or a thin county) fall back to the
+  // old single-parcel path — never lose a scan that used to work.
+  if (!parcel) {
+    parcel =
+      (await lookupParcelByPoint(geo.loc)) ??
+      (await lookupParcelByAddress(geo.formatted));
+    nearby = parcel ? [parcel] : [];
+  }
   if (parcel) {
     const ring0 = parcel.rings.flat();
     if (ring0.length < 3 || metersBetween(centroid(ring0), geo.loc) > 250) {
       parcel = null;
+      nearby = [];
     }
   }
+  const neighbors = parcel
+    ? nearby.filter((n) => n !== parcel && !(n.apn && parcel!.apn && n.apn === parcel!.apn))
+    : [];
 
   const allPts: LatLng[] = parcel ? parcel.rings.flat() : [];
   // Center on the bbox midpoint (zoomToFit fits the bbox — centering on
@@ -250,10 +283,18 @@ export async function fenceScanCore(
     aerial: { imageDataUrl, width: CANVAS_W, height: CANVAS_H, zoom },
     parcelRings: rings,
     suggestedRuns,
+    neighborRings: neighbors.flatMap((n) =>
+      n.rings.map((ring) => ring.map((pt) => latLngToCanvas(pt, center, zoom))),
+    ),
+    neighborLabels: neighbors.flatMap((n) =>
+      n.rings.map(() => n.address ?? (n.apn ? `APN ${n.apn}` : null)),
+    ),
     // Building footprints load ASYNC via getScanBuildings — Overpass
     // latency (1–9 s) used to sit here and made every scan feel slow.
     buildings: [],
-    parcel: parcel ? { acres: parcel.acres, apn: parcel.apn } : null,
+    parcel: parcel
+      ? { acres: parcel.acres, apn: parcel.apn, address: parcel.address }
+      : null,
     // Structured components first; the formatted string is the fallback
     // for the odd result that carries no postal_code component.
     market: resolveMarket({
