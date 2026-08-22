@@ -14,6 +14,7 @@ import {
   MAP_W,
   canvasPxPerFt,
   centroid,
+  canvasToLatLng,
   latLngToCanvas,
   zoomToFit,
   type LatLng,
@@ -191,13 +192,13 @@ export async function fenceScanCore(
   // provider call) and pick the subject by geometry + address match.
   // The neighbours aren't waste — they ship in the result so the canvas
   // can draw the surrounding lines (shared fences, double lots).
-  const BOX_M = 120;
+  const BOX_M = 90;
   const dLat = BOX_M / 111_320;
   const dLng = BOX_M / (111_320 * Math.cos((geo.loc.lat * Math.PI) / 180));
-  let nearby = await lookupParcelsInBox(
+  const nearby = await lookupParcelsInBox(
     { lat: geo.loc.lat - dLat, lng: geo.loc.lng - dLng },
     { lat: geo.loc.lat + dLat, lng: geo.loc.lng + dLng },
-    24,
+    12,
   );
   let parcel: RegridParcel | null = pickSubjectParcel(nearby, geo.loc, address);
   // Providers without box support (or a thin county) fall back to the
@@ -206,18 +207,13 @@ export async function fenceScanCore(
     parcel =
       (await lookupParcelByPoint(geo.loc)) ??
       (await lookupParcelByAddress(geo.formatted));
-    nearby = parcel ? [parcel] : [];
   }
   if (parcel) {
     const ring0 = parcel.rings.flat();
     if (ring0.length < 3 || metersBetween(centroid(ring0), geo.loc) > 250) {
       parcel = null;
-      nearby = [];
     }
   }
-  const neighbors = parcel
-    ? nearby.filter((n) => n !== parcel && !(n.apn && parcel!.apn && n.apn === parcel!.apn))
-    : [];
 
   const allPts: LatLng[] = parcel ? parcel.rings.flat() : [];
   // Center on the bbox midpoint (zoomToFit fits the bbox — centering on
@@ -232,6 +228,30 @@ export async function fenceScanCore(
     center = { lat: (minLat + maxLat) / 2, lng: (minLng + maxLng) / 2 };
   }
   const zoom = allPts.length >= 3 ? zoomToFit(allPts) : 19;
+
+  // Neighbour parcels for the VISIBLE frame. The canvas is 900x580 at
+  // this center/zoom, so its own corners define the box — every lot the
+  // contractor can see gets its line, including the ones flanking a
+  // subject larger than any fixed radius. Junk county addresses
+  // ("UNKNOWN") fall back to the APN.
+  let neighbors: RegridParcel[] = [];
+  if (parcel) {
+    const nw = canvasToLatLng({ x: 0, y: 0 }, center, zoom);
+    const se = canvasToLatLng({ x: CANVAS_W, y: CANVAS_H }, center, zoom);
+    const inView = await lookupParcelsInBox(
+      { lat: Math.min(nw.lat, se.lat), lng: Math.min(nw.lng, se.lng) },
+      { lat: Math.max(nw.lat, se.lat), lng: Math.max(nw.lng, se.lng) },
+      24,
+    );
+    const subjectRing = parcel.rings.flat();
+    const subjectCtr = subjectRing.length >= 3 ? centroid(subjectRing) : geo.loc;
+    neighbors = inView.filter((n) => {
+      if (n.apn && parcel!.apn && n.apn === parcel!.apn) return false;
+      const r = n.rings.flat();
+      // APN-less rows: drop rings that are geometrically the subject.
+      return !(r.length >= 3 && metersBetween(centroid(r), subjectCtr) < 3);
+    });
+  }
 
   // Satellite tile → data URL (same shape the proposal aerial expects).
   let imageDataUrl: string | null = null;
@@ -286,9 +306,15 @@ export async function fenceScanCore(
     neighborRings: neighbors.flatMap((n) =>
       n.rings.map((ring) => ring.map((pt) => latLngToCanvas(pt, center, zoom))),
     ),
-    neighborLabels: neighbors.flatMap((n) =>
-      n.rings.map(() => n.address ?? (n.apn ? `APN ${n.apn}` : null)),
-    ),
+    neighborLabels: neighbors.flatMap((n) => {
+      const cleaned = (n.address ?? "")
+        .replace(/\bunknown\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      const label =
+        cleaned.length >= 4 ? cleaned : n.apn ? `APN ${n.apn}` : null;
+      return n.rings.map(() => label);
+    }),
     // Building footprints load ASYNC via getScanBuildings — Overpass
     // latency (1–9 s) used to sit here and made every scan feel slow.
     buildings: [],
