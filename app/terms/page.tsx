@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 const UPDATED = "July 11, 2026";
-const CONTACT = "hello@fencescan.com";
+const CONTACT = "info@fencescan.com";
 
 export default function TermsPage() {
   return (

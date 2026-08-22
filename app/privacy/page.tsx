@@ -12,8 +12,8 @@ export const metadata: Metadata = {
     "How FenceScan (FenceScan Inc.) collects, uses, and protects your information, including data received from Google APIs.",
 };
 
-const UPDATED = "July 11, 2026";
-const CONTACT = "hello@fencescan.com";
+const UPDATED = "August 21, 2026";
+const CONTACT = "info@fencescan.com";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -250,12 +250,21 @@ export default function PrivacyPolicyPage() {
         </p>
       </LegalSection>
 
-      <LegalSection id="cookies" title="11. Cookies">
+      <LegalSection id="cookies" title="11. Cookies & similar technologies">
         <p>
           FenceScan uses only the cookies necessary to run the product:
           authentication and session cookies set by our sign-in provider, and
           security cookies used for abuse prevention. We do not use
           third-party advertising or cross-site tracking cookies.
+        </p>
+        <p>
+          For product analytics we use a privacy-friendly, first-party system
+          we run ourselves: a random identifier stored in your browser&rsquo;s
+          local storage tells us that page views belong to the same visit. It
+          contains no personal information, is never shared with or sold to
+          third parties, and does not follow you to other websites. You can
+          clear it at any time by clearing your browser&rsquo;s site data for
+          fencescan.com.
         </p>
       </LegalSection>
 

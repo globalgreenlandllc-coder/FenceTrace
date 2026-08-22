@@ -176,7 +176,10 @@ export function TeaserScan() {
   const tagsAt = reduceMotion ? 0 : T.fenceStart + fenceRuns.length * T.fenceEach + 0.15;
 
   return (
-    <div className="mt-10 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5">
+    <div
+      id="scan"
+      className="mt-10 scroll-mt-24 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm sm:p-5"
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();

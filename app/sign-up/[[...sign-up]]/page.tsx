@@ -73,8 +73,19 @@ export default async function SignUpPage() {
           />
         </div>
 
-        <div className="text-xs text-zinc-400">
-          © {new Date().getFullYear()} FenceScan Inc. · Secured with Clerk
+        <div className="max-w-xs space-y-1.5 text-center text-xs text-zinc-400">
+          <p>
+            By creating an account you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-zinc-600">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline hover:text-zinc-600">
+              Privacy Policy
+            </Link>
+            .
+          </p>
+          <p>© {new Date().getFullYear()} FenceScan Inc. · Secured with Clerk</p>
         </div>
       </div>
 

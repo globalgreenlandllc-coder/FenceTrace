@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { SessionProvider } from "@/components/auth/session-provider";
 import { EstimateJobProvider } from "@/components/estimate/estimate-job";
 import { Tracker } from "@/components/analytics/tracker";
+import { CookieNotice } from "@/components/legal/cookie-notice";
 import "./globals.css";
 
 const inter = Inter({
@@ -137,6 +138,7 @@ export default function RootLayout({
             <EstimateJobProvider>{children}</EstimateJobProvider>
           </SessionProvider>
           <Tracker />
+          <CookieNotice />
         </body>
       </html>
     </ClerkProvider>
