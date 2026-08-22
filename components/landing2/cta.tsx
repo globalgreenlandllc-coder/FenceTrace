@@ -13,9 +13,6 @@ export function CTA() {
   return (
     <section className="px-3 pb-3">
       <div className="relative overflow-hidden rounded-3xl bg-accent-950 py-24 md:py-32">
-        <Sparkle className="anim-float absolute left-[8%] top-12 h-8 w-8 text-accent-500/60" />
-        <Sparkle className="anim-float absolute bottom-14 right-[9%] h-10 w-10 text-accent-300/70 [animation-delay:0.8s]" />
-        <Sparkle className="anim-float absolute bottom-24 left-[16%] h-4 w-4 text-accent-400/50 [animation-delay:1.6s]" />
         {/* drifting survey ticks over the CTA */}
         <svg
           viewBox="0 0 600 120"

@@ -5,12 +5,12 @@ import {
   Check,
   DoorOpen,
   Home,
+  LandPlot,
   Layers,
   MousePointer2,
   PenLine,
   Trash2,
   Undo2,
-  Wand2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -1081,7 +1081,7 @@ export function FenceCanvas({
             onClick={usePropertyLine}
             className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full border border-accent-300 bg-accent-50 px-3.5 text-xs font-semibold text-accent-800 hover:bg-accent-100 sm:h-7 sm:px-3"
           >
-            <Wand2 className="h-3.5 w-3.5" />
+            <LandPlot className="h-3.5 w-3.5" />
             Use property line
           </button>
         )}
@@ -1399,29 +1399,31 @@ export function FenceCanvas({
                 <polygon
                   points={pts}
                   fill="rgba(74,222,128,0.05)"
-                  stroke="rgba(6,18,10,0.8)"
-                  strokeWidth={4.6}
+                  stroke="rgba(6,18,10,0.85)"
+                  strokeWidth={8}
                   vectorEffect="non-scaling-stroke"
-                  strokeDasharray="8 5"
+                  strokeDasharray="14 8"
+                  strokeLinecap="round"
                 />
                 <polygon
                   points={pts}
                   fill="none"
                   stroke="#4ADE80"
-                  strokeWidth={2}
+                  strokeWidth={3.5}
                   vectorEffect="non-scaling-stroke"
-                  strokeDasharray="8 5"
-                  style={{ filter: "drop-shadow(0 0 3px rgba(74,222,128,0.55))" }}
+                  strokeDasharray="14 8"
+                  strokeLinecap="round"
+                  style={{ filter: "drop-shadow(0 0 5px rgba(74,222,128,0.7))" }}
                 />
                 {ring.map((p, vi) => (
                   <circle
                     key={vi}
                     cx={p.x}
                     cy={p.y}
-                    r={3 * ui}
+                    r={4 * ui}
                     fill="#0D1B12"
                     stroke="#4ADE80"
-                    strokeWidth={1.6}
+                    strokeWidth={2.2}
                     vectorEffect="non-scaling-stroke"
                   />
                 ))}

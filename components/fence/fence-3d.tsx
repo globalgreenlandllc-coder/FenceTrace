@@ -2793,8 +2793,8 @@ export function Fence3D({
                     <polygon
                       points={pts}
                       fill="none"
-                      stroke="rgba(30,44,32,0.45)"
-                      strokeWidth={3}
+                      stroke="rgba(30,44,32,0.5)"
+                      strokeWidth={5}
                       strokeDasharray={dash}
                       vectorEffect="non-scaling-stroke"
                     />
@@ -2802,7 +2802,7 @@ export function Fence3D({
                       points={pts}
                       fill="none"
                       stroke="#FFFFFF"
-                      strokeWidth={1.5}
+                      strokeWidth={2.4}
                       strokeDasharray={dash}
                       vectorEffect="non-scaling-stroke"
                       opacity={0.95}

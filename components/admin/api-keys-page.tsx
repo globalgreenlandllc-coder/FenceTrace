@@ -9,20 +9,20 @@ import {
   Copy,
   CreditCard,
   Database,
-  Eye,
   ExternalLink,
+  Eye,
   Key,
-  Lock,
   Loader2,
+  Lock,
   Mail,
   Map as MapIcon,
   Plug,
+  Plus,
   RefreshCw,
   Send,
   ShieldOff,
   Trash2,
   X,
-  Zap,
 } from "lucide-react";
 import type { ApiKeyProvider } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
@@ -766,7 +766,7 @@ function ProviderCard({
           </>
         ) : (
           <Button size="sm" onClick={onAdd}>
-            <Zap className="h-3.5 w-3.5" />
+            <Plus className="h-3.5 w-3.5" />
             Add key
           </Button>
         )}

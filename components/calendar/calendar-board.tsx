@@ -10,12 +10,13 @@ import {
 } from "react";
 import {
   Ban,
+  CalendarClock,
   CalendarDays,
   CalendarRange,
   Check,
-  Clock3,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Columns3,
   ExternalLink,
   Hammer,
@@ -31,7 +32,6 @@ import {
   UserRound,
   Users,
   X,
-  Zap,
 } from "lucide-react";
 import {
   createAppointment,
@@ -2623,7 +2623,7 @@ function Sidebar({
       </div>
       <p className="text-[11px] leading-snug text-zinc-500">
         Drag a card onto a time slot, or tap{" "}
-        <Zap className="inline h-3 w-3 text-amber-500" /> and we&apos;ll find the
+        <CalendarClock className="inline h-3 w-3 text-amber-500" /> and we&apos;ll find the
         best open slot for you.
       </p>
       <div className="relative">
@@ -2744,7 +2744,7 @@ function DragItem({
         title="Smart-schedule: find the best open slot"
         className="transition-smooth ring-focus absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-white/70 text-amber-500 opacity-70 shadow-sm ring-1 ring-zinc-200 hover:bg-amber-50 hover:opacity-100"
       >
-        <Zap className="h-3.5 w-3.5" />
+        <CalendarClock className="h-3.5 w-3.5" />
       </button>
     </div>
   );
@@ -2819,7 +2819,7 @@ function SmartScheduleModal({
   return (
     <ModalShell onClose={onClose} title="Smart schedule">
       <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900 ring-1 ring-amber-200">
-        <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+        <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
         <span>
           Best open slots for <strong>{item.title}</strong> — a{" "}
           {durationMin >= 60 ? `${durationMin / 60}h` : `${durationMin}min`}{" "}

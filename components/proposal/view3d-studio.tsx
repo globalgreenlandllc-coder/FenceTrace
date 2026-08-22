@@ -1,6 +1,13 @@
 "use client";
 
-import { Lock, Route, Star, Trash2, Rotate3d, Wand2 } from "lucide-react";
+import {
+  Camera,
+  Lock,
+  Rotate3d,
+  Route,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   INTERACTION_HINT,
@@ -77,7 +84,7 @@ export function View3DStudio({
           onClick={onSuggest}
           className="ring-focus inline-flex items-center gap-1.5 rounded-full border border-accent-200 bg-accent-50 px-2.5 py-1 text-[11px] font-semibold text-accent-800 transition-colors hover:bg-accent-100"
         >
-          <Wand2 className="h-3 w-3" />
+          <Camera className="h-3 w-3" />
           Suggest angles
         </button>
       </div>
