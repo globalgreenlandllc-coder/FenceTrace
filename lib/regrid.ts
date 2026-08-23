@@ -19,6 +19,12 @@ export type RegridParcel = {
   /** Parcel area in acres when Regrid provides it. */
   acres: number | null;
   apn: string | null;
+  /** The county's own point for the lot (ReportAll's latitude/longitude
+   *  situs field). More trustworthy than a computed ring centroid —
+   *  a centroid can fall OUTSIDE an L-shaped parcel — and often better
+   *  than a drifted Google rooftop geocode. Optional: Regrid rows and
+   *  older stored scans don't carry it. */
+  situs?: LatLng | null;
 };
 
 async function regridToken(): Promise<string | null> {

@@ -64,11 +64,17 @@ function parcelFromResult(r: any): RegridParcel | null {
   const rings = ringsFromWkt(r.geom_as_wkt);
   if (rings.length === 0) return null;
   const acres = Number(r.acreage_calc ?? r.acreage);
+  const sLat = Number(r.latitude);
+  const sLng = Number(r.longitude);
   return {
     rings,
     address: typeof r.address === "string" && r.address ? r.address : null,
     acres: Number.isFinite(acres) && acres > 0 ? acres : null,
     apn: typeof r.parcel_id === "string" && r.parcel_id ? r.parcel_id : null,
+    situs:
+      Number.isFinite(sLat) && Number.isFinite(sLng)
+        ? { lat: sLat, lng: sLng }
+        : null,
   };
 }
 

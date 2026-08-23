@@ -265,7 +265,14 @@ export async function fenceScanCore(
 
   let pinLL: LatLng = geo.loc;
   if (parcel && !parcel.rings.some((ring) => pointInRingLL(geo.loc, ring))) {
-    pinLL = centroid(parcel.rings.flat());
+    // Google's pin missed the lot. Prefer the county's OWN situs point
+    // (ReportAll ships it per parcel) — a computed centroid is the
+    // fallback, and it can land outside an L-shaped ring.
+    pinLL =
+      parcel.situs &&
+      parcel.rings.some((ring) => pointInRingLL(parcel!.situs!, ring))
+        ? parcel.situs
+        : centroid(parcel.rings.flat());
   }
 
   const allPts: LatLng[] = parcel ? parcel.rings.flat() : [];
