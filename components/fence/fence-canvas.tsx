@@ -219,6 +219,10 @@ export function FenceCanvas({
   className?: string;
 }) {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // Neighbour parcels are hidden by default — the requested address is
+  // the subject; the surrounding lots are only wanted when a scan
+  // matched the WRONG parcel and the contractor needs to click over.
+  const [showNeighbors, setShowNeighbors] = useState(false);
   const [tool, setTool] = useState<Tool>(
     scan.suggestedRuns.length > 0 ? "select" : "draw",
   );
@@ -1337,7 +1341,7 @@ export function FenceCanvas({
               quieter than the subject. No labels: the chips read as
               clutter on the photo (the county record for the SUBJECT
               lot is spelled out under the canvas instead). */}
-          {(scan.neighborRings ?? []).map((ring, i) => {
+          {showNeighbors && (scan.neighborRings ?? []).map((ring, i) => {
             if (ring.length < 3) return null;
             const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
             const clickable = !!onPickNeighbor && tool === "select";
@@ -1748,6 +1752,26 @@ export function FenceCanvas({
         {/* zoom controls — pinch / ctrl+scroll zooms, scroll pans,
             drag pans in any tool, double-click (select tool) zooms in */}
         <div className="absolute bottom-3 right-3 flex items-center gap-1">
+          {(scan.neighborRings?.length ?? 0) > 0 && (
+            <button
+              type="button"
+              title={
+                showNeighbors
+                  ? "Hide neighbor lots"
+                  : "Wrong lot? Show neighbor parcels — click one to switch"
+              }
+              aria-pressed={showNeighbors}
+              onClick={() => setShowNeighbors((v) => !v)}
+              className={cn(
+                "transition-smooth ring-focus press-scale h-9 rounded-full px-2.5 text-[11px] font-bold shadow-sm ring-1 sm:h-7 sm:px-2",
+                showNeighbors
+                  ? "bg-accent-600 text-white ring-accent-600"
+                  : "bg-white/90 text-zinc-700 ring-zinc-200 hover:bg-white",
+              )}
+            >
+              Lots
+            </button>
+          )}
           <button
             type="button"
             aria-label="Zoom out"
