@@ -169,6 +169,22 @@ async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome>
   return outcome;
 }
 
+/** Ray-cast point-in-ring in lat/lng space (parcel scale — planar is fine). */
+function pointInRingLL(p: LatLng, ring: LatLng[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const a = ring[i];
+    const b = ring[j];
+    if (
+      a.lat > p.lat !== b.lat > p.lat &&
+      p.lng < ((b.lng - a.lng) * (p.lat - a.lat)) / (b.lat - a.lat) + a.lng
+    ) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
 /** Rough meters between two points (equirectangular — fine at parcel scale). */
 function metersBetween(a: LatLng, b: LatLng): number {
   const dLat = (b.lat - a.lat) * 111_320;
@@ -245,6 +261,11 @@ export async function fenceScanCore(
     if (ring0.length < 3 || metersBetween(centroid(ring0), geo.loc) > 250) {
       parcel = null;
     }
+  }
+
+  let pinLL: LatLng = geo.loc;
+  if (parcel && !parcel.rings.some((ring) => pointInRingLL(geo.loc, ring))) {
+    pinLL = centroid(parcel.rings.flat());
   }
 
   const allPts: LatLng[] = parcel ? parcel.rings.flat() : [];
@@ -346,8 +367,14 @@ export async function fenceScanCore(
         acres: n.acres,
       })),
     ),
-    pin: latLngToCanvas(geo.loc, center, zoom),
-    pinLL: geo.loc,
+    // The pin marks THE SUBJECT for the contractor. Google's rooftop
+    // geocode drifts by tens of meters on some lots (verified live:
+    // 26 Mira Loma Ln pinned a hillside two lots over while the county
+    // situs record and the Census geocoder both agree on the parcel we
+    // selected). When the pin misses the county-confirmed parcel, trust
+    // the county — pin the parcel, not the guess.
+    pin: latLngToCanvas(pinLL, center, zoom),
+    pinLL,
     parcelRingsLL: parcel?.rings ?? [],
     neighborLabels: neighbors.flatMap((n) => {
       const cleaned = (n.address ?? "")
