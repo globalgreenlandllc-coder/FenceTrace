@@ -355,7 +355,7 @@ function groundFill(
   c = c.map((v, i) => v + (EARTH[i] - v) * earth);
   // Warm light from the NW, cool shade opposite.
   const lit = Math.tanh((-gxFt * 2.4 + gyFt * 1.2) * 1.4);
-  const bright = 1 + 0.16 * lit;
+  const bright = 1 + 0.18 * lit;
   c = [
     c[0] * bright * (1 + 0.05 * lit),
     c[1] * bright * (1 + 0.015 * lit),
@@ -369,7 +369,7 @@ function groundFill(
     const gray = (c[0] + c[1] + c[2]) / 3;
     c = c.map((v) => (v + (gray - v) * 0.42 * wash) * (1 + 0.06 * wash) + 14 * wash);
   }
-  const n = 0.97 + jitter * 0.06;
+  const n = 0.955 + jitter * 0.09;
   const px = c.map((v) => Math.round(Math.max(0, Math.min(255, v * n))));
   return `rgb(${px[0]},${px[1]},${px[2]})`;
 }
@@ -2980,6 +2980,15 @@ export function Fence3D({
             <stop offset="0%" stopColor="#7B828F" />
             <stop offset="100%" stopColor="#646B78" />
           </linearGradient>
+          {/* The terrain lattice is honest geometry but hard-edged quads
+              read as a board game, not land. Feathering ONLY the ground
+              layer melts the facets into continuous shaded relief; the
+              blur counter-scales with zoom so the softness stays a
+              constant couple of screen pixels instead of smearing at 8×.
+              Contours, shadows and the fence render above, un-blurred. */}
+          <filter id="f3d-terra" x="-4%" y="-4%" width="108%" height="108%">
+            <feGaussianBlur stdDeviation={walking ? 2 : Math.min(3, 2.2 / zoomCam.k)} />
+          </filter>
         </defs>
 
         {walking ? (
@@ -2988,7 +2997,7 @@ export function Fence3D({
             <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-sky)" />
             <circle cx={VIEW_W * 0.78} cy={Math.min(walkScene!.horizon - 60, 120)} r={90} fill="url(#f3d-sun)" />
             <rect x={0} y={Math.max(0, walkScene!.horizon)} width={VIEW_W} height={Math.max(0, VIEW_H - walkScene!.horizon)} fill="#A9C29B" />
-            <g>{walkScene!.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
+            <g filter="url(#f3d-terra)">{walkScene!.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
             <g>{walkScene!.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
             <g>{walkScene!.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
             {walkScene!.elevLabels.map((l, i) => elevChip(l, i))}
@@ -2999,7 +3008,7 @@ export function Fence3D({
             <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
             <circle cx={VIEW_W * 0.8} cy={70} r={110} fill="url(#f3d-sun)" />
             <g transform={`translate(${zoomCam.tx} ${zoomCam.ty}) scale(${zoomCam.k})`}>
-              <g>{orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
+              <g filter="url(#f3d-terra)">{orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
               <g>{orbitScene.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
               <g>{orbitScene.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
               {orbitScene.rings.map((ring, i) => {
