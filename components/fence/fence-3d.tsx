@@ -1291,9 +1291,47 @@ export function Fence3D({
       }
     }
 
-    const rings: V3[][] = parcelRings.map((ring) =>
-      ring.map((p) => ({ x: p.x, y: p.y, z: (grid ? zAtPlan(p.x, p.y) : 0) + 1 })),
-    );
+    // Boundary drape. County rings carry a vertex every few px; draping
+    // EACH against the terrain let the dashed line ride every ground
+    // bulge between the fence's panel chords — on steep lots it
+    // periodically floated up across the fence face (measured: aligned
+    // within ~0.6px for 94% of points, up to 6px adrift on bulges).
+    // Instead: keep real corners (≥25°, the same rule everything else
+    // uses), then walk each straight span at a chord step near the
+    // fence's own bay length, so line and fence bend over the ground
+    // the SAME way.
+    const rings: V3[][] = parcelRings.map((ring) => {
+      if (ring.length < 3) {
+        return ring.map((p) => ({ x: p.x, y: p.y, z: (grid ? zAtPlan(p.x, p.y) : 0) + 1 }));
+      }
+      const corners: Pt[] = [ring[0]];
+      for (let i = 1; i < ring.length - 1; i++) {
+        const a = ring[i - 1];
+        const b = ring[i];
+        const c2 = ring[i + 1];
+        const inA = Math.atan2(b.y - a.y, b.x - a.x);
+        const outA = Math.atan2(c2.y - b.y, c2.x - b.x);
+        let d2 = Math.abs(outA - inA);
+        if (d2 > Math.PI) d2 = 2 * Math.PI - d2;
+        if (d2 >= (25 * Math.PI) / 180) corners.push(b);
+      }
+      corners.push(ring[ring.length - 1]);
+      const step = Math.max(6, Math.min(14, spacingPx));
+      const out: V3[] = [];
+      for (let i = 0; i < corners.length; i++) {
+        const a = corners[i];
+        const b = corners[(i + 1) % corners.length];
+        const L = Math.hypot(b.x - a.x, b.y - a.y);
+        const n = Math.max(1, Math.round(L / step));
+        for (let k2 = 0; k2 < n; k2++) {
+          const t = k2 / n;
+          const x = a.x + (b.x - a.x) * t;
+          const y = a.y + (b.y - a.y) * t;
+          out.push({ x, y, z: (grid ? zAtPlan(x, y) : 0) + 1 });
+        }
+      }
+      return out;
+    });
 
     // Where a walk should start: centroid of the drawn fence.
     const runPts = runs.flatMap((r) => r.points);

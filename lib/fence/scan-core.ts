@@ -179,9 +179,14 @@ async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome>
  * still sits exactly on the county line. The displayed parcel boundary
  * stays dense — only the FENCE seed is cleaned.
  */
-function straightenSeed(pts: Pt[]): Pt[] {
+function straightenSeed(pts: Pt[], pxPerFt: number): Pt[] {
   if (pts.length < 4) return pts;
-  const out = simplify(pts, 2);
+  // The tolerance must be PHYSICAL, not pixels: a big lot scans zoomed
+  // out, where 2px is 4+ ft and a gently bowing county edge would get
+  // chorded visibly inside the boundary (the "fence off its line" bug,
+  // round two). ~1.1 ft eats GPS jitter everywhere without cutting bows.
+  const eps = Math.min(2.5, Math.max(0.8, pxPerFt * 1.1));
+  const out = simplify(pts, eps);
   return out.length >= 2 ? out : pts;
 }
 
@@ -360,12 +365,13 @@ export async function fenceScanCore(
   // GeoJSON rings usually arrive already closed (first == last) — only
   // append the closing vertex when it's genuinely missing, else the
   // duplicate point reads as a phantom corner.
+  const pxPerFt = canvasPxPerFt(center.lat, zoom);
   const suggestedRuns: FenceRunSeed[] = rings.map((ring, i) => {
     const closed =
       ring.length >= 2 &&
       Math.hypot(ring[0].x - ring[ring.length - 1].x, ring[0].y - ring[ring.length - 1].y) < 1;
     const pts = ring.length > 0 && !closed ? [...ring, ring[0]] : ring;
-    return { id: `parcel-${i}`, points: straightenSeed(pts) };
+    return { id: `parcel-${i}`, points: straightenSeed(pts, pxPerFt) };
   });
 
   return {
@@ -520,7 +526,7 @@ export async function reframeScanCore(
     aerial: { imageDataUrl, width: CANVAS_W, height: CANVAS_H, zoom },
     parcelRings: [canvasRing],
     suggestedRuns: [
-      { id: "parcel-0", points: straightenSeed(closed ? canvasRing : [...canvasRing, canvasRing[0]]) },
+      { id: "parcel-0", points: straightenSeed(closed ? canvasRing : [...canvasRing, canvasRing[0]], canvasPxPerFt(center.lat, zoom)) },
     ],
     neighborRings: neighbors.flatMap((n) =>
       n.rings.map((r) => r.map((pt) => latLngToCanvas(pt, center, zoom))),
