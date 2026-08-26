@@ -353,14 +353,22 @@ function groundFill(
   const slopeMag = Math.hypot(gxFt, gyFt);
   const earth = Math.max(0, Math.min(0.55, (slopeMag - 0.1) * 2.2));
   c = c.map((v, i) => v + (EARTH[i] - v) * earth);
-  // Warm light from the NW, cool shade opposite.
-  const lit = Math.tanh((-gxFt * 2.4 + gyFt * 1.2) * 1.4);
-  const bright = 1 + 0.18 * lit;
+  // Warm light from the NW, cool shade opposite. The amplitude is the
+  // whole ballgame on a rolling lot: too timid and a hump doesn't read
+  // as a hump, which is what makes a straight fence crossing it look
+  // like a BENT fence. Sun-facing slopes lift hard, away-facing drop.
+  const lit = Math.tanh((-gxFt * 2.4 + gyFt * 1.2) * 1.9);
+  const bright = 1 + 0.27 * lit;
   c = [
-    c[0] * bright * (1 + 0.05 * lit),
-    c[1] * bright * (1 + 0.015 * lit),
-    c[2] * bright * (1 - 0.05 * lit),
+    c[0] * bright * (1 + 0.06 * lit),
+    c[1] * bright * (1 + 0.02 * lit),
+    c[2] * bright * (1 - 0.06 * lit),
   ];
+  // Sky light: flat ground sees the whole dome and picks up its cool
+  // cast, steep faces see a slice of it. Pairs with the warm sun above
+  // to give the surface two light sources, the way real land is lit.
+  const flat = 1 - Math.min(1, slopeMag * 3.2);
+  c = [c[0] + (150 - c[0]) * 0.05 * flat, c[1] + (168 - c[1]) * 0.05 * flat, c[2] + (188 - c[2]) * 0.11 * flat];
   // Off-parcel context washes out — brighter, grayer, quieter. `inParcel`
   // is a 0..1 fade (1 on the property), so the wash rolls in smoothly
   // instead of stair-stepping cell by cell along the boundary.
@@ -739,16 +747,28 @@ export function Fence3D({
     // its cells. Shading and geometry read the same SOFTENED surface,
     // so light and shape can't disagree.
     let contourIntervalFt = 0;
+    /** Plan-px pitch of one terrain quad — the feathering radius is a
+     *  fraction of THIS, so the surface reads smooth at every zoom. */
+    let groundStepPx = 0;
+    /** Plan extent the terrain surface covers, for its silhouette clip. */
+    let groundRect: { w: number; h: number } | null = null;
     if (grid) {
       const baseQuads = (gridCols - 1) * (gridRows - 1);
+      // Subdivide toward a fixed CELL size, not a fixed multiple — a
+      // coarse county grid needs SUB 6 where a dense scan needs 2, and
+      // capping too low is what left zoom-ins staring at giant soft
+      // blocks. The budget bounds total quads so the painter's sort
+      // stays interactive.
       const SUB = Math.max(
         2,
-        Math.min(4, Math.round(Math.sqrt(4800 / Math.max(1, baseQuads)))),
+        Math.min(6, Math.round(Math.sqrt(6400 / Math.max(1, baseQuads)))),
       );
       const stepX = cellW / SUB;
       const stepY = cellH / SUB;
+      groundStepPx = Math.min(stepX, stepY);
       const nx = (gridCols - 1) * SUB;
       const ny = (gridRows - 1) * SUB;
+      groundRect = { w: nx * stepX, h: ny * stepY };
       /** Softened elevation (ft above the lot's low point) — the surface
        *  the quads actually sit on. */
       const sElevFt = (x: number, y: number) => soften(bilinear(x, y) - minElev);
@@ -1465,6 +1485,8 @@ export function Fence3D({
       hasSurface: !!grid,
       reliefFt: Math.round(relief),
       contourIntervalFt,
+      groundStepPx,
+      groundRect,
     };
   }, [runs, gates, heightFt, typeId, pxPerFt, parcelRings, runElevationsFt, elevationSpacingPx, topoGridFt, buildings, sections, retainingWall, postUpgrade, postSpacingFt]);
 
@@ -1533,11 +1555,35 @@ export function Fence3D({
       if (Math.abs(base.y - top.y) < 6) continue;
       if (!marker || base.x < marker.base.x) marker = { base, top };
     }
+    // Silhouette of the terrain slab: the feathering that melts the
+    // quad facets would otherwise fuzz the lot's OUTER edge into a gray
+    // smudge, so the blurred layer gets clipped back to its true
+    // outline. Sampled densely enough that the undulating far edge
+    // stays faithful — a straight-line clip would slice off crests.
+    let groundClip: Pt[] | null = null;
+    if (world.groundRect) {
+      const { w, h } = world.groundRect;
+      const pts: Pt[] = [];
+      const N = 48;
+      const edge = (x0: number, y0: number, x1: number, y1: number) => {
+        for (let s = 0; s < N; s++) {
+          const x = x0 + (x1 - x0) * (s / N);
+          const y = y0 + (y1 - y0) * (s / N);
+          pts.push(T(proj({ x, y, z: world.zAtPlan(x, y) })));
+        }
+      };
+      edge(0, 0, w, 0);
+      edge(w, 0, w, h);
+      edge(w, h, 0, h);
+      edge(0, h, 0, 0);
+      groundClip = pts;
+    }
     return {
       faces,
       labels: plabels.map((l) => ({ ...l, at: T(l.at) })),
       elevLabels: pElev.map((l) => ({ ...l, at: T(l.at) })),
       rings: prings.map((r) => r.map(T)),
+      groundClip,
       marker,
       fit,
       ox,
@@ -2987,8 +3033,13 @@ export function Fence3D({
               constant couple of screen pixels instead of smearing at 8×.
               Contours, shadows and the fence render above, un-blurred. */}
           <filter id="f3d-terra" x="-4%" y="-4%" width="108%" height="108%">
-            <feGaussianBlur stdDeviation={walking ? 2 : Math.min(3, 2.2 / zoomCam.k)} />
+            <feGaussianBlur stdDeviation={Math.max(1.2, world.groundStepPx * 0.42)} />
           </filter>
+          {orbitScene?.groundClip && (
+            <clipPath id="f3d-terra-clip">
+              <polygon points={orbitScene.groundClip.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
+            </clipPath>
+          )}
         </defs>
 
         {walking ? (
@@ -3008,7 +3059,9 @@ export function Fence3D({
             <rect width={VIEW_W} height={VIEW_H} fill="url(#f3d-bg)" />
             <circle cx={VIEW_W * 0.8} cy={70} r={110} fill="url(#f3d-sun)" />
             <g transform={`translate(${zoomCam.tx} ${zoomCam.ty}) scale(${zoomCam.k})`}>
-              <g filter="url(#f3d-terra)">{orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}</g>
+              <g filter="url(#f3d-terra)" clipPath={orbitScene.groundClip ? "url(#f3d-terra-clip)" : undefined}>
+                {orbitScene.faces.filter((f) => f.face.kind === "ground").map(renderFace)}
+              </g>
               <g>{orbitScene.faces.filter((f) => f.face.kind === "contour" || f.face.kind === "shadow").map(renderFace)}</g>
               <g>{orbitScene.faces.filter((f) => f.face.kind !== "ground" && f.face.kind !== "shadow" && f.face.kind !== "contour").map(renderFace)}</g>
               {orbitScene.rings.map((ring, i) => {

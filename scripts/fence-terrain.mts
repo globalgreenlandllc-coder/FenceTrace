@@ -47,6 +47,9 @@ const runs = [{ points: [...ring, ring[0]] }];
 const views: { name: string; patch?: [number, number, number] }[] = [
   { name: "opening view" },
   { name: "zoom 2.6×", patch: [2.6, 450 - 2.6 * 430, 280 - 2.6 * 300] },
+  // The frame the client complained about: walked in close on the hump
+  // the fence crosses, where facets used to reappear.
+  { name: "zoom 5× on the hump", patch: [5, 450 - 5 * 470, 280 - 5 * 330] },
 ];
 
 const cards = views.map((v) => {
@@ -63,10 +66,9 @@ const cards = views.map((v) => {
   );
   if (v.patch) {
     const [k, tx, ty] = v.patch;
-    svg = svg
-      .replace('transform="translate(0 0) scale(1)"', `transform="translate(${tx} ${ty}) scale(${k})"`)
-      // live, the component recomputes the terrain blur as 2.2/k — mirror it
-      .replace('stdDeviation="2.2"', `stdDeviation="${(2.2 / k).toFixed(3)}"`);
+    // The terrain blur is in WORLD units (a fraction of one quad), so the
+    // zoom transform scales it along with the cells — nothing to patch.
+    svg = svg.replace('transform="translate(0 0) scale(1)"', `transform="translate(${tx} ${ty}) scale(${k})"`);
   }
   return `<section><h2>steep 5-acre — ${v.name}</h2>${svg}</section>`;
 }).join("\n");
