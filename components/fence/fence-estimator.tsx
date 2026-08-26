@@ -55,6 +55,8 @@ import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getMyFenceRates } from "@/app/actions/fence-rates";
 import type { RateBook } from "@/lib/fence/rates";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
+import { marketFrostIn } from "@/lib/fence/market";
+import { nearestHeight } from "@/lib/fence/takeoff";
 import { Mountain } from "lucide-react";
 import type { Downspout, EditableLine, Measurements } from "@/lib/types";
 
@@ -117,6 +119,12 @@ export function FenceEstimator() {
   const [terrain, setTerrain] = useState<Terrain>("flat");
   // Terrain follows the measured grade until the contractor overrides it.
   const [terrainAuto, setTerrainAuto] = useState(true);
+  // The debounced elevation callback reads this REF, not the state —
+  // closing over the state meant a manual Ground pick made inside the
+  // 1.2 s debounce window got snapped back to the auto suggestion by
+  // the stale timer.
+  const terrainAutoRef = useRef(terrainAuto);
+  terrainAutoRef.current = terrainAuto;
   const [slope, setSlope] = useState<SlopeSummary | null>(null);
   // Whether the current slope analysis measured the DRAWN runs (prices
   // steps) or just the yard preview (informational only).
@@ -297,9 +305,22 @@ export function FenceEstimator() {
     };
   }, []);
 
-  // Keep height valid when the type changes.
+  // Keep the options honest when the type changes: height snaps to one
+  // the new type comes in, stain only survives onto stainable wood, the
+  // spacing override resets (8' o.c. cedar spacing means nothing to a
+  // 10' o.c. chain-link run), and a post upgrade the new build can't
+  // take (steel on already-steel, 6×6 on a type that ships 6×6) drops
+  // to standard instead of riding invisibly into the proposal.
   useEffect(() => {
     if (!t.heightsFt.includes(heightFt)) setHeightFt(t.defaultHeightFt);
+    setStain((s) => s && t.stainable);
+    setPostSpacing(null);
+    setPostUpgrade((u) => {
+      if (u === "none") return u;
+      if (t.category !== "wood") return "none";
+      if (u === "6x6" && t.spec.postWidthIn >= 5.5) return "none";
+      return u;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeId]);
 
@@ -404,9 +425,15 @@ export function FenceEstimator() {
         effSpacingFt,
         heightFt,
         t.build,
+        marketFrostIn(scan.market),
       );
       setSlope(summary);
-      if (terrainAuto) setTerrain(summary.suggestedTerrain);
+      // Auto-apply the measured grade to the PRICE only once there is a
+      // drawn fence to measure. The pre-draw yard read is information —
+      // committing a 1.4× labor multiplier off two hardcoded canvas
+      // cross-sections priced ground the fence may never touch.
+      if (terrainAutoRef.current && layout.runs.length > 0)
+        setTerrain(summary.suggestedTerrain);
     }, 1200);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -456,36 +483,45 @@ export function FenceEstimator() {
     const byType = new Map<string, number>();
     for (const s of layout.sections ?? []) {
       if (!layout.runs.some((r) => r.id === s.runId)) continue;
+      // A section marked as the fence's own type is a no-op, not a
+      // carve-out — pricing it separately dropped its height factor and
+      // duplicated its BOM block.
+      if (s.type === typeId) continue;
       if (s.lfFt > 0) byType.set(s.type, (byType.get(s.type) ?? 0) + s.lfFt);
     }
     return [...byType].map(([type, lf]) => ({
       type: type as FenceTypeId,
       lf: Math.round(lf),
     }));
-  }, [layout.sections, layout.runs]);
+  }, [layout.sections, layout.runs, typeId]);
   const effRemoval = removalLf < 0 ? totalLf : removalLf; // -1 = "same as drawn"
 
   // Wall-top LF: manual entry wins; else the topo's sheer-drop estimate;
-  // else the whole drawn fence (contractor said wall, nothing measured).
+  // else NOTHING — the old fallback was the whole drawn fence, so one
+  // checkbox click on a 300 LF job silently billed every post as a
+  // core-drilled anchor. No measurement + no number = no charge until
+  // the contractor types the span.
   const suggestedWallLf =
     slopeFromRuns && slope ? Math.round(slope.wallLikeLf) : 0;
   const effWallLf = wallTop
-    ? Math.max(
-        0,
-        Math.min(
-          totalLf || 9999,
-          wallLfInput ?? (suggestedWallLf > 0 ? suggestedWallLf : totalLf),
-        ),
-      )
+    ? Math.max(0, Math.min(totalLf || 9999, wallLfInput ?? suggestedWallLf))
     : 0;
   // Wall sections are mounts, not slope steps — don't double-charge.
-  // Subtract the SPLIT step count those sections contributed (a 4'
-  // sheer drop counted as 4 code-sized steps until the wall confirmed).
+  // Subtract the SPLIT step count those sections contributed, PRORATED
+  // by how much of the wall-like span the contractor actually confirmed
+  // (10 LF of wall on a 3-wall-section run must not erase all three
+  // sections' steps).
+  const wallStepShare =
+    slope && slope.wallLikeLf > 0
+      ? Math.min(1, effWallLf / slope.wallLikeLf)
+      : 0;
   const effSteppedSections = slopeFromRuns
     ? Math.max(
         0,
-        (slope?.steppedSections ?? 0) -
-          (wallTop ? (slope?.wallSteppedSections ?? 0) : 0),
+        Math.round(
+          (slope?.steppedSections ?? 0) -
+            (wallTop ? (slope?.wallSteppedSections ?? 0) * wallStepShare : 0),
+        ),
       )
     : 0;
 
@@ -532,17 +568,24 @@ export function FenceEstimator() {
 
   const tierPrices = useMemo(() => {
     if (totalLf === 0) return [];
-    return fenceTiers(typeId).map((tier) => ({
-      tier,
-      label: fenceType(tier.type).label,
-      price: priceFence(
-        // The user's stain choice applies to every stainable tier; Best
-        // adds it regardless.
-        { ...layoutInput, type: tier.type, stain: tier.stain || stain },
-        { markupPct: tier.markupPct },
-      ),
-    }));
-  }, [layoutInput, typeId, totalLf]);
+    // Height rides along: siblings that don't come in this height fall
+    // back to the base type inside fenceTiers, and the card label says
+    // which height each tier actually quotes.
+    return fenceTiers(typeId, heightFt).map((tier) => {
+      const tierT = fenceType(tier.type);
+      const tierH = nearestHeight(tierT, heightFt);
+      return {
+        tier,
+        label: tierH === heightFt ? tierT.label : `${tierT.label} · ${tierH}'`,
+        price: priceFence(
+          // The user's stain choice applies to every stainable tier; Best
+          // adds it regardless.
+          { ...layoutInput, type: tier.type, stain: tier.stain || stain },
+          { markupPct: tier.markupPct },
+        ),
+      };
+    });
+  }, [layoutInput, typeId, heightFt, totalLf]);
 
   // The tier the rail marks "recommended" — mirrored into the mobile
   // action bar so the number the contractor quotes is always on screen.
@@ -880,29 +923,53 @@ export function FenceEstimator() {
                     {(
                       [
                         { id: "none", label: "Standard" },
-                        { id: "steel", label: "Steel (+$24/post)" },
-                        { id: "6x6", label: "6×6 PT (+$14/post)" },
+                        { id: "steel", label: "Steel (+$/post)" },
+                        { id: "6x6", label: "6×6 PT (+$/post)" },
                       ] as const
-                    ).map((o) => (
-                      <button
-                        key={o.id}
-                        type="button"
-                        onClick={() => setPostUpgrade(o.id)}
-                        className={cn(
-                          "transition-smooth ring-focus rounded-full border px-2.5 py-1.5 text-xs font-medium",
-                          postUpgrade === o.id
-                            ? "border-accent-500 bg-accent-50 text-accent-900"
-                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
-                        )}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
+                    )
+                      // Upgrades exist only where the base build can
+                      // take them: wood fences on standard 4×4 stock.
+                      // Chain link and ornamental are already steel,
+                      // vinyl rails route through vinyl posts, and
+                      // horizontal-modern ships on 6×6 as standard —
+                      // offering "+6×6" there charged for the base spec.
+                      .filter(
+                        (o) =>
+                          o.id === "none" ||
+                          (t.category === "wood" &&
+                            !(o.id === "6x6" && t.spec.postWidthIn >= 5.5)),
+                      )
+                      .map((o) => (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => setPostUpgrade(o.id)}
+                          className={cn(
+                            "transition-smooth ring-focus rounded-full border px-2.5 py-1.5 text-xs font-medium",
+                            postUpgrade === o.id
+                              ? "border-accent-500 bg-accent-50 text-accent-900"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                          )}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
                   </div>
+                  {t.category !== "wood" && (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                      {t.category === "vinyl"
+                        ? "Vinyl systems use routed vinyl posts — the rails lock through them."
+                        : t.category === "chain-link"
+                          ? "Chain link already stands on galvanized steel posts."
+                          : t.category === "split-rail"
+                            ? "Split rail posts are mortised for the rails — the stock is the system."
+                            : "Ornamental fences already ship on steel posts."}
+                    </p>
+                  )}
                   {postUpgrade === "steel" && (
                     <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
                       Galvanized steel posts never rot, warp or lean — the
-                      panels stay wood.
+                      panels stay wood. Priced per post in the estimate.
                     </p>
                   )}
                 </div>
@@ -914,10 +981,20 @@ export function FenceEstimator() {
                       {t.label} installs as prefab {t.postSpacingFt}&apos;
                       panels — spacing is fixed by the section width.
                     </p>
+                  ) : t.build === "rail" ? (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                      {t.label} spacing is set by the rail stock itself —
+                      the {t.postSpacingFt}&apos; rails span post to post.
+                    </p>
                   ) : (
                     <>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {([null, 4, 6, 8, 10] as const).map((o) => (
+                        {/* Stick builds cap at 8' — that's what a 2×4
+                            rail spans; mesh runs out to 10'. */}
+                        {(t.build === "stick"
+                          ? ([null, 4, 6, 8] as const)
+                          : ([null, 4, 6, 8, 10] as const)
+                        ).map((o) => (
                           <button
                             key={String(o)}
                             type="button"
@@ -936,7 +1013,7 @@ export function FenceEstimator() {
                       {postSpacing !== null && postSpacing !== t.postSpacingFt && (
                         <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
                           {postSpacing < t.postSpacingFt
-                            ? `Tighter than the ${t.postSpacingFt}′ standard — more posts and a stiffer fence; the takeoff and 3D update to match.`
+                            ? `Tighter than the ${t.postSpacingFt}′ standard — more posts and a stiffer fence; the price, takeoff and 3D all update to match.`
                             : `Wider than the ${t.postSpacingFt}′ standard — fewer posts; check your rail stock spans ${postSpacing}′.`}
                         </p>
                       )}
@@ -951,6 +1028,22 @@ export function FenceEstimator() {
                       <span className="rounded-full bg-accent-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-accent-700 ring-1 ring-inset ring-accent-200">
                         auto
                       </span>
+                    )}
+                    {!terrainAuto && slope && (
+                      /* Once a manual pick is made there was no road
+                         back to the measured suggestion — re-arm auto
+                         and apply the measured grade right away. */
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTerrainAuto(true);
+                          if (layout.runs.length > 0)
+                            setTerrain(slope.suggestedTerrain);
+                        }}
+                        className="transition-smooth rounded-full bg-zinc-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-500 ring-1 ring-inset ring-zinc-200 hover:bg-accent-50 hover:text-accent-700"
+                      >
+                        back to auto
+                      </button>
                     )}
                   </span>
                   <select
@@ -1004,17 +1097,39 @@ export function FenceEstimator() {
 
                 <div className="mt-3 space-y-2 text-sm">
                   {jobType === "replacement" && (
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={effRemoval > 0}
-                        onChange={(e) => setRemovalLf(e.target.checked ? -1 : 0)}
-                        className="h-4 w-4 accent-[#1E7340]"
-                      />
-                      <span className="text-zinc-700">
-                        Tear out old fence{effRemoval > 0 ? ` (${effRemoval} LF)` : ""}
-                      </span>
-                    </label>
+                    <>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={effRemoval > 0}
+                          onChange={(e) => setRemovalLf(e.target.checked ? -1 : 0)}
+                          className="h-4 w-4 accent-[#1E7340]"
+                        />
+                        <span className="text-zinc-700">
+                          Tear out old fence{effRemoval > 0 ? ` (${effRemoval} LF)` : ""}
+                        </span>
+                      </label>
+                      {effRemoval > 0 && (
+                        <div className="flex items-center gap-2 pl-6">
+                          <input
+                            type="number"
+                            min={0}
+                            max={9999}
+                            value={Math.round(effRemoval)}
+                            onChange={(e) =>
+                              setRemovalLf(
+                                Math.max(0, Math.min(9999, Number(e.target.value) || 0)),
+                              )
+                            }
+                            className="input w-24 py-1"
+                          />
+                          <span className="text-xs text-zinc-500">
+                            LF of old fence coming out — often only part of
+                            the new run
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                   {t.stainable && (
                     <label className="flex items-center gap-2">
@@ -1047,8 +1162,14 @@ export function FenceEstimator() {
                           max={totalLf || 9999}
                           value={Math.round(effWallLf)}
                           onChange={(e) =>
+                            // Clamp on WRITE — an un-clamped value kept in
+                            // state used to jump the charge up later when
+                            // the fence got longer.
                             setWallLfInput(
-                              Math.max(0, Number(e.target.value) || 0),
+                              Math.max(
+                                0,
+                                Math.min(totalLf || 9999, Number(e.target.value) || 0),
+                              ),
                             )
                           }
                           className="input w-24 py-1"
@@ -1060,6 +1181,8 @@ export function FenceEstimator() {
                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
                         Posts on the wall are core-drilled & epoxy-anchored to
                         the cap — no digging, priced per post.
+                        {effWallLf === 0 &&
+                          " Enter the span — nothing is charged until a length is set."}
                       </p>
                     </div>
                   )}

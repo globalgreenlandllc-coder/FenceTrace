@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { computeFenceTakeoff } from "./takeoff.ts";
 import { priceFence, fenceTiers, layoutToPricingInputs } from "./pricing.ts";
 import { packageTotal, blankProposal, FENCE_TAX_RATE } from "../proposal-mock.ts";
+import { resolveMarket } from "./market.ts";
+import { burialFt } from "./slope.ts";
+import { fenceClientScope } from "./scope.ts";
 
 const CEDAR_100: Parameters<typeof computeFenceTakeoff>[0] = {
   type: "cedar-privacy",
@@ -31,8 +34,15 @@ test("cedar 6' privacy, 100 net LF: sections, posts, pickets sane", () => {
   const tall = computeFenceTakeoff({ ...CEDAR_100, heightFt: 8 });
   assert.equal(tall.bom.find((b) => b.key === "picket")!.qty, pickets.qty);
   const concrete = t.bom.find((b) => b.key === "concrete")!;
-  assert.ok(concrete.qty >= t.posts.total * 2 - 2, "2 bags per 6' post");
-  assert.ok(t.laborHours > 30 && t.laborHours < 60, `hours=${t.laborHours}`);
+  // Volume-based: a 6' post in a 10-12" hole at 2' burial runs ~2.5-3
+  // bags — the crew must never run out of mix mid-job.
+  assert.ok(
+    concrete.qty >= t.posts.total * 2 && concrete.qty <= t.posts.total * 3.5,
+    `bags=${concrete.qty} for ${t.posts.total} posts`,
+  );
+  // ~4.5 LF/person-hour stick production: a 3-man crew does 100 LF in
+  // a day, not two.
+  assert.ok(t.laborHours > 15 && t.laborHours < 40, `hours=${t.laborHours}`);
 });
 
 test("per-run sections: three 34' runs need more sections than one 102' run", () => {
@@ -128,16 +138,24 @@ test("retaining wall: anchors replace concrete for wall-span posts", () => {
   const anchors = wall.bom.find((b) => b.key === "wall-anchor")!;
   assert.equal(anchors.qty, 4);
   assert.ok(!flat.bom.some((b) => b.key === "wall-anchor"));
-  // those 4 posts lose their concrete (2 bags each at 6' height)…
+  // those 4 posts lose their concrete (~2.5 volume-based bags each)…
   const cFlat = flat.bom.find((b) => b.key === "concrete")!.qty;
   const cWall = wall.bom.find((b) => b.key === "concrete")!.qty;
-  assert.equal(cFlat - cWall, 8);
+  assert.ok(
+    cFlat - cWall >= 4 * 2 && cFlat - cWall <= 4 * 3.5,
+    `bag credit=${cFlat - cWall}`,
+  );
   // …and gain core-drill time
   assert.ok(wall.laborHours > flat.laborHours);
-  // money: the wall-mount line prices on the proposal side too
+  // money: the wall-mount line prices on the proposal side too — and
+  // the $/LF line's dug-footing share comes BACK off as a visible
+  // credit, so the client never pays for concrete that isn't poured.
   const priced = priceFence({ ...CEDAR_100, wallTopLf: 24 });
   const line = priced.lines.find((l) => l.key === "fence-wall-mount")!;
   assert.equal(line.amount, 4 * 72);
+  const credit = priced.lines.find((l) => l.key === "fence-wall-credit")!;
+  assert.ok(credit.amount < 0, "footing credit is a deduction");
+  assert.ok(Math.abs(credit.amount) < line.amount, "anchors still net positive");
   assert.ok(priced.total > priceFence(CEDAR_100).total);
 });
 
@@ -308,4 +326,123 @@ test("post spacing override: tighter spacing = more posts; panels ignore it", ()
   const vinyl = computeFenceTakeoff({ ...CEDAR_100, type: "vinyl-privacy", heightFt: 6 });
   const vinylTight = computeFenceTakeoff({ ...CEDAR_100, type: "vinyl-privacy", heightFt: 6, postSpacingFt: 4 });
   assert.equal(vinylTight.sections, vinyl.sections, "panels ignore the override");
+});
+
+/* ------------- the fixes the 2026-08 engine audit forced ------------- */
+
+test("tighter post spacing raises the PRICE, not just the BOM", () => {
+  const std = priceFence(CEDAR_100);
+  const tight = priceFence({ ...CEDAR_100, postSpacingFt: 4 });
+  // Doubling the posts is ~25% material / ~30% labor on the post share.
+  assert.ok(tight.total > std.total * 1.1, `${tight.total} vs ${std.total}`);
+  assert.ok(tight.total < std.total * 1.5, "but nowhere near double");
+  // Panels ignore the override in dollars exactly as they do in quantities.
+  const vinyl = priceFence({ ...CEDAR_100, type: "vinyl-privacy" });
+  const vinylTight = priceFence({ ...CEDAR_100, type: "vinyl-privacy", postSpacingFt: 4 });
+  assert.equal(vinyl.total, vinylTight.total);
+});
+
+test("frost country digs deeper and buys more concrete", () => {
+  const dallas = resolveMarket({ state: "TX" }); // 6" frost line
+  const fargo = resolveMarket({ state: "ND" }); // 48" frost line
+  const south = computeFenceTakeoff({ ...CEDAR_100, market: dallas });
+  const north = computeFenceTakeoff({ ...CEDAR_100, market: fargo });
+  const cS = south.bom.find((b) => b.key === "concrete")!.qty;
+  const cN = north.bom.find((b) => b.key === "concrete")!.qty;
+  // 4' burial vs 2' burial ≈ double the mix.
+  assert.ok(cN >= cS * 1.7, `Fargo ${cN} bags vs Dallas ${cS}`);
+  // …and the frost line rides on the snapshot for the burial math.
+  assert.equal(fargo.frostIn, 48);
+  assert.equal(burialFt(6, 48), 4);
+  assert.equal(burialFt(6, 0), 2);
+});
+
+test("a tiny job floors at the mobilization minimum", () => {
+  // 8 LF of bare fence ≈ $290 of work — under the $450 truck-roll floor.
+  const tiny = priceFence({
+    ...CEDAR_100,
+    totalLf: 8,
+    corners: 0,
+    gatesSingle: 0,
+  });
+  const line = tiny.lines.find((l) => l.key === "fence-job-minimum");
+  assert.ok(line, "minimum line present on a sub-$450 job");
+  const subtotal = tiny.lines.reduce((a, l) => a + l.amount, 0);
+  assert.ok(Math.abs(subtotal - 450) < 1, `floors at 450, got ${subtotal}`);
+  // A real-size job never sees the line.
+  const normal = priceFence(CEDAR_100);
+  assert.ok(!normal.lines.some((l) => l.key === "fence-job-minimum"));
+});
+
+test("custom gate pricing is continuous through the 4-10' range", () => {
+  const at = (w: number) =>
+    priceFence({ ...CEDAR_100, gatesSingle: 0, gatesCustomWidthsFt: [w] })
+      .lines.find((l) => l.key === "gate-custom-0")!.amount;
+  // No cliff: each half-foot step moves the price by a small, similar amount.
+  let prev = at(4);
+  for (let w = 4.5; w <= 10; w += 0.5) {
+    const cur = at(w);
+    assert.ok(cur > prev, `monotone at ${w}'`);
+    assert.ok(cur - prev < prev * 0.2, `no cliff at ${w}': +${cur - prev}`);
+    prev = cur;
+  }
+  // The 10' custom gate prices exactly like the 10' drive-gate preset.
+  const drive = priceFence({ ...CEDAR_100, gatesSingle: 0, gatesDouble: 1 })
+    .lines.find((l) => l.key === "gate-double")!.amount;
+  assert.ok(Math.abs(at(10) - drive) < 1);
+});
+
+test("horizontal-modern board count grows with height, not with the picket formula", () => {
+  const short = computeFenceTakeoff({ ...CEDAR_100, type: "horizontal-modern", heightFt: 4 });
+  const tall = computeFenceTakeoff({ ...CEDAR_100, type: "horizontal-modern", heightFt: 6 });
+  const sQty = short.bom.find((b) => b.key === "picket")!.qty;
+  const tQty = tall.bom.find((b) => b.key === "picket")!.qty;
+  // 6' is ~1.5× the courses of 4' — identical counts was the bug.
+  assert.ok(tQty >= sQty * 1.3, `6' ${tQty} slats vs 4' ${sQty}`);
+});
+
+test("tier ladder holds the job's height and never inverts Good over Better", () => {
+  // Steel ornamental at 6': aluminum sibling comes in 6' — keep it; at
+  // 8' aluminum doesn't exist, so Good must quote the base type instead
+  // of silently downgrading an 8' job to a 4' fence.
+  const okTiers = fenceTiers("steel-ornamental", 6);
+  assert.equal(okTiers[0]!.type, "aluminum-ornamental");
+  const talls = fenceTiers("steel-ornamental", 8);
+  assert.equal(talls[0]!.type, "steel-ornamental");
+  // Cedar at 5': pt-pine comes in 4/6/8 only — Good stays cedar at 5'.
+  const fives = fenceTiers("cedar-privacy", 5);
+  assert.equal(fives[0]!.type, "cedar-privacy");
+  // …and at 8', pine DOES come in 8' and is cheaper — the swap stands.
+  const eights = fenceTiers("cedar-privacy", 8);
+  assert.equal(eights[0]!.type, "pt-pine-privacy");
+});
+
+test("client scope sheet shows the same LF the price billed (no double gate subtraction)", () => {
+  const { measurements, config } = layoutToPricingInputs(CEDAR_100);
+  const scope = fenceClientScope(config.fence!, measurements);
+  assert.ok(scope);
+  // 104 drawn − 4' gate = 100 net, matching the priced quantity.
+  assert.equal(scope!.spec.netLf, 100);
+  assert.equal(scope!.spec.totalLf, 104);
+  assert.equal(scope!.spec.sections, computeFenceTakeoff(CEDAR_100).sections);
+});
+
+test("same-type 'mixed' sections are a no-op, not a double-billed carve-out", () => {
+  const plain = priceFence(CEDAR_100);
+  const selfMixed = priceFence({
+    ...CEDAR_100,
+    mixed: [{ type: "cedar-privacy", lf: 40 }],
+  });
+  assert.ok(Math.abs(plain.total - selfMixed.total) < 0.02);
+});
+
+test("mixed sections longer than the fence shrink proportionally", () => {
+  const priced = priceFence({
+    ...CEDAR_100,
+    totalLf: 104,
+    mixed: [{ type: "chain-link-galv", lf: 200 }],
+  });
+  const line = priced.lines.find((l) => l.key === "fence-mixed-chain-link-galv")!;
+  // Clamped to the net fence, not billed at the drawn 200.
+  assert.ok(line.label.includes("100 LF"), line.label);
 });

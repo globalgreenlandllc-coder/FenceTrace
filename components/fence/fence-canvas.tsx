@@ -852,13 +852,31 @@ export function FenceCanvas({
         say("Draw a fence line first — gates hang on the fence.");
         return;
       }
-      const q = nearestOnRuns(raw);
-      if (q) {
+      const hit = nearestOnRunsInfo(raw);
+      if (hit) {
         const widthFt =
           gateKind === "single" ? 4 : gateKind === "double" ? 10 : Math.min(24, Math.max(3, customGateFt));
+        // The opening has to FIT: this run's length, minus what other
+        // gates on it already consume, minus a post's worth of fence at
+        // each side. A 20' gate on a 10' run used to zero the whole
+        // fence out and still bill the gate.
+        const run = layout.runs.find((r) => r.id === hit.runId);
+        const runFt = run ? canvasPolylineFt(run.points, pxPerFt) : 0;
+        const usedFt = layout.gates.reduce((acc, g) => {
+          const gHit = nearestOnRunsInfo(g, Infinity);
+          return gHit?.runId === hit.runId
+            ? acc + (g.widthFt ?? (g.kind === "double" ? 10 : 4))
+            : acc;
+        }, 0);
+        if (widthFt + usedFt > runFt - 2) {
+          say(
+            `A ${widthFt}' gate won't fit — this run is ${Math.round(runFt)} LF${usedFt > 0 ? ` with ${Math.round(usedFt)}' already in gates` : ""}.`,
+          );
+          return;
+        }
         onChange({
           ...layout,
-          gates: [...layout.gates, { id: nextId("gate"), ...q, kind: gateKind, widthFt }],
+          gates: [...layout.gates, { id: nextId("gate"), ...hit.q, kind: gateKind, widthFt }],
         });
       } else {
         say("Tap on (or near) a fence line to place the gate.");

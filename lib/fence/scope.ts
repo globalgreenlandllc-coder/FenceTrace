@@ -59,9 +59,6 @@ export function fenceClientScope(
   fence: FenceEstimateConfig,
   measurements: Measurements,
 ): FenceScope | null {
-  const totalLf = Math.max(0, Math.round(measurements.eaveLF));
-  if (totalLf <= 0) return null;
-
   const t = fenceType(fence.type as FenceTypeId);
 
   const customWidths = (fence.gatesCustomWidthsFt ?? []).filter(
@@ -81,10 +78,23 @@ export function fenceClientScope(
   );
   const gatesSingle = Math.max(0, liveGates - gatesDouble - gatesCustom);
 
+  // measurements.eaveLF is the NET fence length — gate openings are
+  // already out of it (that's the number pricing bills). The takeoff
+  // subtracts openings itself, so hand it the DRAWN length back:
+  // net + openings. Passing eaveLF straight through subtracted every
+  // gate twice and the client sheet showed less fence than was priced.
+  const gateOpenings =
+    gatesSingle * 4 +
+    gatesDouble * 10 +
+    customWidths.slice(0, gatesCustom).reduce((a, w) => a + w, 0);
+  const totalLf = Math.max(0, Math.round(measurements.eaveLF + gateOpenings));
+  if (totalLf <= 0) return null;
+
   const takeoff = computeFenceTakeoff({
     type: fence.type as FenceTypeId,
     heightFt: fence.heightFt,
     totalLf,
+    runLengths: fence.runLengths,
     corners: Math.max(0, fence.corners),
     ends: Math.max(0, fence.ends),
     gatesSingle,
@@ -99,6 +109,8 @@ export function fenceClientScope(
     postUpgrade: fence.postUpgrade,
     postSpacingFt: fence.postSpacingFt,
     mixed: fence.mixed as { type: FenceTypeId; lf: number }[] | undefined,
+    // Frost-aware concrete depths come from the job's market snapshot.
+    market: fence.market,
   });
 
   const gates: FenceScopeSpec["gates"] = [];
@@ -114,11 +126,13 @@ export function fenceClientScope(
       totalLf,
       netLf: takeoff.netFenceLf,
       sections: takeoff.sections,
+      // Same eligibility rule as the takeoff: stick ≤8', mesh ≤12',
+      // panel and rail systems keep their fixed catalog spacing.
       postSpacingFt:
-        t.build !== "panel" &&
+        (t.build === "stick" || t.build === "mesh") &&
         Number.isFinite(fence.postSpacingFt) &&
         (fence.postSpacingFt as number) >= 4 &&
-        (fence.postSpacingFt as number) <= 12
+        (fence.postSpacingFt as number) <= (t.build === "stick" ? 8 : 12)
           ? (fence.postSpacingFt as number)
           : t.postSpacingFt,
       corners: Math.max(0, fence.corners),

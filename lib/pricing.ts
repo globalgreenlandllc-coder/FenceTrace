@@ -16,6 +16,7 @@ import {
   type Terrain,
 } from "./fence/catalog";
 import { ratedType } from "./fence/rates";
+import { computeFenceTakeoff, nearestHeight } from "./fence/takeoff";
 import {
   blendedFactor,
   laborFactor,
@@ -23,6 +24,18 @@ import {
   materialFactor,
   type MarketSnapshot,
 } from "./fence/market";
+
+/** Share of a fence's $/LF that is the posts + footings. Tightening the
+ *  post spacing scales exactly this slice of the line — 8'→4' o.c.
+ *  doubles the posts, which is a ~25% material / ~30% labor bump, not a
+ *  doubling of the fence. */
+const POST_MATERIAL_SHARE = 0.25;
+const POST_LABOR_SHARE = 0.3;
+
+/** Every real crew has a mobilization floor — the truck, the fuel, the
+ *  morning that a 20 LF job burns exactly like a 200 LF one. Applied
+ *  pre-markup when the fence work sums below it, as a visible line. */
+export const FENCE_JOB_MINIMUM = 450;
 
 type GutterKey = `${GutterSize}-${GutterStyle}-${GutterMaterial}`;
 
@@ -111,7 +124,12 @@ function buildFenceLineItems(
   // The contractor's own price book is the BASE rate; the market
   // snapshot below still scales it. Absent book ⇒ catalog rates.
   const t = ratedType(fence.type as FenceTypeId, fence.rates);
-  const hf = heightFactor(t, fence.heightFt);
+  // A height the type doesn't come in prices at the NEAREST one it
+  // does, and every label says so — before this, heightFactor silently
+  // fell back to the default while the line name still printed the raw
+  // request ("8' fence package" priced at the 6' rate).
+  const hFt = nearestHeight(t, fence.heightFt);
+  const hf = heightFactor(t, hFt);
   const waste = 1 + Math.max(0, measurements.wasteFactorPct) / 100;
   // Local market calibration (state + ZIP). Undefined → every factor is
   // 1 and this prices at the catalog's national rates, exactly as it did
@@ -120,15 +138,34 @@ function buildFenceLineItems(
   const matF = materialFactor(mk, t.id);
   const labF = laborFactor(mk);
   const totalLfAll = Math.max(0, measurements.eaveLF);
+  // Effective post spacing — same eligibility rule as the takeoff
+  // (stick ≤8', mesh ≤12', panel/rail fixed). Tightening it scales the
+  // post share of both $/LF lines; before this the override moved every
+  // quantity in the BOM and not one dollar.
+  const spacingCap = t.build === "stick" ? 8 : 12;
+  const effSpacing =
+    (t.build === "stick" || t.build === "mesh") &&
+    Number.isFinite(fence.postSpacingFt) &&
+    (fence.postSpacingFt as number) >= 4 &&
+    (fence.postSpacingFt as number) <= spacingCap
+      ? (fence.postSpacingFt as number)
+      : t.postSpacingFt;
+  const spacingRatio = t.postSpacingFt / effSpacing;
+  const spacingMatF = 1 + POST_MATERIAL_SHARE * (spacingRatio - 1);
+  const spacingLabF = 1 + POST_LABOR_SHARE * (spacingRatio - 1);
   // Mixed-type sections price at their OWN catalog rates; their footage
-  // comes out of the primary type's lines so nothing double-bills.
+  // comes out of the primary type's lines so nothing double-bills. A
+  // section marked as the SAME type as the fence is a no-op, not a
+  // carve-out — pricing it separately dropped its height factor.
   const mixed = (fence.mixed ?? []).filter(
-    (m) => Number.isFinite(m.lf) && m.lf > 0,
+    (m) => Number.isFinite(m.lf) && m.lf > 0 && m.type !== fence.type,
   );
-  const mixedLf = Math.min(
-    totalLfAll,
-    mixed.reduce((a, m) => a + m.lf, 0),
-  );
+  const rawMixedLf = mixed.reduce((a, m) => a + m.lf, 0);
+  const mixedLf = Math.min(totalLfAll, rawMixedLf);
+  // Sections drawn longer than the fence they sit on shrink
+  // proportionally — clamping only the aggregate let the primary line
+  // floor at 0 while the mixed lines billed every drawn foot.
+  const mixScale = rawMixedLf > 0 ? mixedLf / rawMixedLf : 0;
   const lf = Math.max(0, totalLfAll - mixedLf);
   // Gates re-price from the LIVE drawn count (measurements.downspoutCount
   // carries gates) — the config split only decides how many of them are
@@ -151,14 +188,16 @@ function buildFenceLineItems(
     liveGates - gatesCustom,
   );
   const gatesSingle = Math.max(0, liveGates - gatesDouble - gatesCustom);
+  const spacingNote =
+    spacingRatio !== 1 ? ` — ${effSpacing}' post spacing` : "";
   const lines: LineItemPlan[] = [
     {
       id: "fence-materials",
-      name: `${t.label} — ${fence.heightFt}' fence package`,
-      description: "Posts, rails/panels, fabric, concrete, hardware & caps",
+      name: `${t.label} — ${hFt}' fence package`,
+      description: `Posts, rails/panels, fabric, concrete, hardware & caps${spacingNote}`,
       quantity: lf,
       unit: "LF",
-      unitPrice: round2(t.materialPerLf * hf * waste * matF),
+      unitPrice: round2(t.materialPerLf * hf * waste * matF * spacingMatF),
       taxable: true,
     },
     {
@@ -171,7 +210,11 @@ function buildFenceLineItems(
       quantity: lf,
       unit: "LF",
       unitPrice: round2(
-        t.laborPerLf * hf * TERRAIN_FACTOR[fence.terrain as Terrain] * labF,
+        t.laborPerLf *
+          hf *
+          TERRAIN_FACTOR[fence.terrain as Terrain] *
+          labF *
+          spacingLabF,
       ),
       taxable: false,
     },
@@ -179,20 +222,25 @@ function buildFenceLineItems(
   for (const m of mixed) {
     // A mixed-in stretch prices at the contractor's rate for THAT type,
     // not the primary one — chain link across the back of a cedar job
-    // bills at their chain-link number.
+    // bills at their chain-link number. It builds at the PRIMARY
+    // fence's height when the sibling offers it (nearest otherwise),
+    // with that height's factor — the old code pinned every section to
+    // the sibling's default height and skipped the factor entirely.
     const mt = ratedType(m.type as FenceTypeId, fence.rates);
-    const mLf = Math.round(m.lf);
+    const mLf = Math.round(m.lf * mixScale);
+    const mHt = nearestHeight(mt, fence.heightFt);
+    const mHf = heightFactor(mt, mHt);
     // A mixed section is a DIFFERENT commodity — chain link across the
     // back of a cedar job is steel, not lumber — so it takes its own
     // material factor, not the primary type's.
     const mMatF = materialFactor(mk, mt.id);
     lines.push({
       id: `fence-mixed-${mt.id}`,
-      name: `${mt.label} section — ${mt.defaultHeightFt}' (${mLf} LF)`,
+      name: `${mt.label} section — ${mHt}' (${mLf} LF)`,
       description: "Built at its own rate along the marked stretch",
       quantity: mLf,
       unit: "LF",
-      unitPrice: round2(mt.materialPerLf * waste * mMatF),
+      unitPrice: round2(mt.materialPerLf * mHf * waste * mMatF),
       taxable: true,
     });
     lines.push({
@@ -201,7 +249,7 @@ function buildFenceLineItems(
       quantity: mLf,
       unit: "LF",
       unitPrice: round2(
-        mt.laborPerLf * TERRAIN_FACTOR[fence.terrain as Terrain] * labF,
+        mt.laborPerLf * mHf * TERRAIN_FACTOR[fence.terrain as Terrain] * labF,
       ),
       taxable: false,
     });
@@ -209,7 +257,10 @@ function buildFenceLineItems(
   // Gates, steps, wall anchors, stain and tear-out are part bought /
   // part worked — each takes a blend of the market's material and labor
   // factors at the split documented in LINE_MATERIAL_SHARE.
-  const gateF = blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.gate);
+  // A gate is a piece of the fence beside it — an 8' privacy gate has a
+  // heavier frame, a third hinge and more infill than a 4' one, so gate
+  // lines take the same height factor as the fence.
+  const gateF = blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.gate) * hf;
   if (gatesSingle > 0)
     lines.push({
       id: "gate-single",
@@ -231,11 +282,12 @@ function buildFenceLineItems(
       taxable: true,
     });
   customWidths.slice(0, gatesCustom).forEach((w, i) => {
-    // Anchor pricing on the presets: ≤5' ≈ a walk gate; wider scales
-    // linearly through the 10' drive-gate price (2.4× walk).
-    const price = round2(
-      (w <= 5 ? t.gateSingle : t.gateSingle * 2.4 * (w / 10)) * gateF,
-    );
+    // Anchored on the presets and CONTINUOUS between them: a walk gate
+    // (≤4') is 1×, the 10' drive gate is 2.4×, and widths between
+    // interpolate — the old ≤5'/&gt;5' cliff repriced a gate 47% for one
+    // extra inch. Past 10', keep the drive gate's per-foot rate.
+    const widthF = w <= 4 ? 1 : w <= 10 ? 1 + 1.4 * ((w - 4) / 6) : 2.4 * (w / 10);
+    const price = round2(t.gateSingle * widthF * gateF);
     lines.push({
       id: `gate-custom-${i}`,
       name: `Custom gate (${w}') — framed & hung`,
@@ -256,17 +308,44 @@ function buildFenceLineItems(
       unitPrice: round2(28 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.step)),
       taxable: true,
     });
-  if (fence.postUpgrade) {
-    // Mirror the takeoff's post count from the same inputs: sections at
-    // the type's spacing; line posts = sections − 1 − corners; plus
-    // corner/end posts and a pair per gate.
-    const corners = measurements.outsideCorners + measurements.insideCorners;
-    const sections = Math.max(1, Math.ceil(lf / t.postSpacingFt));
-    const posts =
-      Math.max(0, sections - 1 - corners) +
-      corners +
-      measurements.endCaps +
-      liveGates * 2;
+  // One post count for the whole engine: the same takeoff the BOM panel
+  // shows. Re-deriving it here from a lumped single-run formula meant
+  // the contractor could read "41 posts" in the takeoff and get billed
+  // for 26.
+  const corners = measurements.outsideCorners + measurements.insideCorners;
+  // measurements.eaveLF is NET of gate openings — hand the takeoff the
+  // drawn length back (net + openings) or it subtracts the gates twice.
+  const gateOpenings =
+    gatesSingle * 4 +
+    gatesDouble * 10 +
+    customWidths.slice(0, gatesCustom).reduce((a, w) => a + w, 0);
+  const tk = computeFenceTakeoff({
+    type: t.id as FenceTypeId,
+    heightFt: hFt,
+    totalLf: totalLfAll + gateOpenings,
+    runLengths: fence.runLengths,
+    mixed: mixed.map((m) => ({ type: m.type as FenceTypeId, lf: m.lf })),
+    corners,
+    ends: measurements.endCaps,
+    gatesSingle,
+    gatesDouble,
+    gatesCustomWidthsFt: customWidths.slice(0, gatesCustom),
+    terrain: fence.terrain as Terrain,
+    wastePct: measurements.wasteFactorPct,
+    postSpacingFt: fence.postSpacingFt,
+    market: mk,
+  });
+  // A post upgrade only exists where the base build can take it: wood
+  // fences on standard 4×4 stock. Chain link and ornamental are already
+  // steel, vinyl rails route through vinyl posts, split rail is
+  // mortised — and horizontal-modern ships on 6×6 stock, so selling it
+  // the 6×6 "upgrade" was billing for what's already in the base price.
+  const upgradeApplies =
+    fence.postUpgrade &&
+    t.category === "wood" &&
+    !(fence.postUpgrade === "6x6" && t.spec.postWidthIn >= 5.5);
+  if (upgradeApplies) {
+    const posts = tk.posts.total;
     lines.push({
       id: "fence-post-upgrade",
       name:
@@ -296,17 +375,39 @@ function buildFenceLineItems(
     // Posts on the wall span are core-drilled + epoxy-anchored to the
     // wall cap instead of dug and set in concrete: anchor kit + drilling
     // time per post (posts every spacing across the span, +1 to close).
-    const wallPosts =
-      Math.floor(Math.max(0, fence.wallTopLf!) / t.postSpacingFt) + 1;
+    // Clamped to the fence that exists — an entered span longer than
+    // the fence billed phantom anchors.
+    const wallLf = Math.min(Math.max(0, fence.wallTopLf!), totalLfAll);
+    const wallPosts = Math.min(
+      tk.posts.total,
+      Math.floor(wallLf / effSpacing) + 1,
+    );
     lines.push({
       id: "fence-wall-mount",
       name: "Retaining-wall mounting — core-drilled anchors",
-      description: `${wallPosts} posts anchored on ${Math.round(fence.wallTopLf!)} LF of wall top (no digging on the wall)`,
+      description: `${wallPosts} posts anchored on ${Math.round(wallLf)} LF of wall top (no digging on the wall)`,
       quantity: wallPosts,
       unit: "ea",
       unitPrice: round2(
         72 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.wallMount),
       ),
+      taxable: true,
+    });
+    // The anchors REPLACE dug-and-poured footings, and the $/LF
+    // material line still carries those footings across the wall span —
+    // credit them back so the client isn't paying for concrete that is
+    // explicitly not being poured. (The takeoff already nets the bags
+    // out of the BOM; this is the dollars catching up.)
+    const footingCredit = round2(
+      t.materialPerLf * POST_MATERIAL_SHARE * effSpacing * hf * waste * matF,
+    );
+    lines.push({
+      id: "fence-wall-credit",
+      name: "Footing credit — wall-anchored posts",
+      description: "Dug footings & concrete not needed on the wall span",
+      quantity: wallPosts,
+      unit: "ea",
+      unitPrice: -footingCredit,
       taxable: true,
     });
   }
@@ -325,13 +426,28 @@ function buildFenceLineItems(
       id: "fence-stain",
       name: "Stain & seal (both faces)",
       description: "Premium penetrating stain, 2 coats",
-      quantity: Math.ceil(lf * fence.heightFt * 2),
+      quantity: Math.ceil(lf * hFt * 2),
       unit: "sq ft",
       unitPrice: round2(
         1.1 * blendedFactor(mk, t.id, LINE_MATERIAL_SHARE.stain),
       ),
       taxable: true,
     });
+  // Mobilization floor: when the whole job sums under the minimum, a
+  // visible line makes up the difference — a 30 LF gate repair still
+  // rolls a truck and burns a morning. Only when there's real work.
+  const jobSubtotal = lines.reduce((a, l) => a + l.quantity * l.unitPrice, 0);
+  if (jobSubtotal > 0 && jobSubtotal < FENCE_JOB_MINIMUM) {
+    lines.push({
+      id: "fence-job-minimum",
+      name: "Mobilization & job minimum",
+      description: "Small-job floor — crew, truck & setup",
+      quantity: 1,
+      unit: "ea",
+      unitPrice: round2(FENCE_JOB_MINIMUM - jobSubtotal),
+      taxable: false,
+    });
+  }
   return lines;
 }
 

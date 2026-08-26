@@ -10,11 +10,13 @@ import {
   fenceType,
   heightFactor,
   TERRAIN_FACTOR,
+  type FenceType,
   type FenceTypeId,
   type Terrain,
 } from "./catalog";
 import type { MarketSnapshot } from "./market";
 import type { RateBook } from "./rates";
+import { burialFt } from "./slope";
 
 export type FenceLayoutInput = {
   type: FenceTypeId;
@@ -99,18 +101,57 @@ const CAP_LABEL: Record<string, string> = {
   dome: "Dome",
 };
 
-/** Concrete bags per set post — deeper holes for taller fences. */
-function concreteBagsPerPost(heightFt: number): number {
-  return heightFt >= 8 ? 3 : heightFt >= 6 ? 2 : 1.5;
+/** The height the mixed-section engine builds a sibling type at: the
+ *  primary fence's height when the sibling offers it, else the nearest
+ *  height it DOES come in (ties break low). A 6' cedar job's chain-link
+ *  stretch is a 6' stretch, not the catalog default. */
+export function nearestHeight(t: FenceType, heightFt: number): number {
+  let best = t.defaultHeightFt;
+  let bestD = Infinity;
+  for (const h of t.heightsFt) {
+    const d = Math.abs(h - heightFt);
+    if (d < bestD || (d === bestD && h < best)) {
+      best = h;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/**
+ * Concrete per set post, from the hole that actually gets dug: diameter
+ * 3× the post width (the auger rule), depth to the burial line — which
+ * is frost-aware — minus the post's own displacement. A 60 lb bag
+ * yields ~0.45 ft³; 10% covers spillage and over-dig. The old flat
+ * 1.5/2/3-bags-by-height schedule ran a crew out of mix mid-job in the
+ * South and didn't begin to cover a northern frost hole.
+ */
+function concreteBagsPerPost(
+  heightFt: number,
+  postWidthIn: number,
+  frostIn: number,
+): number {
+  const depthFt = burialFt(heightFt, frostIn);
+  // Auger rule: 3× the post width, floored at 8" and capped at 12" —
+  // nobody bores a 16" hole for a 6×6, they size up the auger one step.
+  const holeDiaFt = Math.min(12, Math.max(8, postWidthIn * 3)) / 12;
+  const holeFt3 = Math.PI * (holeDiaFt / 2) ** 2 * depthFt;
+  const postFt3 = (postWidthIn / 12) ** 2 * depthFt;
+  return (Math.max(0, holeFt3 - postFt3) / 0.45) * 1.1;
 }
 
 export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   const t = fenceType(input.type);
+  // Spacing override: stick builds cap at 8' — that's what a 2×4 rail
+  // spans — and mesh runs to 12'. Panel systems come in fixed sections,
+  // and rail builds (split/ranch) are fixed by the rail stock itself: a
+  // 10' mortised split rail cannot be built at 4' o.c.
+  const spacingCap = t.build === "stick" ? 8 : 12;
   const spacingFt =
-    t.build !== "panel" &&
+    (t.build === "stick" || t.build === "mesh") &&
     Number.isFinite(input.postSpacingFt) &&
     (input.postSpacingFt as number) >= 4 &&
-    (input.postSpacingFt as number) <= 12
+    (input.postSpacingFt as number) <= spacingCap
       ? (input.postSpacingFt as number)
       : t.postSpacingFt;
   const waste = 1 + Math.min(30, Math.max(0, input.wastePct ?? 10)) / 100;
@@ -147,12 +188,17 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     (acc, r) => acc + Math.ceil((r * netRatio) / spacingFt),
     0,
   );
-  // Posts: one per section boundary (sections+1 per open run), corners
-  // already sit on boundaries but need the heavier set (counted as
-  // upgrades, not extra posts), ends terminate runs, gates add a pair
-  // each. A closed loop (ends=0) has no end posts — its boundary posts
-  // are all line/corner posts.
-  const linePosts = Math.max(0, sections - 1 - input.corners);
+  // Posts: one per section boundary. An OPEN run with S sections has
+  // S+1 boundary posts and contributes 2 ends; a CLOSED ring has
+  // exactly S and no ends. So boundaries = sections + ends/2, and the
+  // line posts are what's left after corners and ends claim theirs.
+  // (The old `sections − 1 − corners` was the single-open-run special
+  // case — it undercounted a ring by one and overcounted three separate
+  // runs by two.)
+  const linePosts = Math.max(
+    0,
+    Math.round(sections - input.corners - input.ends / 2),
+  );
   const cornerPosts = Math.max(0, input.corners);
   const endPosts = Math.max(0, input.ends);
   const gatePosts = (input.gatesSingle + input.gatesDouble + customGates.length) * 2;
@@ -171,15 +217,24 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     if (qty > 0) bom.push({ key, label, qty: Math.ceil(qty), unit });
   };
 
-  add("post-line", `Line posts (${spacingFt}' o.c.)`, linePosts * waste, "ea");
+  // Posts are DISCRETE units — a crew orders a spare or two, not 10%.
+  // Waste stays on cut goods (pickets, rails, fabric, wire), where
+  // offcuts are real.
+  add("post-line", `Line posts (${spacingFt}' o.c.)`, linePosts, "ea");
   add("post-corner", "Corner posts", cornerPosts, "ea");
   add("post-end", "End posts", endPosts, "ea");
   add("post-gate", "Gate posts (heavy-set)", gatePosts, "ea");
+  // Frost line from the job's market: a Minneapolis hole is twice a
+  // Dallas hole, and the concrete goes with it.
+  const frostIn = input.market?.frostIn ?? 0;
   if (t.spec.setInConcrete) {
+    const bagsLine = concreteBagsPerPost(input.heightFt, t.spec.postWidthIn, frostIn);
+    const bagsTerm = concreteBagsPerPost(input.heightFt, t.spec.terminalWidthIn, frostIn);
     add(
       "concrete",
       "Concrete (60 lb bags)",
-      (totalPosts - wallPosts) * concreteBagsPerPost(input.heightFt),
+      Math.max(0, linePosts - wallPosts) * bagsLine +
+        (cornerPosts + endPosts + gatePosts) * bagsTerm,
       "bag",
     );
   } else {
@@ -200,24 +255,43 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   );
 
   if (t.build === "stick") {
-    const rails = sections * t.railsPerSection(input.heightFt);
-    add("rail", `Rails (${spacingFt}')`, rails * waste, "ea");
+    const railsPer = t.railsPerSection(input.heightFt);
+    const rails = sections * railsPer;
+    add("rail", `Rails (${spacingFt}' bays)`, rails * waste, "ea");
     const w = t.picketWidthIn ?? 5.5;
     const gap = t.picketGapIn ?? 0;
     const pitch = Math.max(1.5, w + gap); // board-on-board overlap floors at 1.5"
-    let pickets = (netFenceLf * 12) / pitch;
-    if (input.type === "shadowbox") pickets *= 2; // both faces
-    // NOTE: picket COUNT doesn't grow with height — taller fences use
-    // longer pickets (priced via heightFactor on the $/LF side), not more.
-    add("picket", "Pickets", pickets * waste, "ea");
-    add(
-      "fasteners",
-      "Fasteners (5 lb boxes)",
-      (pickets * waste) / 350,
-      "box",
-    );
+    if (railsPer === 0) {
+      // Horizontal build — the boards ARE the horizontal members,
+      // stacked UP the fence: courses = height / board pitch, one board
+      // per bay per course. Height is what grows the count here; the
+      // old vertical-picket formula gave a 4' and a 6' fence identical
+      // boards.
+      const courses = Math.ceil((input.heightFt * 12) / pitch);
+      const slats = courses * sections;
+      add("picket", `1×6 slats (${spacingFt}' bays, ${courses} courses)`, slats * waste, "ea");
+      // 4 screws per slat end ×2 ends, 500 per box.
+      add("fasteners", "Screws (5 lb boxes)", (slats * 8) / 500, "box");
+    } else {
+      let pickets = (netFenceLf * 12) / pitch;
+      if (input.type === "shadowbox") pickets *= 2; // both faces
+      // NOTE: picket COUNT doesn't grow with height — taller fences use
+      // longer pickets (priced via heightFactor on the $/LF side), not more.
+      add("picket", "Pickets", pickets * waste, "ea");
+      // Two nails per picket per rail (plus 10% bend/misfire); a 5 lb
+      // box of ring-shank runs ~500. The old pickets/350 was a third of
+      // what the gun actually shoots.
+      add(
+        "fasteners",
+        "Fasteners (5 lb boxes)",
+        (pickets * Math.max(1, railsPer) * 2 * 1.1) / 500,
+        "box",
+      );
+    }
   } else if (t.build === "panel") {
-    add("panel", `${t.label} panels (${t.postSpacingFt}')`, sections * waste, "ea");
+    // Panels are discrete units — nobody buys 10% spare prefab panels;
+    // ceil() on the waste factor was silently adding a whole one.
+    add("panel", `${t.label} panels (${t.postSpacingFt}')`, sections, "ea");
     if (t.category === "vinyl") {
       // Vinyl rails slide THROUGH routed posts — no brackets at all. A
       // privacy panel's bottom rail carries an aluminum stiffener so it
@@ -234,15 +308,22 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     // Residential chain link has no bottom rail — a 7-ga tension wire
     // runs the base to stop the fabric being pushed up.
     add("tension-wire", "Bottom tension wire (7-ga)", netFenceLf * waste, "lf");
-    add("tension-bar", "Tension bars", input.ends + input.corners + gatePosts, "ea");
+    // A corner terminates fabric on BOTH faces — two bars where an end
+    // or gate post takes one.
+    const terminals = input.ends + input.corners + gatePosts;
+    add("tension-bar", "Tension bars", input.ends + input.corners * 2 + gatePosts, "ea");
     // Bands only wrap TERMINAL posts (ends/corners/gate posts) — line
     // posts carry the fabric on the top rail and ties.
     add(
       "tension-band",
       "Tension bands",
-      (input.ends + input.corners + gatePosts) * (input.heightFt / 1.2),
+      terminals * (input.heightFt / 1.2),
       "ea",
     );
+    // The top rail dead-ends into a cup at every terminal, clamped by a
+    // brace band — the parts a crew can't tension the run without.
+    add("rail-end", "Rail end cups", terminals, "ea");
+    add("brace-band", "Brace bands", terminals, "ea");
     add("tie-wire", "Aluminum ties (100 ct bags)", netFenceLf / 60, "box");
   } else if (t.build === "rail") {
     const rails = sections * t.railsPerSection(input.heightFt);
@@ -288,11 +369,13 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     "ea",
   );
   if (input.stain && t.stainable) {
-    // Two faces; a gallon covers ~150 sq ft on rough-sawn wood.
+    // Two faces × TWO COATS; a gallon covers ~150 sq ft per coat on
+    // rough-sawn wood. The proposal sells "2 coats" — buying one left
+    // the crew half a job short of product.
     add(
       "stain",
-      "Stain / seal (gallons)",
-      (netFenceLf * input.heightFt * 2) / 150,
+      "Stain / seal (gallons, 2 coats)",
+      (netFenceLf * input.heightFt * 2 * 2) / 150,
       "ea",
     );
   }
@@ -301,20 +384,29 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
   }
 
   // Mixed sections: run the same engine on each secondary stretch (its
-  // own type, its own default height, 2 terminal posts at the splices)
-  // and fold the BOM in with prefixed keys + labels.
+  // own type, at the PRIMARY fence's height when the sibling offers it,
+  // 2 terminal posts at the splices) and fold the BOM in with prefixed
+  // keys + labels. When the drawn sections exceed the fence they sit
+  // on, the clamp distributes proportionally — clamping each section
+  // against the whole-job cap let two sections each pass and together
+  // exceed it.
   let mixedLaborHours = 0;
+  const rawMixedLf = mixed.reduce((a, m) => a + m.lf, 0);
+  const mixScale = rawMixedLf > 0 ? mixedLf / rawMixedLf : 0;
   for (const m of mixed) {
+    const mt = fenceType(m.type);
     const sub = computeFenceTakeoff({
       type: m.type,
-      heightFt: fenceType(m.type).defaultHeightFt,
-      totalLf: Math.min(m.lf, mixedLf),
+      heightFt: nearestHeight(mt, input.heightFt),
+      totalLf: m.lf * mixScale,
       corners: 0,
       ends: 2,
       gatesSingle: 0,
       gatesDouble: 0,
       terrain: input.terrain,
       wastePct: input.wastePct,
+      postSpacingFt: input.postSpacingFt,
+      market: input.market,
     });
     const label = fenceType(m.type).label;
     for (const line of sub.bom) {
@@ -327,10 +419,14 @@ export function computeFenceTakeoff(input: FenceLayoutInput): FenceTakeoff {
     mixedLaborHours += sub.laborHours;
   }
 
-  // Crew-hours: base rate ≈ 2.5 LF/hour/person for stick builds on flat
-  // ground, faster for mesh/panels; terrain multiplies dig time.
+  // Crew-hours: ≈4.5 LF/person-hour for stick builds on flat ground —
+  // a 3-man crew doing 100–110 LF/day, which is real residential
+  // production. (The old 2.5 predicted 60 LF/day and made every
+  // schedule read two days long; cross-checked against laborPerLf it
+  // implied a $33/hr all-in crew cost, below the wage the market table
+  // itself cites.) Mesh and panels hang faster; rail is fastest.
   const lfPerHour =
-    t.build === "mesh" ? 4.5 : t.build === "panel" ? 3.5 : t.build === "rail" ? 5 : 2.5;
+    t.build === "mesh" ? 7 : t.build === "panel" ? 6 : t.build === "rail" ? 8 : 4.5;
   const laborHours =
     (netFenceLf / lfPerHour) * TERRAIN_FACTOR[input.terrain] * hf +
     (input.gatesSingle + input.gatesDouble + customGates.length) * 1.5 +

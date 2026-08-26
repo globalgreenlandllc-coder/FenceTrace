@@ -18,6 +18,7 @@
  */
 import {
   fenceType,
+  heightFactor,
   type FenceTypeId,
 } from "./catalog";
 import { computeFenceTakeoff, type FenceLayoutInput } from "./takeoff";
@@ -100,6 +101,7 @@ export function layoutToPricingInputs(layout: FenceLayoutInput): {
       corners: Math.max(0, layout.corners),
       ends: Math.max(0, layout.ends),
       steppedSections: Math.max(0, layout.steppedSections ?? 0),
+      runLengths: layout.runLengths,
       wallTopLf: Math.max(0, layout.wallTopLf ?? 0),
       postUpgrade: layout.postUpgrade,
       postSpacingFt: layout.postSpacingFt,
@@ -174,10 +176,31 @@ export type FenceTier = {
 
 /** Tier ladder for a chosen base type: Good = value build of the same
  *  category, Better = the chosen type as drawn, Best = chosen type plus
- *  stain/seal (wood) or the premium sibling, longer warranty. */
-export function fenceTiers(base: FenceTypeId): FenceTier[] {
+ *  stain/seal (wood) or the premium sibling, longer warranty.
+ *
+ *  Pass the job's height and siblings are held to it: a sibling that
+ *  doesn't COME in that height falls back to the base type instead of
+ *  silently quoting an 8' job as the 4' fence the sibling tops out at.
+ *  A "value" sibling that would actually cost MORE at this height
+ *  (4' picket → 6'-class pine) collapses to the base too — Good must
+ *  never out-price Better. When a tier ends up being the same fence,
+ *  its tagline says what actually differs (markup + warranty), not a
+ *  premium line that doesn't exist. */
+export function fenceTiers(base: FenceTypeId, heightFt?: number): FenceTier[] {
   const t = fenceType(base);
-  const valueSibling: FenceTypeId =
+  // Sibling must offer the job's height, else the tier quotes the base.
+  const held = (id: FenceTypeId): FenceTypeId => {
+    if (id === base) return base;
+    if (heightFt !== undefined && !fenceType(id).heightsFt.includes(heightFt))
+      return base;
+    return id;
+  };
+  const costPerLf = (id: FenceTypeId): number => {
+    const ft = fenceType(id);
+    const h = heightFt !== undefined ? heightFt : ft.defaultHeightFt;
+    return (ft.materialPerLf + ft.laborPerLf) * heightFactor(ft, h);
+  };
+  let valueSibling: FenceTypeId = held(
     t.category === "wood"
       ? "pt-pine-privacy"
       : t.category === "vinyl"
@@ -186,22 +209,35 @@ export function fenceTiers(base: FenceTypeId): FenceTier[] {
           ? "chain-link-galv"
           : t.category === "aluminum" || t.category === "steel"
             ? "aluminum-ornamental"
-            : "split-rail-2";
-  const premiumSibling: FenceTypeId =
+            : "split-rail-2",
+  );
+  if (valueSibling !== base && costPerLf(valueSibling) >= costPerLf(base)) {
+    valueSibling = base;
+  }
+  const premiumSibling: FenceTypeId = held(
     t.category === "wood"
       ? "board-on-board"
       : t.category === "chain-link"
         ? "chain-link-black"
         : t.category === "aluminum" || t.category === "steel"
           ? "steel-ornamental"
-          : base;
+          : base === "vinyl-picket"
+            ? "vinyl-privacy"
+            : base === "split-rail-2"
+              ? "ranch-rail-3"
+              : base,
+  );
 
+  const bestType = t.stainable ? base : premiumSibling;
   return [
     {
       id: "good",
       name: "Good",
-      tagline: "Solid build, best price",
-      type: valueSibling === base ? base : valueSibling,
+      tagline:
+        valueSibling !== base
+          ? "Solid build, best price"
+          : "Same fence, value-priced — 1-yr warranty",
+      type: valueSibling,
       stain: false,
       markupPct: 30,
       warrantyYears: 1,
@@ -221,8 +257,10 @@ export function fenceTiers(base: FenceTypeId): FenceTier[] {
       name: "Best",
       tagline: t.stainable
         ? "Stained, sealed & extended warranty"
-        : "Premium line & extended warranty",
-      type: t.stainable ? base : premiumSibling,
+        : bestType !== base
+          ? "Premium line & extended warranty"
+          : "Priority scheduling & 5-yr warranty",
+      type: bestType,
       stain: t.stainable,
       markupPct: 38,
       warrantyYears: 5,

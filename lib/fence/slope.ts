@@ -93,9 +93,13 @@ export function rackingLimitFt(build: "stick" | "panel" | "mesh" | "rail"): numb
   return 1.0; // stick-built & rail
 }
 
-/** Burial depth: a third of the height, never less than 2'. */
-export function burialFt(heightFt: number): number {
-  return Math.max(2, heightFt / 3);
+/** Burial depth: a third of the height, never less than 2' — and never
+ *  above the local frost line. A post footed above frost heaves out of
+ *  plumb by the second spring, so in Minneapolis (48" frost) a 6' fence
+ *  digs 4' holes where Dallas digs 2'. `frostIn` comes from the job's
+ *  market snapshot; omitted (old saved estimates) means height-only. */
+export function burialFt(heightFt: number, frostIn = 0): number {
+  return Math.max(2, heightFt / 3, frostIn / 12);
 }
 
 export function analyzeRunSlope(
@@ -167,6 +171,8 @@ export function summarizeSlopes(
   sectionLenFt: number,
   heightFt: number,
   build: "stick" | "panel" | "mesh" | "rail",
+  /** Local code frost depth, inches (market snapshot). */
+  frostIn = 0,
 ): SlopeSummary {
   const limit = rackingLimitFt(build);
   const runs = runElevations
@@ -184,10 +190,19 @@ export function summarizeSlopes(
   const wallSteps = all.reduce((a, r) => a + r.wallSteppedSections, 0);
   const maxStep = all.reduce((m, r) => Math.max(m, r.maxStepFt), 0);
 
+  // >20% average grade gets ROCKY-grade digging time, exactly as the
+  // header rules promise — before this it was unreachable from
+  // measurement and the 1.55× factor only existed as a manual pick.
   const suggestedTerrain: Terrain =
-    avg < 5 && maxG < 10 ? "flat" : avg < 12 ? "sloped" : "steep";
+    avg < 5 && maxG < 10
+      ? "flat"
+      : avg < 12
+        ? "sloped"
+        : avg <= 20
+          ? "steep"
+          : "rocky";
 
-  const base = heightFt + burialFt(heightFt);
+  const base = heightFt + burialFt(heightFt, frostIn);
   return {
     runs,
     avgGradePct: round2(avg),

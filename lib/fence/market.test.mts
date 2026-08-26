@@ -216,8 +216,11 @@ test("a mixed section prices on ITS OWN commodity, not the primary type's", () =
     mixed: [{ type: "chain-link-galv", lf: 50 }],
   });
   const mixedLine = priced.lines.find((l) => l.key === "fence-mixed-chain-link-galv")!;
+  // The section builds at the PRIMARY fence's height (6' on chain link,
+  // default 4' → 1.5× height factor), at its own commodity's factor.
   const expected =
-    Math.round(9 * 1.1 * materialFactor(atl, "chain-link-galv") * 100) / 100;
+    Math.round(9 * 1.5 * 1.1 * materialFactor(atl, "chain-link-galv") * 100) /
+    100;
   assert.equal(Math.round((mixedLine.amount / 50) * 100) / 100, expected);
 });
 

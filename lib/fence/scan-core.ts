@@ -137,6 +137,10 @@ async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome>
     try {
       const u = new URL("https://maps.googleapis.com/maps/api/geocode/json");
       u.searchParams.set("address", address);
+      // US only — the autocomplete already filters to country:us, but a
+      // hand-typed Toronto address geocoded fine and then priced at the
+      // national-fallback market with a made-up tax rate.
+      u.searchParams.set("components", "country:US");
       u.searchParams.set("key", key);
       const res = await fetch(u, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) {

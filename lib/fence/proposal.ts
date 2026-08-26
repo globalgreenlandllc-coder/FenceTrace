@@ -47,7 +47,7 @@ export type FenceTierPatch = {
 /** Three tier patches for the drawn layout: same geometry facts on every
  *  tier, material/stain laddered by fenceTiers. */
 export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
-  return fenceTiers(input.type).map((tier) => {
+  return fenceTiers(input.type, input.heightFt).map((tier) => {
     const t = fenceType(tier.type);
     const heightFt = t.heightsFt.includes(input.heightFt)
       ? input.heightFt
@@ -56,18 +56,40 @@ export function fenceTierPatches(input: FenceDraftInput): FenceTierPatch[] {
       input.gatesSingle +
       input.gatesDouble +
       (input.gatesCustomWidthsFt?.length ?? 0);
+    // The spec sheet states what will actually be built: the EFFECTIVE
+    // spacing (a 6' o.c. quote must not ship an 8' o.c. proposal), and
+    // gravel-tamped systems don't claim concrete.
+    const effSpacing =
+      (t.build === "stick" || t.build === "mesh") &&
+      Number.isFinite(input.postSpacingFt) &&
+      (input.postSpacingFt as number) >= 4 &&
+      (input.postSpacingFt as number) <= (t.build === "stick" ? 8 : 12)
+        ? (input.postSpacingFt as number)
+        : t.postSpacingFt;
+    // A post upgrade only applies where the build can take it — a
+    // chain-link Good tier must not advertise 6×6 timber posts.
+    const tierUpgrade =
+      input.postUpgrade &&
+      t.category === "wood" &&
+      !(input.postUpgrade === "6x6" && t.spec.postWidthIn >= 5.5)
+        ? input.postUpgrade
+        : undefined;
     const highlights = [
       `${heightFt}' ${t.label.toLowerCase()} — ${t.blurb}`,
-      "Posts set in concrete, " + t.postSpacingFt + "' on center",
+      (t.spec.setInConcrete
+        ? "Posts set in concrete, "
+        : "Posts tamped in gravel, ") +
+        effSpacing +
+        "' on center",
       gates > 0
         ? `${gates} ${gates === 1 ? "gate" : "gates"} — hung, latched & adjusted`
         : "Layout staked & string-lined before digging",
       ...((tier.stain || input.stain) && t.stainable
         ? ["Penetrating stain & seal, both faces"]
         : []),
-      ...(input.postUpgrade === "steel"
+      ...(tierUpgrade === "steel"
         ? ["Galvanized steel posts — never rot, warp or lean"]
-        : input.postUpgrade === "6x6"
+        : tierUpgrade === "6x6"
           ? ["Heavy 6×6 pressure-treated posts throughout"]
           : []),
       ...(input.mixed ?? [])

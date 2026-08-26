@@ -200,6 +200,10 @@ export type FenceEstimateConfig = {
   ends: number;
   /** Sections stepping down a measured slope (terrain analysis). */
   steppedSections?: number;
+  /** Per-run lengths, feet — lets a saved estimate keep the multi-run
+   *  post math (3 runs need more posts than one long run). Absent on
+   *  estimates saved before this field existed: single-run counting. */
+  runLengths?: number[];
   /** LF of fence mounted on top of a retaining wall — those posts are
    *  core-drilled + anchored to the wall cap instead of dug and set in
    *  concrete (mount hardware + drilling labor priced per post). */

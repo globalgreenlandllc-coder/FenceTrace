@@ -503,8 +503,17 @@ export const sampleProposal: Proposal = {
     {
       id: "exclusions",
       title: "Exclusions",
+      // Shipped ON: this is the clause that decides who pays when the
+      // auger hits ledge or the city wants a permit — a proposal silent
+      // on it eats those costs. The contractor can still toggle it off.
       body: "Pricing excludes unmarked private utilities, rock or root obstructions requiring machine excavation, retaining or grading work, and any permits beyond standard residential.",
-      enabled: false,
+      enabled: true,
+    },
+    {
+      id: "codes",
+      title: "Heights, setbacks & local codes",
+      body: "Fence height limits, street-side and front-yard rules, setbacks and permit requirements vary by municipality and HOA. Owner is responsible for confirming local requirements and any HOA approval before installation; corrections required by unverified restrictions are billed as extra work.",
+      enabled: true,
     },
   ],
   depositPct: 30,

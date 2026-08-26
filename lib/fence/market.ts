@@ -131,6 +131,12 @@ const BASIS_REGIONS = {
   midwest: { cedar: 1.02, pine: 0.98, vinyl: 1.0, metal: 1.0 },
   /** Northeast — dense yards, short hauls, but everything imported. */
   northeast: { cedar: 1.05, pine: 1.0, vinyl: 1.02, metal: 1.02 },
+  /** Alaska — cedar is NOT PNW-cheap once it's barged past Ketchikan,
+   *  and vinyl/steel carry the same freight; the state `mat` index
+   *  alone was crediting Fairbanks with Seattle lumber prices. */
+  alaska: { cedar: 1.0, pine: 1.1, vinyl: 1.12, metal: 1.12 },
+  /** Hawaii — every commodity crosses the Pacific in a container. */
+  hawaii: { cedar: 1.15, pine: 1.12, vinyl: 1.1, metal: 1.12 },
 } satisfies Record<string, BasisAdj>;
 
 type BasisRegion = keyof typeof BASIS_REGIONS;
@@ -151,60 +157,65 @@ type StateRow = {
   /** True where installation labor on real property is itself taxable
    *  (AZ prime contracting, HI GET, NM GRT, SD, WV, CT residential). */
   laborTax?: true;
+  /** Typical code frost depth, INCHES. Post holes bottom out below
+   *  this line or the fence heaves out of plumb by the second spring —
+   *  it's the number every local contractor knows by heart, so the
+   *  takeoff has to know it too. 0 = no frost consideration. */
+  frost: number;
 };
 
 export const STATE_MARKETS: Record<string, StateRow> = {
-  AL: { name: "Alabama", region: "south", mat: 0.97, lab: 0.81, tax: 0.0929 },
-  AK: { name: "Alaska", region: "pnw", mat: 1.28, lab: 1.12, tax: 0.0182 },
-  AZ: { name: "Arizona", region: "west", mat: 1.0, lab: 0.92, tax: 0.0838, laborTax: true },
-  AR: { name: "Arkansas", region: "south", mat: 0.96, lab: 0.81, tax: 0.0945 },
-  CA: { name: "California", region: "west", mat: 1.06, lab: 1.19, tax: 0.0885 },
-  CO: { name: "Colorado", region: "west", mat: 1.0, lab: 1.0, tax: 0.0781 },
-  CT: { name: "Connecticut", region: "northeast", mat: 1.04, lab: 1.12, tax: 0.0635, laborTax: true },
-  DE: { name: "Delaware", region: "northeast", mat: 1.02, lab: 0.98, tax: 0 },
-  DC: { name: "District of Columbia", region: "northeast", mat: 1.05, lab: 1.09, tax: 0.06 },
-  FL: { name: "Florida", region: "south", mat: 1.0, lab: 0.86, tax: 0.07 },
-  GA: { name: "Georgia", region: "south", mat: 0.97, lab: 0.86, tax: 0.0738 },
-  HI: { name: "Hawaii", region: "west", mat: 1.35, lab: 1.25, tax: 0.045, laborTax: true },
-  ID: { name: "Idaho", region: "pnw", mat: 0.98, lab: 0.92, tax: 0.0602 },
-  IL: { name: "Illinois", region: "midwest", mat: 1.02, lab: 1.19, tax: 0.0886 },
-  IN: { name: "Indiana", region: "midwest", mat: 0.99, lab: 0.98, tax: 0.07 },
-  IA: { name: "Iowa", region: "midwest", mat: 0.98, lab: 0.95, tax: 0.0694 },
-  KS: { name: "Kansas", region: "midwest", mat: 0.98, lab: 0.88, tax: 0.0866 },
-  KY: { name: "Kentucky", region: "south", mat: 0.98, lab: 0.86, tax: 0.06 },
-  LA: { name: "Louisiana", region: "south", mat: 0.98, lab: 0.83, tax: 0.1012 },
-  ME: { name: "Maine", region: "northeast", mat: 1.03, lab: 0.95, tax: 0.055 },
-  MD: { name: "Maryland", region: "northeast", mat: 1.03, lab: 1.02, tax: 0.06 },
-  MA: { name: "Massachusetts", region: "northeast", mat: 1.06, lab: 1.21, tax: 0.0625 },
-  MI: { name: "Michigan", region: "midwest", mat: 0.99, lab: 1.02, tax: 0.06 },
-  MN: { name: "Minnesota", region: "midwest", mat: 1.01, lab: 1.12, tax: 0.0813 },
-  MS: { name: "Mississippi", region: "south", mat: 0.96, lab: 0.8, tax: 0.0706 },
-  MO: { name: "Missouri", region: "midwest", mat: 0.97, lab: 0.95, tax: 0.0839 },
-  MT: { name: "Montana", region: "pnw", mat: 1.02, lab: 0.95, tax: 0 },
-  NE: { name: "Nebraska", region: "midwest", mat: 0.98, lab: 0.92, tax: 0.0697 },
-  NV: { name: "Nevada", region: "west", mat: 1.02, lab: 1.03, tax: 0.0824 },
-  NH: { name: "New Hampshire", region: "northeast", mat: 1.03, lab: 1.0, tax: 0 },
-  NJ: { name: "New Jersey", region: "northeast", mat: 1.05, lab: 1.15, tax: 0.066 },
-  NM: { name: "New Mexico", region: "west", mat: 1.01, lab: 0.86, tax: 0.0762, laborTax: true },
-  NY: { name: "New York", region: "northeast", mat: 1.06, lab: 1.21, tax: 0.0853 },
-  NC: { name: "North Carolina", region: "south", mat: 0.97, lab: 0.86, tax: 0.07 },
-  ND: { name: "North Dakota", region: "midwest", mat: 1.01, lab: 0.95, tax: 0.0704 },
-  OH: { name: "Ohio", region: "midwest", mat: 0.98, lab: 0.98, tax: 0.0724 },
-  OK: { name: "Oklahoma", region: "south", mat: 0.96, lab: 0.83, tax: 0.0899 },
-  OR: { name: "Oregon", region: "pnw", mat: 0.98, lab: 1.09, tax: 0 },
-  PA: { name: "Pennsylvania", region: "northeast", mat: 1.02, lab: 1.03, tax: 0.0634 },
-  RI: { name: "Rhode Island", region: "northeast", mat: 1.04, lab: 1.07, tax: 0.07 },
-  SC: { name: "South Carolina", region: "south", mat: 0.97, lab: 0.83, tax: 0.075 },
-  SD: { name: "South Dakota", region: "midwest", mat: 1.0, lab: 0.88, tax: 0.0611, laborTax: true },
-  TN: { name: "Tennessee", region: "south", mat: 0.97, lab: 0.85, tax: 0.0955 },
-  TX: { name: "Texas", region: "south", mat: 0.97, lab: 0.88, tax: 0.082 },
-  UT: { name: "Utah", region: "west", mat: 0.99, lab: 0.93, tax: 0.0725 },
-  VT: { name: "Vermont", region: "northeast", mat: 1.04, lab: 0.98, tax: 0.0636 },
-  VA: { name: "Virginia", region: "south", mat: 1.0, lab: 0.93, tax: 0.0577 },
-  WA: { name: "Washington", region: "pnw", mat: 0.99, lab: 1.15, tax: 0.0938 },
-  WV: { name: "West Virginia", region: "south", mat: 0.99, lab: 0.9, tax: 0.0657, laborTax: true },
-  WI: { name: "Wisconsin", region: "midwest", mat: 1.0, lab: 1.05, tax: 0.057 },
-  WY: { name: "Wyoming", region: "west", mat: 1.02, lab: 0.95, tax: 0.0544 },
+  AL: { name: "Alabama", region: "south", mat: 0.97, lab: 0.81, tax: 0.0929, frost: 5 },
+  AK: { name: "Alaska", region: "alaska", mat: 1.28, lab: 1.12, tax: 0.0182, frost: 48 },
+  AZ: { name: "Arizona", region: "west", mat: 1.0, lab: 0.92, tax: 0.0838, laborTax: true, frost: 6 },
+  AR: { name: "Arkansas", region: "south", mat: 0.96, lab: 0.81, tax: 0.0945, frost: 12 },
+  CA: { name: "California", region: "west", mat: 1.06, lab: 1.19, tax: 0.0885, frost: 12 },
+  CO: { name: "Colorado", region: "west", mat: 1.0, lab: 1.0, tax: 0.0781, frost: 36 },
+  CT: { name: "Connecticut", region: "northeast", mat: 1.04, lab: 1.12, tax: 0.0635, laborTax: true, frost: 42 },
+  DE: { name: "Delaware", region: "northeast", mat: 1.02, lab: 0.98, tax: 0, frost: 24 },
+  DC: { name: "District of Columbia", region: "northeast", mat: 1.05, lab: 1.09, tax: 0.06, frost: 22 },
+  FL: { name: "Florida", region: "south", mat: 1.0, lab: 0.86, tax: 0.07, frost: 0 },
+  GA: { name: "Georgia", region: "south", mat: 0.97, lab: 0.86, tax: 0.0738, frost: 6 },
+  HI: { name: "Hawaii", region: "hawaii", mat: 1.35, lab: 1.25, tax: 0.045, laborTax: true, frost: 0 },
+  ID: { name: "Idaho", region: "pnw", mat: 0.98, lab: 0.92, tax: 0.0602, frost: 30 },
+  IL: { name: "Illinois", region: "midwest", mat: 1.02, lab: 1.19, tax: 0.0886, frost: 36 },
+  IN: { name: "Indiana", region: "midwest", mat: 0.99, lab: 0.98, tax: 0.07, frost: 30 },
+  IA: { name: "Iowa", region: "midwest", mat: 0.98, lab: 0.95, tax: 0.0694, frost: 40 },
+  KS: { name: "Kansas", region: "midwest", mat: 0.98, lab: 0.88, tax: 0.0866, frost: 24 },
+  KY: { name: "Kentucky", region: "south", mat: 0.98, lab: 0.86, tax: 0.06, frost: 15 },
+  LA: { name: "Louisiana", region: "south", mat: 0.98, lab: 0.83, tax: 0.1012, frost: 0 },
+  ME: { name: "Maine", region: "northeast", mat: 1.03, lab: 0.95, tax: 0.055, frost: 48 },
+  MD: { name: "Maryland", region: "northeast", mat: 1.03, lab: 1.02, tax: 0.06, frost: 24 },
+  MA: { name: "Massachusetts", region: "northeast", mat: 1.06, lab: 1.21, tax: 0.0625, frost: 40 },
+  MI: { name: "Michigan", region: "midwest", mat: 0.99, lab: 1.02, tax: 0.06, frost: 42 },
+  MN: { name: "Minnesota", region: "midwest", mat: 1.01, lab: 1.12, tax: 0.0813, frost: 48 },
+  MS: { name: "Mississippi", region: "south", mat: 0.96, lab: 0.8, tax: 0.0706, frost: 3 },
+  MO: { name: "Missouri", region: "midwest", mat: 0.97, lab: 0.95, tax: 0.0839, frost: 24 },
+  MT: { name: "Montana", region: "pnw", mat: 1.02, lab: 0.95, tax: 0, frost: 44 },
+  NE: { name: "Nebraska", region: "midwest", mat: 0.98, lab: 0.92, tax: 0.0697, frost: 36 },
+  NV: { name: "Nevada", region: "west", mat: 1.02, lab: 1.03, tax: 0.0824, frost: 18 },
+  NH: { name: "New Hampshire", region: "northeast", mat: 1.03, lab: 1.0, tax: 0, frost: 48 },
+  NJ: { name: "New Jersey", region: "northeast", mat: 1.05, lab: 1.15, tax: 0.066, frost: 30 },
+  NM: { name: "New Mexico", region: "west", mat: 1.01, lab: 0.86, tax: 0.0762, laborTax: true, frost: 18 },
+  NY: { name: "New York", region: "northeast", mat: 1.06, lab: 1.21, tax: 0.0853, frost: 40 },
+  NC: { name: "North Carolina", region: "south", mat: 0.97, lab: 0.86, tax: 0.07, frost: 10 },
+  ND: { name: "North Dakota", region: "midwest", mat: 1.01, lab: 0.95, tax: 0.0704, frost: 48 },
+  OH: { name: "Ohio", region: "midwest", mat: 0.98, lab: 0.98, tax: 0.0724, frost: 32 },
+  OK: { name: "Oklahoma", region: "south", mat: 0.96, lab: 0.83, tax: 0.0899, frost: 12 },
+  OR: { name: "Oregon", region: "pnw", mat: 0.98, lab: 1.09, tax: 0, frost: 18 },
+  PA: { name: "Pennsylvania", region: "northeast", mat: 1.02, lab: 1.03, tax: 0.0634, frost: 36 },
+  RI: { name: "Rhode Island", region: "northeast", mat: 1.04, lab: 1.07, tax: 0.07, frost: 36 },
+  SC: { name: "South Carolina", region: "south", mat: 0.97, lab: 0.83, tax: 0.075, frost: 4 },
+  SD: { name: "South Dakota", region: "midwest", mat: 1.0, lab: 0.88, tax: 0.0611, laborTax: true, frost: 44 },
+  TN: { name: "Tennessee", region: "south", mat: 0.97, lab: 0.85, tax: 0.0955, frost: 12 },
+  TX: { name: "Texas", region: "south", mat: 0.97, lab: 0.88, tax: 0.082, frost: 6 },
+  UT: { name: "Utah", region: "west", mat: 0.99, lab: 0.93, tax: 0.0725, frost: 30 },
+  VT: { name: "Vermont", region: "northeast", mat: 1.04, lab: 0.98, tax: 0.0636, frost: 48 },
+  VA: { name: "Virginia", region: "south", mat: 1.0, lab: 0.93, tax: 0.0577, frost: 18 },
+  WA: { name: "Washington", region: "pnw", mat: 0.99, lab: 1.15, tax: 0.0938, frost: 18 },
+  WV: { name: "West Virginia", region: "south", mat: 0.99, lab: 0.9, tax: 0.0657, laborTax: true, frost: 30 },
+  WI: { name: "Wisconsin", region: "midwest", mat: 1.0, lab: 1.05, tax: 0.057, frost: 44 },
+  WY: { name: "Wyoming", region: "west", mat: 1.02, lab: 0.95, tax: 0.0544, frost: 40 },
 };
 
 /* ------------------------------------------------------------------ */
@@ -402,6 +413,24 @@ export const ZIP3_MARKETS: Record<string, Zip3Row> = {
   "837": { label: "Boise, ID", state: "ID", mat: 1.0, lab: 1.05, tax: 0.06 },
   "995": { label: "Anchorage, AK", state: "AK", mat: 1.0, lab: 1.02, tax: 0 },
   "968": { label: "Honolulu, HI", state: "HI", mat: 1.0, lab: 1.02, tax: 0.045 },
+  // Largest metro in each state that previously had NO ZIP3 row at all
+  // — without these, Des Moines priced as rural Iowa and Omaha as rural
+  // Nebraska. Multipliers stay relative to the state average.
+  "061": { label: "Hartford, CT", state: "CT", mat: 1.0, lab: 1.03, tax: 0.0635 },
+  "198": { label: "Wilmington, DE", state: "DE", mat: 1.0, lab: 1.03, tax: 0 },
+  "503": { label: "Des Moines, IA", state: "IA", mat: 1.0, lab: 1.06, tax: 0.0694 },
+  "672": { label: "Wichita, KS", state: "KS", mat: 1.0, lab: 1.03, tax: 0.075 },
+  "041": { label: "Portland, ME", state: "ME", mat: 1.0, lab: 1.07, tax: 0.055 },
+  "392": { label: "Jackson, MS", state: "MS", mat: 1.0, lab: 1.05, tax: 0.08 },
+  "591": { label: "Billings, MT", state: "MT", mat: 1.0, lab: 1.04, tax: 0 },
+  "581": { label: "Fargo, ND", state: "ND", mat: 1.0, lab: 1.05, tax: 0.0755 },
+  "681": { label: "Omaha, NE", state: "NE", mat: 1.0, lab: 1.06, tax: 0.07 },
+  "031": { label: "Manchester, NH", state: "NH", mat: 1.0, lab: 1.05, tax: 0 },
+  "029": { label: "Providence, RI", state: "RI", mat: 1.0, lab: 1.03, tax: 0.07 },
+  "571": { label: "Sioux Falls, SD", state: "SD", mat: 1.0, lab: 1.05, tax: 0.062 },
+  "054": { label: "Burlington, VT", state: "VT", mat: 1.0, lab: 1.05, tax: 0.0703 },
+  "253": { label: "Charleston, WV", state: "WV", mat: 1.0, lab: 1.04, tax: 0.07 },
+  "820": { label: "Cheyenne, WY", state: "WY", mat: 1.0, lab: 1.03, tax: 0.06 },
 };
 
 /* ------------------------------------------------------------------ */
@@ -432,6 +461,10 @@ export type MarketSnapshot = {
   salesTaxRate: number;
   /** True where install labor is itself taxable (AZ/CT/HI/NM/SD/WV). */
   laborTaxable: boolean;
+  /** Code frost depth for this market, inches — drives post burial and
+   *  concrete volume in the takeoff. Absent on snapshots frozen before
+   *  this field existed; treat as the national default then. */
+  frostIn?: number;
   /** Which layers actually fired. */
   resolution: "zip" | "state" | "national";
   /** Plain-English provenance, shown under the price in the UI. */
@@ -448,6 +481,7 @@ export const NATIONAL_MARKET: MarketSnapshot = {
   labor: 1,
   salesTaxRate: 0.0825,
   laborTaxable: false,
+  frostIn: 24,
   resolution: "national",
   basis: ["No state or ZIP resolved — national average rates."],
 };
@@ -466,11 +500,14 @@ export function parseStateZip(address: string | null | undefined): {
   zip: string | null;
 } {
   if (!address) return { state: null, zip: null };
-  const m = address.match(/\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b/);
+  // Case-insensitive: "austin, tx 78701" from a hand-typed address is
+  // the same market as the geocoder's "Austin, TX 78701".
+  const addr = address.toUpperCase();
+  const m = addr.match(/\b([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b/);
   if (m && STATE_MARKETS[m[1]]) return { state: m[1], zip: m[2] };
   // ZIP with no usable state (or a two-letter token that isn't a state).
-  const zipOnly = address.match(/\b(\d{5})(?:-\d{4})?\b/);
-  const stateOnly = address.match(/,\s*([A-Z]{2})\b/);
+  const zipOnly = addr.match(/\b(\d{5})(?:-\d{4})?\b/);
+  const stateOnly = addr.match(/,\s*([A-Z]{2})\b/);
   return {
     state: stateOnly && STATE_MARKETS[stateOnly[1]] ? stateOnly[1] : null,
     zip: zipOnly ? zipOnly[1] : null,
@@ -557,9 +594,16 @@ export function resolveMarket(input: {
     labor,
     salesTaxRate,
     laborTaxable: row.laborTax === true,
+    frostIn: row.frost,
     resolution: metro ? "zip" : "state",
     basis,
   };
+}
+
+/** Frost depth for a snapshot, inches — old snapshots predate the
+ *  field and fall back to the national default. */
+export function marketFrostIn(market: MarketSnapshot | undefined): number {
+  return market?.frostIn ?? NATIONAL_MARKET.frostIn ?? 24;
 }
 
 /* ------------------------------------------------------------------ */
