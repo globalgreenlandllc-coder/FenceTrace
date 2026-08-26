@@ -21,6 +21,7 @@ import {
   type Pt,
 } from "@/lib/fence/geo";
 import { resolveMarket, type MarketSnapshot } from "@/lib/fence/market";
+import { simplify } from "@/lib/ai/geometry";
 
 /**
  * scan-core.ts — the FenceScan measuring pipeline, shared between the
@@ -167,6 +168,21 @@ async function geocode(address: string, keys: string[]): Promise<GeocodeOutcome>
     }
   }
   return outcome;
+}
+
+/**
+ * Straighten a seeded fence run. County parcel polygons carry GPS
+ * jitter — hundreds of sub-foot micro-kinks — and every kink becomes a
+ * bent fence panel and a phantom corner post downstream. ~2 canvas px
+ * (about a foot at scan zooms) removes the noise while keeping every
+ * real corner; Douglas-Peucker only DELETES vertices, so what survives
+ * still sits exactly on the county line. The displayed parcel boundary
+ * stays dense — only the FENCE seed is cleaned.
+ */
+function straightenSeed(pts: Pt[]): Pt[] {
+  if (pts.length < 4) return pts;
+  const out = simplify(pts, 2);
+  return out.length >= 2 ? out : pts;
 }
 
 /** Ray-cast point-in-ring in lat/lng space (parcel scale — planar is fine). */
@@ -348,10 +364,8 @@ export async function fenceScanCore(
     const closed =
       ring.length >= 2 &&
       Math.hypot(ring[0].x - ring[ring.length - 1].x, ring[0].y - ring[ring.length - 1].y) < 1;
-    return {
-      id: `parcel-${i}`,
-      points: ring.length > 0 && !closed ? [...ring, ring[0]] : ring,
-    };
+    const pts = ring.length > 0 && !closed ? [...ring, ring[0]] : ring;
+    return { id: `parcel-${i}`, points: straightenSeed(pts) };
   });
 
   return {
@@ -506,7 +520,7 @@ export async function reframeScanCore(
     aerial: { imageDataUrl, width: CANVAS_W, height: CANVAS_H, zoom },
     parcelRings: [canvasRing],
     suggestedRuns: [
-      { id: "parcel-0", points: closed ? canvasRing : [...canvasRing, canvasRing[0]] },
+      { id: "parcel-0", points: straightenSeed(closed ? canvasRing : [...canvasRing, canvasRing[0]]) },
     ],
     neighborRings: neighbors.flatMap((n) =>
       n.rings.map((r) => r.map((pt) => latLngToCanvas(pt, center, zoom))),

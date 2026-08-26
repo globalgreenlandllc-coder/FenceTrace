@@ -17,6 +17,7 @@ import {
   SQUASH_MAX,
   SQUASH_MIN,
   ZOOM_MAX,
+  ZOOM_MIN,
   easeInOut,
   lerpView,
   lerpZoom,
@@ -321,6 +322,8 @@ function groundFill(
   return `rgb(${px[0]},${px[1]},${px[2]})`;
 }
 
+let sessionDragMode: "move" | "spin" = "move";
+
 export function Fence3D({
   runs,
   gates,
@@ -417,6 +420,19 @@ export function Fence3D({
   // Screen zoom over the orbit view: screen = world*k + t (an SVG group
   // transform, so zooming never rebuilds the scene).
   const [zoomCam, setZoomCam] = useState({ k: 1, tx: 0, ty: 0 });
+  // What a PLAIN drag does. "move" pans the scene (what everyone tries
+  // first — the old spin-only camera felt nailed to the center); "spin"
+  // orbits. Shift or middle-drag always does the OTHER one, so both
+  // gestures are permanently reachable. Remembered per session.
+  const [dragMode, setDragMode] = useState<"move" | "spin">(
+    () => sessionDragMode,
+  );
+  const dragModeRef = useRef(dragMode);
+  dragModeRef.current = dragMode;
+  const pickDragMode = (m: "move" | "spin") => {
+    sessionDragMode = m;
+    setDragMode(m);
+  };
   const [mode, setMode] = useState<"orbit" | "walk">("orbit");
   const [walkCam, setWalkCam] = useState({ x: 450, y: 300, heading: 0, pitch: 0 });
 
@@ -440,8 +456,8 @@ export function Fence3D({
    *  keep the touch-friendly mobile sizing. */
   const pillCls = compactUi
     ? "px-2.5 py-1.5 text-[11px]"
-    : "${pillCls}";
-  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean; pan: boolean; k0: number; tx0: number; ty0: number; vscale: number } | null>(null);
+    : "px-3 py-1.5 text-xs";
+  const dragRef = useRef<{ sx: number; sy: number; yaw0: number; sq0: number; h0: number; p0: number; moved: boolean; pan: boolean; modified: boolean; k0: number; tx0: number; ty0: number; vscale: number } | null>(null);
   // Live pointers over the svg: one spins the camera, two pinch-zoom it.
   // Touch has no wheel, so without this the orbit view can't zoom at all
   // on a phone.
@@ -570,10 +586,23 @@ export function Fence3D({
     // Terminal posts: every run end and every corner. On chain link these
     // are the 2⅜″ pipes that take the fabric tension; on wood they're the
     // 4×6 at the gate. Everything between them is lighter line stock.
+    // Only vertices where the fence genuinely TURNS (≥25°, matching the
+    // priced corner count) get terminal stock. A county-traced polyline
+    // carries hundreds of sub-degree jitter vertices — treating each as
+    // a corner dressed the whole fence in heavy posts and tension bands.
     const terminalDs = geo.map((rg) => {
       const total = rg.cum[rg.cum.length - 1];
       const ds = [0, total];
-      for (let i = 1; i < rg.pts.length - 1; i++) ds.push(rg.cum[i]);
+      for (let i = 1; i < rg.pts.length - 1; i++) {
+        const a = rg.pts[i - 1];
+        const b = rg.pts[i];
+        const c2 = rg.pts[i + 1];
+        const inA = Math.atan2(b.y - a.y, b.x - a.x);
+        const outA = Math.atan2(c2.y - b.y, c2.x - b.x);
+        let d2 = Math.abs(outA - inA);
+        if (d2 > Math.PI) d2 = 2 * Math.PI - d2;
+        if (d2 >= (25 * Math.PI) / 180) ds.push(rg.cum[i]);
+      }
       return ds;
     });
     const isTerminal = (ri: number, d: number) =>
@@ -1616,20 +1645,29 @@ export function Fence3D({
     };
   }, []);
 
-  /** Put world point (wx,wy) under VIEW point (sx,sy) at scale k, keeping
-   *  the framed scene inside the viewport. At k=1 the clamp collapses to
-   *  tx=ty=0, so pinching back out always lands on the framed view. */
+  /** The camera is FREE: pan at any zoom (the old clamp pinned the
+   *  frame dead-center until you zoomed in — "stuck in the middle"),
+   *  and zoom out below the framed view for context. The only rule is
+   *  that a meaningful slice of the scene must stay on screen, so the
+   *  yard can never be lost off an edge. */
+  const clampCam = (k: number, tx: number, ty: number) => {
+    const kc = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
+    const KEEP = 170; // px of scene that must remain visible
+    const cx = Math.min(VIEW_W - KEEP, Math.max(KEEP - VIEW_W * kc, tx));
+    const cy = Math.min(VIEW_H - KEEP, Math.max(KEEP - VIEW_H * kc, ty));
+    return { k: kc, tx: cx, ty: cy };
+  };
   const zoomTo = useCallback(
     (k: number, wx: number, wy: number, sx: number, sy: number) => {
-      const kc = Math.min(ZOOM_MAX, Math.max(1, k));
-      const tx = Math.min(0, Math.max(VIEW_W * (1 - kc), sx - wx * kc));
-      const ty = Math.min(0, Math.max(VIEW_H * (1 - kc), sy - wy * kc));
+      const kc = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k));
+      const c = clampCam(kc, sx - wx * kc, sy - wy * kc);
       setZoomCam((z0) =>
         // Wheel and pinch both fire in bursts; once a gesture is pressed
         // against the zoom stop every event would otherwise re-render.
-        z0.k === kc && z0.tx === tx && z0.ty === ty ? z0 : { k: kc, tx, ty },
+        z0.k === c.k && z0.tx === c.tx && z0.ty === c.ty ? z0 : c,
       );
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -1732,8 +1770,11 @@ export function Fence3D({
       const v = viewRef.current;
       const w = walkCamRef.current;
       const z0 = zoomRef.current;
+      const invert = e.button === 1 || e.shiftKey;
       const pan =
-        modeRef.current === "orbit" && (e.button === 1 || e.shiftKey);
+        modeRef.current === "orbit" &&
+        (dragModeRef.current === "move") !== invert;
+      const modified = invert;
       if (e.button === 1) e.preventDefault(); // no middle-click autoscroll
       const rect = e.currentTarget.getBoundingClientRect();
       dragRef.current = {
@@ -1745,6 +1786,7 @@ export function Fence3D({
         p0: w.pitch,
         moved: false,
         pan,
+        modified,
         k0: z0.k,
         tx0: z0.tx,
         ty0: z0.ty,
@@ -1789,11 +1831,10 @@ export function Fence3D({
       } else if (d.pan) {
         // Same clamp as zoomTo: the framed scene never pans off-screen,
         // and at k=1 the clamp collapses to no-op.
-        const tx = Math.min(0, Math.max(VIEW_W * (1 - d.k0), d.tx0 + dx * d.vscale));
-        const ty = Math.min(0, Math.max(VIEW_H * (1 - d.k0), d.ty0 + dy * d.vscale));
+        const c = clampCam(d.k0, d.tx0 + dx * d.vscale, d.ty0 + dy * d.vscale);
         scheduleFrame(() =>
           setZoomCam((z) =>
-            z.tx === tx && z.ty === ty ? z : { ...z, tx, ty },
+            z.tx === c.tx && z.ty === c.ty ? z : { ...z, tx: c.tx, ty: c.ty },
           ),
         );
       } else {
@@ -1822,9 +1863,10 @@ export function Fence3D({
         if (modeRef.current === "orbit" && !d.pan) onViewChange?.(viewRef.current);
         return;
       }
-      // clean click: in orbit mode, step into the yard at that spot
-      // (a shift-click or middle-click that never moved does nothing).
-      if (d.pan) return;
+      // clean click: in orbit mode, step into the yard at that spot.
+      // Only a MODIFIED click (shift / middle) that never moved is
+      // ignored — a plain click walks in both drag modes.
+      if (d.modified) return;
       if (modeRef.current === "orbit" && canWalk) {
         const at = pickGround(e.clientX, e.clientY);
         if (at) enterWalk(at);
@@ -2707,6 +2749,20 @@ export function Fence3D({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onDoubleClick={(e) => {
+          if (modeRef.current !== "orbit" || !canOrbit) return;
+          const s2 = toView(e.clientX, e.clientY);
+          const z0 = zoomRef.current;
+          // World point under the cursor → put it at the view center,
+          // one comfortable zoom step closer.
+          zoomTo(
+            Math.min(ZOOM_MAX, z0.k * 1.6),
+            (s2.x - z0.tx) / z0.k,
+            (s2.y - z0.ty) / z0.k,
+            VIEW_W / 2,
+            VIEW_H / 2,
+          );
+        }}
       >
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
@@ -2887,6 +2943,32 @@ export function Fence3D({
                 🚶 Walk the yard
               </button>
             )}
+            {canOrbit && (
+              <span className="inline-flex overflow-hidden rounded-full bg-white/90 shadow-sm ring-1 ring-zinc-200">
+                {(
+                  [
+                    { id: "move" as const, label: "✋ Move" },
+                    { id: "spin" as const, label: "↻ Spin" },
+                  ]
+                ).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    aria-pressed={dragMode === m.id}
+                    onClick={() => pickDragMode(m.id)}
+                    className={cn(
+                      "transition-smooth ring-focus font-semibold",
+                      pillCls,
+                      dragMode === m.id
+                        ? "bg-accent-600 text-white"
+                        : "text-zinc-600 hover:bg-zinc-100",
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </span>
+            )}
             {canOrbit && !compactUi ? (
               <>
                 {/* Same gestures, named the way each input actually does
@@ -2894,10 +2976,14 @@ export function Fence3D({
                     canvas the hint is clutter, not help: gestures still
                     work, the pills were covering the fence. */}
                 <span className="pointer-events-none rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:hidden">
-                  ↻ Drag to spin · pinch to zoom · tap to walk
+                  {dragMode === "move"
+                    ? "Drag to move · pinch to zoom · tap to walk"
+                    : "Drag to spin · pinch to zoom · tap to walk"}
                 </span>
                 <span className="pointer-events-none hidden rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-zinc-500 shadow-sm ring-1 ring-zinc-200 sm:inline">
-                  ↻ Drag to spin · scroll to zoom · ⇧ drag to pan · click to walk
+                  {dragMode === "move"
+                    ? "Drag to move · ⇧ drag to spin · scroll to zoom · double-click to zoom in · click to walk"
+                    : "Drag to spin · ⇧ drag to move · scroll to zoom · double-click to zoom in · click to walk"}
                 </span>
               </>
             ) : interaction === "guided" && showShots && !compactUi ? (

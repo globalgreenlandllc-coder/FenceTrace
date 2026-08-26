@@ -76,6 +76,8 @@ export const DEFAULT_VIEW: Fence3DView = {
 export const SQUASH_MIN = 0.3;
 export const SQUASH_MAX = 0.8;
 export const ZOOM_MAX = 8;
+/** Below 1 = pulled back past the framed fit — context view. */
+export const ZOOM_MIN = 0.5;
 
 export const INTERACTION_LABEL: Record<FenceInteraction, string> = {
   free: "Free spin",
@@ -126,7 +128,7 @@ export function clampZoom(
   z: Partial<Fence3DZoom> | undefined | null,
 ): Fence3DZoom | undefined {
   if (!z) return undefined;
-  const k = clamp(num(z.k, 1), 1, ZOOM_MAX);
+  const k = clamp(num(z.k, 1), ZOOM_MIN, ZOOM_MAX);
   // k = 1 is the default fit; storing a pan with no zoom would just
   // push the scene off-centre for no reason.
   if (k === 1) return undefined;
