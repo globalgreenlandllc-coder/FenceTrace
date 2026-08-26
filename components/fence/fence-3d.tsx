@@ -2264,6 +2264,21 @@ export function Fence3D({
             />
           );
         }
+        // A cap is the one part of a fence at eye level that catches full
+        // sky — in every reference photo it's the brightest edge on the
+        // whole run. Flat-filling it is what makes caps disappear.
+        const capLit = (
+          <line
+            key="cap-lit"
+            x1={mix(c0, apex, 0.55).x}
+            y1={mix(c0, apex, 0.55).y}
+            x2={mix(c1, apex, 0.55).x}
+            y2={mix(c1, apex, 0.55).y}
+            stroke="rgba(255,244,214,0.5)"
+            strokeWidth={Math.max(0.4, wPx * 0.22)}
+            strokeLinecap="round"
+          />
+        );
         const capPath =
           f.face.cap === "dome"
             ? // parabola peaking at the post centerline
@@ -2274,14 +2289,16 @@ export function Fence3D({
                 ? polyPath([c0, c1, mix(t1, apex, 0.5), mix(t0, apex, 0.5)])
                 : polyPath(q); // flat
         return (
-          <path
-            key={i}
-            d={capPath}
-            fill={baseFill}
-            stroke={strokeC}
-            strokeWidth={0.7}
-            strokeLinejoin="round"
-          />
+          <g key={i}>
+            <path
+              d={capPath}
+              fill={baseFill}
+              stroke={strokeC}
+              strokeWidth={0.7}
+              strokeLinejoin="round"
+            />
+            {wPx >= 2.2 && capLit}
+          </g>
         );
       }
 
@@ -2312,6 +2329,25 @@ export function Fence3D({
             strokeWidth={Math.max(0.5, wPx * 0.24)}
             strokeLinecap="round"
           />
+        ) : null;
+
+      // Square stock is TWO faces meeting at a corner: the sun catches
+      // one, the other falls away. Flat-filling the quad is what left
+      // posts reading as dark bars stuck on the panel instead of solid
+      // timbers standing in front of it — the thing that reads loudest
+      // in a photo of a real fence.
+      const facets =
+        !f.face.round && !f.face.sub && f.isQuad && wPx >= 1.8 ? (
+          <>
+            <path
+              d={polyPath([q[0], mix(q[0], q[1], 0.42), mix(q[3], q[2], 0.42), q[3]])}
+              fill="rgba(255,246,222,0.16)"
+            />
+            <path
+              d={polyPath([mix(q[0], q[1], 0.72), q[1], q[2], mix(q[3], q[2], 0.72)])}
+              fill="rgba(12,8,4,0.22)"
+            />
+          </>
         ) : null;
 
       // Chain-link terminals wear the tension bands that clamp the
@@ -2348,6 +2384,7 @@ export function Fence3D({
             strokeWidth={f.face.heavy ? psw * 1.4 : psw}
           />
           {highlight}
+          {facets}
           {bands}
         </g>
       );
@@ -2367,7 +2404,9 @@ export function Fence3D({
             ? style.face
             : metal
               ? style.post
-              : "#C08449";
+              : // a cedar gate is cedar — same stock, same gradient as
+                // the panels it hangs between
+                "url(#f3d-wood)";
       const gStroke = style.stroke;
       const braceStroke = metal || cat === "chain-link" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.22)";
       if (!f.isQuad) {
@@ -2888,9 +2927,11 @@ export function Fence3D({
         )}
         {cap && (
           <g>
-            <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={Math.max(1, Math.min(3.4, hPx * 0.058))} strokeLinecap="round" />
-            {/* sun catches the top face of the 2×6 cap */}
-            <line x1={ta.x} y1={ta.y - Math.max(0.5, hPx * 0.018)} x2={tb.x} y2={tb.y - Math.max(0.5, hPx * 0.018)} stroke="rgba(255,240,210,0.4)" strokeWidth={Math.max(0.4, hPx * 0.016)} strokeLinecap="round" />
+            {/* A 2×6 cap rail is a BOARD laid flat across the tops, and
+                in a photo it's the line your eye follows down the run.
+                Body, then the sun on its upper face. */}
+            <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={Math.max(1, Math.min(5, hPx * 0.062))} strokeLinecap="round" />
+            <line x1={ta.x} y1={ta.y - Math.max(0.5, hPx * 0.02)} x2={tb.x} y2={tb.y - Math.max(0.5, hPx * 0.02)} stroke="rgba(255,242,214,0.45)" strokeWidth={Math.max(0.4, hPx * 0.018)} strokeLinecap="round" />
           </g>
         )}
       </g>
