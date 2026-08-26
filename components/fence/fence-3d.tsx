@@ -133,7 +133,11 @@ type FStyle = {
 };
 
 const STYLES: Record<string, FStyle> = {
-  wood: { face: "#BC8A52", shade: "#9A6C3C", post: "#7E5730", stroke: "#5F421F", lines: "pickets" },
+  // Cedar with a real stain depth — the face carries amber warmth, the
+  // shade side drops a full value step (weak sun/shade delta is what
+  // makes wood render like cardboard), and posts sit darker than the
+  // boards so the structure anchors the panel run.
+  wood: { face: "#B87E42", shade: "#875A2B", post: "#6E4B26", stroke: "#4A3115", lines: "pickets" },
   vinyl: { face: "#F4F4EE", shade: "#DDDDD4", post: "#E9E9E2", stroke: "#9C9C92" },
   // Chain link is a SCREEN, not a wall — the yard has to show through it.
   "chain-link": { face: "rgba(148,158,166,0.17)", shade: "rgba(120,130,138,0.22)", post: "#8B9298", stroke: "#6E767D", lines: "mesh", mesh: "rgba(88,98,106,0.46)", rail: "#9AA3AA" },
@@ -141,7 +145,7 @@ const STYLES: Record<string, FStyle> = {
   // pickets themselves are what you actually see.
   aluminum: { face: "rgba(38,42,48,0.10)", shade: "rgba(30,33,38,0.16)", post: "#1E2126", stroke: "#2B2F35", lines: "bars" },
   steel: { face: "rgba(32,36,40,0.12)", shade: "rgba(26,29,33,0.18)", post: "#1A1D21", stroke: "#23272C", lines: "bars" },
-  "split-rail": { face: "#B98F5C", shade: "#9A7344", post: "#7E5730", stroke: "#5F421F", lines: "rails" },
+  "split-rail": { face: "#B2854E", shade: "#8E6739", post: "#75512C", stroke: "#553B1D", lines: "rails" },
 };
 
 /** Per-TYPE overrides, for categories that ship in more than one finish.
@@ -2317,7 +2321,7 @@ export function Fence3D({
             ? style.face
             : metal
               ? style.post
-              : "#EAD9BC";
+              : "#C08449";
       const gStroke = style.stroke;
       const braceStroke = metal || cat === "chain-link" ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.22)";
       if (!f.isQuad) {
@@ -2414,7 +2418,7 @@ export function Fence3D({
             ? st.shade
             : st.face;
     if (!f.isQuad) {
-      return <path key={i} d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeWidth={0.7} strokeOpacity={0.6} strokeLinejoin="round" />;
+      return <path key={i} d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeWidth={0.7} strokeOpacity={0.45} strokeLinejoin="round" />;
     }
     const [a, b, tb, ta] = f.poly;
     const ftLen = f.face.baseLenPx / world.scale;
@@ -2448,6 +2452,7 @@ export function Fence3D({
       // Horizontal-modern: 1×6 slats stacked up the bay at a ¾″ reveal —
       // a 6' fence is ~11 boards, not a decorative half-dozen.
       const m = Math.max(3, Math.min(18, Math.round((hFt * 12) / pitchIn)));
+      const boardH = hPx / m;
       const els: React.ReactNode[] = [];
       for (let j = 0; j < m; j++) {
         const t0 = j / m;
@@ -2457,23 +2462,58 @@ export function Fence3D({
         const br0 = { x: b.x + (tb.x - b.x) * t0, y: b.y + (tb.y - b.y) * t0 };
         const br1 = { x: b.x + (tb.x - b.x) * t1, y: b.y + (tb.y - b.y) * t1 };
         const bl1 = { x: a.x + (ta.x - a.x) * t1, y: a.y + (ta.y - a.y) * t1 };
+        // Slats out of the same lift still land a shade apart — some
+        // heartwood-dark, some sap-light, a few with a red cast. The
+        // spread is what separates real cedar from a painted band.
         const tone =
-          h < 0.33 ? "rgba(60,36,14,0.14)" : h > 0.7 ? "rgba(255,235,205,0.16)" : "rgba(0,0,0,0.02)";
+          h < 0.3
+            ? "rgba(86,50,18,0.28)"
+            : h > 0.72
+              ? "rgba(255,222,164,0.26)"
+              : h > 0.44 && h < 0.56
+                ? "rgba(158,82,28,0.2)"
+                : "rgba(0,0,0,0.03)";
         els.push(
           <path
             key={`hb-${j}`}
             d={`M${bl0.x.toFixed(1)} ${bl0.y.toFixed(1)} L${br0.x.toFixed(1)} ${br0.y.toFixed(1)} L${br1.x.toFixed(1)} ${br1.y.toFixed(1)} L${bl1.x.toFixed(1)} ${bl1.y.toFixed(1)} Z`}
             fill={tone}
-            stroke="rgba(0,0,0,0.13)"
-            strokeWidth={0.45 * u}
           />,
         );
+        // The ¾″ reveal between slats is a shadow slot, not an outline —
+        // and each slat's top edge catches the sun above it.
+        if (j > 0) {
+          els.push(
+            <line
+              key={`gap-${j}`}
+              x1={bl0.x}
+              y1={bl0.y}
+              x2={br0.x}
+              y2={br0.y}
+              stroke="rgba(26,15,6,0.38)"
+              strokeWidth={Math.max(0.4, Math.min(1.6, boardH * 0.12))}
+            />,
+          );
+        }
+        if (boardH >= 3.5) {
+          els.push(
+            <line
+              key={`hl-${j}`}
+              x1={bl1.x}
+              y1={bl1.y}
+              x2={br1.x}
+              y2={br1.y}
+              stroke="rgba(255,232,188,0.22)"
+              strokeWidth={Math.max(0.35, boardH * 0.09)}
+            />,
+          );
+        }
       }
       return (
         <g key={i}>
-          <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeOpacity={0.5} strokeWidth={0.55 * u} strokeLinejoin="round" />
+          <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeOpacity={0.35} strokeWidth={0.5 * u} strokeLinejoin="round" />
           {els}
-          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.15)" strokeWidth={Math.max(0.8, Math.min(2.4, hPx * 0.042))} />
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(18,22,15,0.26)" strokeWidth={Math.max(0.8, Math.min(3, hPx * 0.05))} />
         </g>
       );
     }
@@ -2484,7 +2524,7 @@ export function Fence3D({
       const np = infillCount;
       const pw = projW / np;
       const isWoodPk = (f.face.alt?.cat ?? styleKey) === "wood";
-      const pkFill = isWoodPk && f.face.shaded ? "#AC7B47" : st.face;
+      const pkFill = isWoodPk && f.face.shaded ? "#96683A" : st.face;
       const lift = 0.05; // pickets stop just above grade
       const els: React.ReactNode[] = [];
       const pkRailW = Math.max(1, Math.min(2.8, hPx * 0.05));
@@ -2525,7 +2565,7 @@ export function Fence3D({
               <path
                 key={`pk-${k}`}
                 d={`M${p0.x.toFixed(1)} ${p0.y.toFixed(1)} L${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L${s1.x.toFixed(1)} ${s1.y.toFixed(1)} L${apex.x.toFixed(1)} ${apex.y.toFixed(1)} L${s0.x.toFixed(1)} ${s0.y.toFixed(1)} Z`}
-                fill={h > 0.72 ? "#C79459" : pkFill}
+                fill={h > 0.72 ? "#C89253" : h < 0.24 ? "#A06B34" : pkFill}
                 stroke={st.stroke}
                 strokeOpacity={0.55}
                 strokeWidth={0.4 * u}
@@ -2552,7 +2592,7 @@ export function Fence3D({
       return (
         <g key={i}>
           {els}
-          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.12)" strokeWidth={Math.max(0.7, Math.min(1.8, hPx * 0.032))} />
+          <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.2)" strokeWidth={Math.max(0.7, Math.min(2.2, hPx * 0.04))} />
         </g>
       );
     }
@@ -2563,7 +2603,7 @@ export function Fence3D({
       const boards = infillCount;
       const bw = projW / boards;
       const els: React.ReactNode[] = [
-        <path key="back" d={polyPath(f.poly)} fill={st.shade} stroke={st.stroke} strokeOpacity={0.5} strokeWidth={0.55 * u} strokeLinejoin="round" />,
+        <path key="back" d={polyPath(f.poly)} fill={st.shade} stroke={st.stroke} strokeOpacity={0.35} strokeWidth={0.5 * u} strokeLinejoin="round" />,
       ];
       if (bw >= 2.6) {
         for (let k = 0; k < boards; k++) {
@@ -2571,11 +2611,11 @@ export function Fence3D({
           const c1 = Math.min(1, c0 + 0.62 / boards);
           const h = hash2(Math.round(seed + k * 19.3), Math.round(seed - k * 9.1));
           els.push(
-            <path key={`fb-${k}`} d={sliceD(c0, c1)} fill={h > 0.6 ? "#C79459" : st.face} stroke="rgba(95,66,31,0.4)" strokeWidth={0.4 * u} />,
+            <path key={`fb-${k}`} d={sliceD(c0, c1)} fill={h > 0.6 ? "#C68F4E" : h < 0.22 ? "#A26D35" : st.face} stroke="rgba(74,49,21,0.4)" strokeWidth={0.4 * u} />,
           );
         }
       }
-      els.push(<line key="ao" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.15)" strokeWidth={Math.max(0.8, Math.min(2.4, hPx * 0.042))} />);
+      els.push(<line key="ao" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(18,22,15,0.26)" strokeWidth={Math.max(0.8, Math.min(3, hPx * 0.05))} />);
       if (cap) {
         els.push(<line key="cap" x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={Math.max(1, Math.min(2.8, hPx * 0.05))} strokeLinecap="round" />);
       }
@@ -2596,7 +2636,7 @@ export function Fence3D({
           if (c >= 1) continue;
           const h = hash2(Math.round(seed + k * 27.7), Math.round(seed + k * 5.3));
           details.push(
-            <path key={`ob-${k}`} d={sliceD(Math.max(0, c - 0.06 / boards), Math.min(1, c + 0.61 / boards))} fill={h > 0.55 ? "#C79459" : "#B9854D"} stroke="rgba(95,66,31,0.4)" strokeWidth={0.4 * u} />,
+            <path key={`ob-${k}`} d={sliceD(Math.max(0, c - 0.06 / boards), Math.min(1, c + 0.61 / boards))} fill={h > 0.55 ? "#C68F4E" : "#AD7639"} stroke="rgba(74,49,21,0.4)" strokeWidth={0.4 * u} />,
           );
         }
       } else {
@@ -2635,19 +2675,27 @@ export function Fence3D({
           const s0 = k / boards;
           const s1 = (k + 1) / boards;
           const h = hash2(Math.round(seed + k * 13.7), Math.round(seed * 0.6 - k * 7.3));
-          if (h < 0.3) details.push(<path key={`b-${k}`} d={sliceD(s0, s1)} fill="rgba(60,36,14,0.10)" />);
-          else if (h > 0.74) details.push(<path key={`b-${k}`} d={sliceD(s0, s1)} fill="rgba(255,235,205,0.13)" />);
+          // Two scales of variation: boards from the same bundle drift
+          // together (the slow hash over groups of four), and each board
+          // adds its own cast on top. One scale alone reads as noise or
+          // as paint; both together read as lumber.
+          const hg = hash2(Math.round(seed * 0.41 + Math.floor(k / 4) * 89.7), Math.round(seed * 1.13));
+          if (hg < 0.3) details.push(<path key={`bg-${k}`} d={sliceD(s0, s1)} fill="rgba(76,45,16,0.1)" />);
+          else if (hg > 0.74) details.push(<path key={`bg-${k}`} d={sliceD(s0, s1)} fill="rgba(255,228,182,0.1)" />);
+          if (h < 0.3) details.push(<path key={`b-${k}`} d={sliceD(s0, s1)} fill="rgba(76,45,16,0.2)" />);
+          else if (h > 0.74) details.push(<path key={`b-${k}`} d={sliceD(s0, s1)} fill="rgba(255,228,182,0.2)" />);
+          else if (h > 0.44 && h < 0.52) details.push(<path key={`b-${k}`} d={sliceD(s0, s1)} fill="rgba(152,76,26,0.14)" />);
           if (k > 0) {
             const sp = atB(s0);
             const sq = atT(s0);
-            details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(30,18,6,0.14)" strokeWidth={seamW} />);
+            details.push(<line key={`s-${k}`} x1={sp.x} y1={sp.y} x2={sq.x} y2={sq.y} stroke="rgba(30,18,6,0.2)" strokeWidth={seamW} />);
           }
-          if (bw >= 5 && h > 0.42 && h < 0.55) {
-            const sm = (s0 + s1) / 2;
+          if (bw >= 5 && h > 0.38 && h < 0.6) {
+            const sm = s0 + (s1 - s0) * (0.3 + h * 0.45);
             const gp = atB(sm);
             const gq = atT(sm);
             details.push(
-              <line key={`g-${k}`} x1={gp.x + (gq.x - gp.x) * 0.2} y1={gp.y + (gq.y - gp.y) * 0.2} x2={gp.x + (gq.x - gp.x) * 0.72} y2={gp.y + (gq.y - gp.y) * 0.72} stroke="rgba(56,34,12,0.11)" strokeWidth={0.7 * u} />,
+              <line key={`g-${k}`} x1={gp.x + (gq.x - gp.x) * 0.15} y1={gp.y + (gq.y - gp.y) * 0.15} x2={gp.x + (gq.x - gp.x) * 0.78} y2={gp.y + (gq.y - gp.y) * 0.78} stroke="rgba(56,34,12,0.16)" strokeWidth={0.7 * u} />,
             );
           }
         }
@@ -2673,7 +2721,7 @@ export function Fence3D({
               y1={a.y + (ta.y - a.y) * s2}
               x2={b.x + (tb.x - b.x) * s2}
               y2={b.y + (tb.y - b.y) * s2}
-              stroke="rgba(66,44,18,0.32)"
+              stroke="rgba(58,38,15,0.4)"
               strokeWidth={railW}
             />,
           );
@@ -2768,17 +2816,35 @@ export function Fence3D({
       }
     }
 
+    // Whole bays weather a half-shade apart — from across the yard that
+    // slow drift is ALL the texture you can resolve, and without it a
+    // long run flattens into one continuous painted ribbon.
+    const bayH = hash2(Math.round(seed * 0.37), Math.round(seed * 1.91));
+    const bayTone =
+      pcat === "wood"
+        ? bayH < 0.3
+          ? "rgba(70,42,16,0.08)"
+          : bayH > 0.72
+            ? "rgba(255,226,180,0.09)"
+            : null
+        : null;
     return (
       <g key={i}>
-        <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeOpacity={0.5} strokeWidth={0.55 * u} strokeLinejoin="round" />
+        <path d={polyPath(f.poly)} fill={fill} stroke={st.stroke} strokeOpacity={0.35} strokeWidth={0.5 * u} strokeLinejoin="round" />
+        {bayTone && <path d={polyPath(f.poly)} fill={bayTone} />}
         {details}
-        {/* contact shadow where boards meet grass */}
-        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.15)" strokeWidth={Math.max(0.8, Math.min(2.4, hPx * 0.042))} />
+        {/* contact shadow where boards meet grass — soft spill, hard core */}
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(20,26,18,0.1)" strokeWidth={Math.max(1.4, Math.min(5, hPx * 0.085))} />
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(18,22,15,0.26)" strokeWidth={Math.max(0.8, Math.min(3, hPx * 0.05))} />
+        {pcat === "wood" && !cap && (
+          /* sun rakes across the open board tops */
+          <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke="rgba(255,236,196,0.32)" strokeWidth={Math.max(0.5, Math.min(1.8, hPx * 0.025))} strokeLinecap="round" />
+        )}
         {cap && (
           <g>
-            <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={Math.max(1, Math.min(2.8, hPx * 0.05))} strokeLinecap="round" />
+            <line x1={ta.x} y1={ta.y} x2={tb.x} y2={tb.y} stroke={st.post} strokeWidth={Math.max(1, Math.min(3.4, hPx * 0.058))} strokeLinecap="round" />
             {/* sun catches the top face of the 2×6 cap */}
-            <line x1={ta.x} y1={ta.y - Math.max(0.5, hPx * 0.016)} x2={tb.x} y2={tb.y - Math.max(0.5, hPx * 0.016)} stroke="rgba(255,240,210,0.35)" strokeWidth={Math.max(0.4, hPx * 0.014)} strokeLinecap="round" />
+            <line x1={ta.x} y1={ta.y - Math.max(0.5, hPx * 0.018)} x2={tb.x} y2={tb.y - Math.max(0.5, hPx * 0.018)} stroke="rgba(255,240,210,0.4)" strokeWidth={Math.max(0.4, hPx * 0.016)} strokeLinecap="round" />
           </g>
         )}
       </g>
@@ -2865,13 +2931,13 @@ export function Fence3D({
       >
         <defs>
           <linearGradient id="f3d-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#D8E6F0" />
-            <stop offset="46%" stopColor="#EDF1E3" />
-            <stop offset="100%" stopColor="#D9E0CC" />
+            <stop offset="0%" stopColor="#C9DEEF" />
+            <stop offset="46%" stopColor="#E9EEDB" />
+            <stop offset="100%" stopColor="#CFD8BE" />
           </linearGradient>
           <linearGradient id="f3d-sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#BFDCF2" />
-            <stop offset="100%" stopColor="#EAF3EA" />
+            <stop offset="0%" stopColor="#AFD3EE" />
+            <stop offset="100%" stopColor="#E6F1E6" />
           </linearGradient>
           <linearGradient id="f3d-earth" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#C7DBBD" />
@@ -2885,22 +2951,22 @@ export function Fence3D({
           {/* Material gradients — sun-bleached tops fading to richer
               bases give flat SVG quads the depth a single fill can't. */}
           <linearGradient id="f3d-wood" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#CB975E" />
-            <stop offset="45%" stopColor="#BC8A52" />
-            <stop offset="100%" stopColor="#A0713D" />
+            <stop offset="0%" stopColor="#D19A58" />
+            <stop offset="45%" stopColor="#BB7F45" />
+            <stop offset="100%" stopColor="#8F5C29" />
           </linearGradient>
           <linearGradient id="f3d-wood-sh" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#A87944" />
-            <stop offset="50%" stopColor="#9A6C3C" />
-            <stop offset="100%" stopColor="#7F572C" />
+            <stop offset="0%" stopColor="#9A6A34" />
+            <stop offset="50%" stopColor="#845727" />
+            <stop offset="100%" stopColor="#623F1B" />
           </linearGradient>
           <linearGradient id="f3d-vinyl" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#FCFCF8" />
             <stop offset="100%" stopColor="#E9E9DE" />
           </linearGradient>
           <linearGradient id="f3d-vinyl-sh" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#EFEFE8" />
-            <stop offset="100%" stopColor="#D8D8CA" />
+            <stop offset="0%" stopColor="#E8E8E0" />
+            <stop offset="100%" stopColor="#CBCBBB" />
           </linearGradient>
           <linearGradient id="f3d-wall-lit" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#F5F1E9" />
