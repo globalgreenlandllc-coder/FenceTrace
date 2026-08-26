@@ -223,6 +223,54 @@ function nearestOnPolyline(p: Pt, pts: Pt[], cum: number[]): { dist: number; per
 
 const fmtFt = (w: number) => `${Math.round(w * 10) / 10}`;
 
+/**
+ * String-line a fence profile. Crews stretch a line between grade
+ * breaks and build the rails STRAIGHT to it — post lengths absorb the
+ * dips. Draping every bay on the exact dirt under it made the top rail
+ * wave with each terrain ripple and the whole fence read as "curved".
+ * Douglas-Peucker over the (distance, z) profile keeps genuine grade
+ * breaks (> tolerance) and flattens everything between them; values
+ * return per input index, interpolated along the kept breaks.
+ */
+function stringLineProfile(ds: number[], zs: number[], tolPx: number): number[] {
+  const n = ds.length;
+  if (n <= 2) return zs.slice();
+  const keep = new Array<boolean>(n).fill(false);
+  keep[0] = keep[n - 1] = true;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length) {
+    const [i0, i1] = stack.pop()!;
+    if (i1 - i0 < 2) continue;
+    const dx = ds[i1] - ds[i0];
+    let worst = -1;
+    let worstDev = tolPx;
+    for (let i = i0 + 1; i < i1; i++) {
+      const t = dx > 0 ? (ds[i] - ds[i0]) / dx : 0;
+      const dev = Math.abs(zs[i] - (zs[i0] + (zs[i1] - zs[i0]) * t));
+      if (dev > worstDev) {
+        worstDev = dev;
+        worst = i;
+      }
+    }
+    if (worst >= 0) {
+      keep[worst] = true;
+      stack.push([i0, worst], [worst, i1]);
+    }
+  }
+  const out = new Array<number>(n);
+  let prev = 0;
+  out[0] = zs[0];
+  for (let i = 1; i < n; i++) {
+    if (!keep[i]) continue;
+    for (let j = prev + 1; j <= i; j++) {
+      const t = ds[i] > ds[prev] ? (ds[j] - ds[prev]) / (ds[i] - ds[prev]) : 1;
+      out[j] = zs[prev] + (zs[i] - zs[prev]) * t;
+    }
+    prev = i;
+  }
+  return out;
+}
+
 /** Deterministic 0..1 hash — grass tone jitter + tree placement. */
 function hash2(r: number, c: number): number {
   const n = Math.sin(r * 127.1 + c * 311.7) * 43758.5453;
@@ -1076,13 +1124,21 @@ export function Fence3D({
             cuts.push(c0 + ((c1 - c0) * k) / splits);
           }
         }
+        // The rails run straight between grade breaks (~½ ft string-line
+        // tolerance); the ground keeps its real shape underneath.
+        const zsRaw = cuts.map((d) => zOf(ri, d));
+        const zsLine = hasGroundFor(ri)
+          ? stringLineProfile(cuts, zsRaw, 0.5 * scale * HEIGHT_EXAGGERATION)
+          : zsRaw;
         for (let c = 0; c < cuts.length - 1; c++) {
           const d0 = cuts[c];
           const d1 = cuts[c + 1];
           const A = pointAt(rg.pts, rg.cum, d0);
           const B = pointAt(rg.pts, rg.cum, d1);
-          const zA = zOf(ri, d0);
-          const zB = zOf(ri, d1);
+          const zRawA = zsRaw[c];
+          const zRawB = zsRaw[c + 1];
+          const zA = zsLine[c];
+          const zB = zsLine[c + 1];
           const riseFt = hasGroundFor(ri) ? elevAt(ri, d1) - elevAt(ri, d0) : 0;
           const wallish =
             retainingWall && hasGroundFor(ri) && Math.abs(riseFt) >= WALL_RISE_FT;
@@ -1126,7 +1182,12 @@ export function Fence3D({
               shaded,
               baseLenPx: segLen,
             });
-          } else if (stepped && grid) {
+          } else if (
+            grid &&
+            (stepped ||
+              bzA > zRawA + 0.15 * scale ||
+              bzB > zRawB + 0.15 * scale)
+          ) {
             // A stepped bay stays LEVEL while the ground drops beneath
             // it — physically true, but in the axonometric view the
             // floating panel bottom reads as "the fence left the
@@ -1137,8 +1198,8 @@ export function Fence3D({
               kind: "skirt",
               bias: -0.02,
               pts: [
-                { ...A, z: zA },
-                { ...B, z: zB },
+                { ...A, z: Math.min(zRawA, bzA) },
+                { ...B, z: Math.min(zRawB, bzB) },
                 { ...B, z: bzB },
                 { ...A, z: bzA },
               ],
@@ -1194,10 +1255,10 @@ export function Fence3D({
             const backZ = (x: number, y: number, fz: number) =>
               grid ? zAtPlan(x, y) + 0.3 : fz + 0.3;
             castShadow(
-              { x: A.x, y: A.y, z: zA + 0.3 },
-              { x: B.x, y: B.y, z: zB + 0.3 },
-              { x: A.x + SH.x * shLen, y: A.y + SH.y * shLen, z: backZ(A.x + SH.x * shLen, A.y + SH.y * shLen, zA) },
-              { x: B.x + SH.x * shLen, y: B.y + SH.y * shLen, z: backZ(B.x + SH.x * shLen, B.y + SH.y * shLen, zB) },
+              { x: A.x, y: A.y, z: zRawA + 0.3 },
+              { x: B.x, y: B.y, z: zRawB + 0.3 },
+              { x: A.x + SH.x * shLen, y: A.y + SH.y * shLen, z: backZ(A.x + SH.x * shLen, A.y + SH.y * shLen, zRawA) },
+              { x: B.x + SH.x * shLen, y: B.y + SH.y * shLen, z: backZ(B.x + SH.x * shLen, B.y + SH.y * shLen, zRawB) },
               segLen,
               solid ? "rgba(22,40,24,0.30)" : spacedType ? "rgba(22,40,24,0.055)" : "rgba(22,40,24,0.12)",
               solid ? "rgba(22,40,24,0.13)" : spacedType ? "rgba(22,40,24,0.03)" : "rgba(22,40,24,0.05)",
