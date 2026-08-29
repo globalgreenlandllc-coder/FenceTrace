@@ -45,10 +45,6 @@ export async function GET(request: Request) {
         dueAt: { lt: now },
         reminderCount: { lt: MAX_REMINDERS },
         OR: [{ remindedAt: null }, { remindedAt: { lt: cooldownCutoff } }],
-        // Never chase a payment whose invoice the contractor just
-        // revoked — "disregard that request" and "please pay" can't
-        // both go to the same client.
-        invoiceCanceledAt: null,
         proposal: { status: "ACCEPTED", completedAt: null },
       },
       include: {
@@ -92,10 +88,17 @@ export async function GET(request: Request) {
         squarePaymentUrl?: string | null;
       };
       const live = p.user?.contractorProfile;
-      // Give the nudge a real pay button: a hosted invoice page for
-      // this exact amount on the connected rail, minted quietly if none
-      // exists yet. Null just falls back to the generic pasted links.
-      const payUrl = await ensurePayLinkForInstallment(inst.id);
+      // Give the nudge a real pay button: the live invoice's hosted
+      // page when one is out, else a quietly-minted one when the
+      // proposal was sent with a payWith rail. Null (no rail, or the
+      // contractor canceled a request — dunning still runs, just
+      // without minting a fresh link) falls back to the generic pasted
+      // links below.
+      const payUrl =
+        inst.invoiceUrl ??
+        (inst.invoiceCanceledAt
+          ? null
+          : await ensurePayLinkForInstallment(inst.id));
       const email = renderReminderEmail({
         clientFirstName:
           (p.clientName || "there").trim().split(/\s+/)[0] || "there",

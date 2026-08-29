@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -30,6 +30,7 @@ import {
 } from "@/lib/proposal-mock";
 import type { Measurements, Stories } from "@/lib/types";
 import { saveProposalDraft } from "@/app/actions/proposals";
+import { getMyProposalDefaults } from "@/app/actions/proposal-defaults";
 import { MaterialsBuilder } from "@/components/proposal/materials-builder";
 import { PackagesSection } from "@/components/proposal/packages-section";
 import { SendModal } from "@/components/proposal/send-modal";
@@ -135,6 +136,25 @@ export function ManualMeasureForm() {
   const [priceDisplay, setPriceDisplay] = useState<
     "totals" | "split" | "itemized"
   >(base.priceDisplay ?? "totals");
+  // The contractor's saved boilerplate (Settings → Proposal terms):
+  // their terms replace the platform samples on this draft, and their
+  // display default seeds the toggle above — both before first edit.
+  const [defaultTerms, setDefaultTerms] = useState<Proposal["terms"] | null>(
+    null,
+  );
+  useEffect(() => {
+    let alive = true;
+    getMyProposalDefaults()
+      .then((d) => {
+        if (!alive) return;
+        if (d.customized) setDefaultTerms(d.terms);
+        setPriceDisplay(d.priceDisplay);
+      })
+      .catch(() => undefined); // platform samples, never a blocker
+    return () => {
+      alive = false;
+    };
+  }, []);
   // The three tiers, fully owned by this flow as live state so the
   // PackagesSection + MaterialsBuilder editors can rebuild each one
   // (name, price/markup, config, highlights, add-ons, BOM overrides).
@@ -222,6 +242,7 @@ export function ManualMeasureForm() {
 
   const proposal: Proposal & { jobType: JobType } = {
     ...base,
+    ...(defaultTerms ? { terms: defaultTerms } : {}),
     address: address.trim(),
     client: { name: clientName.trim(), email: clientEmail.trim() },
     contractor: {

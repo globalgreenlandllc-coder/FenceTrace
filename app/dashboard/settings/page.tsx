@@ -7,6 +7,7 @@ import { DashboardShell } from "@/components/dashboard/dashboard-nav";
 import { BrandProfileSection } from "@/components/dashboard/brand-profile-section";
 import { PaymentsSection } from "@/components/dashboard/payments-section";
 import { FenceRatesSection } from "@/components/dashboard/fence-rates-section";
+import { ProposalDefaultsSection } from "@/components/dashboard/proposal-defaults-section";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/lib/auth-mock";
@@ -32,6 +33,8 @@ export default function SettingsPage() {
           <BrandProfileSection />
 
           <FenceRatesSection />
+
+          <ProposalDefaultsSection />
 
           <PaymentsSection />
 

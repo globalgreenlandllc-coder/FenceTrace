@@ -19,7 +19,9 @@ import { POLICIES } from "@/lib/abuse/policies";
 import { getMe } from "./me";
 import { ensureScheduleForProposal } from "@/lib/payment-schedule";
 import {
+  cancelInvoiceForInstallment,
   ensurePayLinkForInstallment,
+  isInvoiceProvider,
   providerWord,
 } from "@/lib/payments/provider-invoices";
 
@@ -366,6 +368,31 @@ export async function recordInstallmentPayment(args: {
       return { ok: false, reason: "Already marked paid" };
     }
 
+    // A live provider invoice must die before the hand-record: its
+    // hosted pay page would stay payable (the provider even emailed a
+    // link) while the poller stops watching PAID rows — a double
+    // collection nobody notices. No apology email: nothing went out by
+    // mistake, the money just arrived another way. If the client beat
+    // us to it online, that payment is recorded instead of the check.
+    if (inst.invoiceId && isInvoiceProvider(inst.invoiceProvider)) {
+      const canceled = await cancelInvoiceForInstallment({
+        ownerId: me.user.id,
+        installmentId: inst.id,
+        apologize: false,
+      });
+      if (canceled.ok && canceled.outcome === "already_paid") {
+        revalidateAfterMutation(inst.proposal.publicToken);
+        const ov = await loadOverview(inst.proposalId);
+        return {
+          ok: true,
+          overview: ov,
+          extra: { completed: !!ov.completedAt, receiptSent: false },
+        };
+      }
+      // Cancel failed (dead key, provider down): still record the money
+      // the contractor is holding — the stale invoice is the lesser bug.
+    }
+
     const now = new Date();
     const sync = await db.$transaction(async (tx) => {
       await tx.paymentInstallment.update({
@@ -469,6 +496,7 @@ export async function undoInstallmentPayment(args: {
         id: true,
         status: true,
         proposalId: true,
+        invoiceId: true,
         proposal: { select: { publicToken: true } },
       },
     });
@@ -483,6 +511,20 @@ export async function undoInstallmentPayment(args: {
           paidAt: null,
           method: null,
           receiptSentAt: null,
+          // A provider-paid installment must also shed its invoice —
+          // otherwise the 2-minute poller sees PENDING + a paid invoice
+          // and re-settles the undo within a cron tick, forever. The
+          // cancel hold keeps the portal from quietly re-minting; an
+          // explicit re-invoice lifts it.
+          ...(inst.invoiceId
+            ? {
+                invoiceProvider: null,
+                invoiceId: null,
+                invoiceUrl: null,
+                invoiceSentAt: null,
+                invoiceCanceledAt: new Date(),
+              }
+            : {}),
         },
       });
       await syncMoneyState(tx, inst.proposalId);
@@ -577,12 +619,16 @@ export async function updateInstallment(args: {
         reason: "Change-order amounts are set by the approved change order",
       };
     }
-    // A live provider invoice bills the OLD amount — changing the number
-    // under it would collect the wrong money. Cancel first, then edit.
-    if (inst.invoiceId && args.amountCents !== undefined) {
+    // A live provider invoice bills the OLD amount and due date —
+    // changing either under it means the client is billed one thing and
+    // shown another. Cancel first, then edit. (Label edits are free.)
+    if (
+      inst.invoiceId &&
+      (args.amountCents !== undefined || args.dueAt !== undefined)
+    ) {
       return {
         ok: false,
-        reason: `A ${providerWord(inst.invoiceProvider)} invoice for this amount is already out — cancel it first, then edit.`,
+        reason: `A ${providerWord(inst.invoiceProvider)} invoice for this payment is already out — cancel it first, then edit.`,
       };
     }
     await db.paymentInstallment.update({
@@ -599,9 +645,9 @@ export async function updateInstallment(args: {
             : args.dueAt
               ? new Date(args.dueAt)
               : null,
-        // A deliberate edit lifts the hold a past invoice-cancel left,
-        // so the portal/reminders may mint a fresh pay link again.
-        invoiceCanceledAt: null,
+        // Note: a past invoice-cancel's hold (invoiceCanceledAt) is NOT
+        // lifted by edits — the client was told to disregard a payment
+        // request, so only an explicit "Send invoice" re-arms links.
       },
     });
     revalidateAfterMutation();
@@ -1060,12 +1106,17 @@ export async function getPortalStateByToken(
   const now = new Date();
   const snap = paymentUrlsFromSnap(row.contractorSnap);
   const liveProfile = row.user?.contractorProfile;
-  // A live hosted invoice for the next unpaid installment — minted
-  // quietly on first view when a rail is connected. Never throws; null
-  // just means the portal falls back to the generic pasted links.
+  // A live hosted invoice for the next unpaid installment. The already-
+  // loaded row answers the common case for free; the helper only runs
+  // when a link might need minting (payWith rail chosen at send time).
+  // Never throws; null just means the portal falls back to the generic
+  // pasted links.
   const nextDue = row.installments.find((i) => i.status === "PENDING");
   const payNowUrl = nextDue
-    ? await ensurePayLinkForInstallment(nextDue.id)
+    ? (nextDue.invoiceUrl ??
+      (nextDue.invoiceCanceledAt
+        ? null
+        : await ensurePayLinkForInstallment(nextDue.id)))
     : null;
   return {
     status: row.status,

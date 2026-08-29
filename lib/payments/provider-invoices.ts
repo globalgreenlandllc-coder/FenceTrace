@@ -144,6 +144,15 @@ export async function sendInvoiceForInstallment(args: {
       reason:
         "No payment rail connected — connect Square, Stripe, or Stax in Settings → Payments",
     };
+  // Stax can't restrict a single invoice to bank-only — ACH is an
+  // account-level Stax setting. Refusing beats silently sending a
+  // card-enabled invoice the contractor believes is bank-only.
+  if (args.achOnly && provider === "stax")
+    return {
+      ok: false,
+      reason:
+        "Stax invoices can't be limited to bank-only — ACH is a Stax account setting. Send it as card + bank instead.",
+    };
 
   const apiKey = await getRailKey(args.ownerId, provider);
   if (!apiKey)
@@ -168,8 +177,13 @@ export async function sendInvoiceForInstallment(args: {
   });
   if (!sent.ok) return { ok: false, reason: sent.reason };
 
-  await db.paymentInstallment.update({
-    where: { id: inst.id },
+  // Conditional claim: two concurrent callers (portal view + cron, or
+  // two portal tabs) can both pass the invoiceId-null check above and
+  // both mint at the provider. Only one may own the row — the loser
+  // cancels its just-created invoice so no orphaned, payable page is
+  // left live that the poller would never watch.
+  const claimed = await db.paymentInstallment.updateMany({
+    where: { id: inst.id, invoiceId: null },
     data: {
       invoiceProvider: provider,
       invoiceId: sent.value.id,
@@ -179,6 +193,14 @@ export async function sendInvoiceForInstallment(args: {
       invoiceCanceledAt: null,
     },
   });
+  if (claimed.count === 0) {
+    void cancelInvoiceOn(provider, apiKey, sent.value.id).catch(() => undefined);
+    const current = await db.paymentInstallment.findUnique({
+      where: { id: inst.id },
+      select: { invoiceUrl: true },
+    });
+    return { ok: true, url: current?.invoiceUrl ?? null };
+  }
 
   return { ok: true, url: sent.value.url };
 }
@@ -215,13 +237,16 @@ export async function ensurePayLinkForInstallment(
     // button again lifts the hold.
     if (inst.invoiceCanceledAt) return null;
     if (!inst.proposal.clientEmail) return null;
-    const chosen = isInvoiceProvider(inst.proposal.payWith)
-      ? inst.proposal.payWith
-      : undefined;
+    // Auto-minting is opt-in: only when the contractor picked a rail at
+    // send time. payWith null means "I'll invoice later" — a portal
+    // view or reminder must never create billing artifacts they chose
+    // not to have. (An invoice they DID send by hand is already caught
+    // by the invoiceUrl branch above.)
+    if (!isInvoiceProvider(inst.proposal.payWith)) return null;
     const r = await sendInvoiceForInstallment({
       ownerId: inst.proposal.userId,
       installmentId,
-      provider: chosen,
+      provider: inst.proposal.payWith,
       quiet: true,
     });
     return r.ok ? r.url : null;
@@ -251,6 +276,9 @@ export async function cancelInvoiceForInstallment(args: {
   /** Contractor-written line for the apology email ("wrong amount —
    *  corrected invoice on the way"). Optional. */
   note?: string | null;
+  /** False = skip the client apology email — for cancels that aren't a
+   *  mistake, like killing the pay page after a check arrived. */
+  apologize?: boolean;
 }): Promise<CancelInvoiceResult> {
   const inst = await db.paymentInstallment.findFirst({
     where: { id: args.installmentId, proposal: { userId: args.ownerId } },
@@ -311,15 +339,17 @@ export async function cancelInvoiceForInstallment(args: {
       },
       paidBy,
     );
-    void emailOwnerPaymentReceived({
-      ownerId: res.ownerId,
-      clientName: res.clientName,
-      label: inst.label,
-      amountCents: inst.amountCents,
-      provider,
-      method: paidBy,
-      completed: res.completed,
-    });
+    if (res) {
+      void emailOwnerPaymentReceived({
+        ownerId: res.ownerId,
+        clientName: res.clientName,
+        label: inst.label,
+        amountCents: inst.amountCents,
+        provider,
+        method: paidBy,
+        completed: res.completed,
+      });
+    }
     return { ok: true, outcome: "already_paid" };
   }
 
@@ -343,7 +373,7 @@ export async function cancelInvoiceForInstallment(args: {
   const company =
     inst.proposal.user.contractorProfile?.company || "Your contractor";
   let apologySent = false;
-  if (inst.proposal.clientEmail) {
+  if (inst.proposal.clientEmail && args.apologize !== false) {
     try {
       const apology = renderInvoiceApologyEmail({
         clientFirstName:
@@ -380,6 +410,10 @@ export async function cancelInvoiceForInstallment(args: {
  * completion cascade, PAID/COMPLETED events. Kept owner-scoped so the
  * cron can run it. No app receipt email on purpose — the provider
  * already sends its own receipt for an online payment.
+ *
+ * Returns null when someone else settled it first: the 2-minute cron
+ * and the drawer's "Check now" can race, and the status-guarded claim
+ * makes exactly one of them book the money (and email the contractor).
  */
 async function settleProviderPaid(
   inst: {
@@ -392,11 +426,11 @@ async function settleProviderPaid(
   /** How they actually paid — a bank (ACH) payment is booked as a bank
    *  transfer, not laundered into "card". */
   method: "CARD" | "BANK_TRANSFER" = "CARD",
-): Promise<{ ownerId: string; clientName: string | null; completed: boolean }> {
+): Promise<{ ownerId: string; clientName: string | null; completed: boolean } | null> {
   const now = new Date();
   return db.$transaction(async (tx) => {
-    await tx.paymentInstallment.update({
-      where: { id: inst.id },
+    const claim = await tx.paymentInstallment.updateMany({
+      where: { id: inst.id, status: "PENDING" },
       data: {
         status: "PAID",
         paidAt: now,
@@ -406,6 +440,7 @@ async function settleProviderPaid(
         }`,
       },
     });
+    if (claim.count === 0) return null;
     const [row, paidAgg] = await Promise.all([
       tx.proposal.findUniqueOrThrow({
         where: { id: inst.proposalId },
@@ -561,10 +596,30 @@ export async function refreshProviderInvoices(ownerId?: string): Promise<number>
       const key = await keyFor(inst.proposal.userId, inst.invoiceProvider);
       if (!key) continue;
       const status = await invoiceStatusOn(inst.invoiceProvider, key, inst.invoiceId);
-      if (!status.ok || !status.value.paid) continue;
+      if (!status.ok) continue;
+      // Canceled at the provider's own dashboard: stop offering the
+      // dead pay page, and hold auto-re-minting — the contractor
+      // canceled it deliberately, just not through the app.
+      if (status.value.canceled) {
+        await db.paymentInstallment
+          .update({
+            where: { id: inst.id },
+            data: {
+              invoiceProvider: null,
+              invoiceId: null,
+              invoiceUrl: null,
+              invoiceSentAt: null,
+              invoiceCanceledAt: new Date(),
+            },
+          })
+          .catch(() => undefined);
+        continue;
+      }
+      if (!status.value.paid) continue;
 
       const paidBy = status.value.method === "ach" ? "BANK_TRANSFER" : "CARD";
       const res = await settleProviderPaid(inst, paidBy);
+      if (!res) continue;
       settled++;
       void emailOwnerPaymentReceived({
         ownerId: res.ownerId,

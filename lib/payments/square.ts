@@ -167,8 +167,12 @@ export async function createSquareInvoice(args: {
           payment_requests: [
             {
               request_type: "BALANCE",
-              due_date:
-                args.dueDate ?? new Date().toISOString().slice(0, 10),
+              // Square rejects a past due_date, and the overdue-reminder
+              // path passes exactly that — clamp to today ("due on receipt").
+              due_date: (() => {
+                const today = new Date().toISOString().slice(0, 10);
+                return args.dueDate && args.dueDate > today ? args.dueDate : today;
+              })(),
             },
           ],
         },

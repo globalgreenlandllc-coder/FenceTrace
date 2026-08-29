@@ -27,7 +27,10 @@ import { FREE_PROPOSALS_PER_MONTH } from "@/lib/stripe";
 import { captureTakeoffCorrection } from "@/lib/ai/takeoff-corrections";
 import { getMe } from "./me";
 import { createDefaultSchedule } from "@/lib/payment-schedule";
-import { sendInvoiceForInstallment } from "@/lib/payments/provider-invoices";
+import {
+  isInvoiceProvider,
+  sendInvoiceForInstallment,
+} from "@/lib/payments/provider-invoices";
 
 export type SendProposalResult =
   | {
@@ -71,10 +74,7 @@ export async function sendProposal(args: {
 
   // The rail the client will be billed on. Validated here rather than
   // trusted: this drives a real charge later.
-  const payWith =
-    args.payWith === "square" || args.payWith === "stripe" || args.payWith === "stax"
-      ? args.payWith
-      : null;
+  const payWith = isInvoiceProvider(args.payWith) ? args.payWith : null;
 
   if (!proposal.client.email || !isPlausibleEmail(proposal.client.email)) {
     return { ok: false, reason: "Client email is missing or invalid" };
@@ -392,6 +392,9 @@ export async function saveDraftFromEstimate(args: {
    *  the saved (possibly contractor-edited) takeoff back to the AI output
    *  that produced it — the ground-truth pair the learning loop trains on. */
   planId?: string;
+  /** How pricing presents to the client — the estimator's choice wins;
+   *  absent, the contractor's saved default applies. */
+  priceDisplay?: "totals" | "split" | "itemized";
   /** Canvas px-per-foot of the takeoff geometry — REQUIRED for correct
    *  re-measuring when the proposal canvas edits fence runs (missing =
    *  legacy plan scale fallback, which mis-prices satellite scans). */
@@ -891,28 +894,33 @@ export async function acceptProposalByToken(args: {
     }
 
     // The moment they sign is the moment they're readiest to pay — so
-    // the first payment due goes straight out as a real Square/Stripe/
-    // Stax invoice (provider's own email, card or bank), and its hosted
-    // pay page comes back to the accepted screen as a "Pay now" button.
-    // Best-effort: no rail connected or a provider hiccup just means
-    // the contractor collects the old way; acceptance never fails on it.
+    // the first payment due goes straight out as a real invoice on the
+    // rail the contractor picked at send time (provider's own email,
+    // card or bank), and its hosted pay page comes back to the accepted
+    // screen as a "Pay now" button. payWith null means the contractor
+    // chose "I'll invoice later" — nothing is sent. Best-effort: a
+    // provider hiccup just means the contractor collects the old way;
+    // acceptance never fails on it.
     let payUrl: string | null = null;
-    try {
-      const firstDue = await db.paymentInstallment.findFirst({
-        where: { proposalId: row.id, status: "PENDING" },
-        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        select: { id: true },
-      });
-      if (firstDue) {
-        const invoiced = await sendInvoiceForInstallment({
-          ownerId: row.userId,
-          installmentId: firstDue.id,
+    if (isInvoiceProvider(row.payWith)) {
+      try {
+        const firstDue = await db.paymentInstallment.findFirst({
+          where: { proposalId: row.id, status: "PENDING" },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { id: true },
         });
-        if (invoiced.ok) payUrl = invoiced.url;
-        else console.warn("[acceptProposalByToken] auto-invoice skipped:", invoiced.reason);
+        if (firstDue) {
+          const invoiced = await sendInvoiceForInstallment({
+            ownerId: row.userId,
+            installmentId: firstDue.id,
+            provider: row.payWith,
+          });
+          if (invoiced.ok) payUrl = invoiced.url;
+          else console.warn("[acceptProposalByToken] auto-invoice skipped:", invoiced.reason);
+        }
+      } catch (e) {
+        console.warn("[acceptProposalByToken] auto-invoice failed", e);
       }
-    } catch (e) {
-      console.warn("[acceptProposalByToken] auto-invoice failed", e);
     }
 
     await db.proposalEvent.create({

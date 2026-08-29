@@ -53,6 +53,7 @@ import { CANVAS_H, CANVAS_W, canvasPolylineFt, canvasToLatLng, countCornersAndEn
 import { contoursFromGrid } from "@/lib/fence/contours";
 import { sampleFenceElevations } from "@/app/actions/fence-topo";
 import { getMyFenceRates } from "@/app/actions/fence-rates";
+import { getMyProposalDefaults } from "@/app/actions/proposal-defaults";
 import type { RateBook } from "@/lib/fence/rates";
 import { summarizeSlopes, type SlopeSummary } from "@/lib/fence/slope";
 import { marketFrostIn } from "@/lib/fence/market";
@@ -101,6 +102,12 @@ export function FenceEstimator() {
   // Undefined until it loads, and undefined when they've overridden
   // nothing — both mean "quote at the platform's standard rates".
   const [rateBook, setRateBook] = useState<RateBook | undefined>(undefined);
+  // How pricing presents to the CLIENT on the proposal this estimate
+  // becomes: totals only / materials+labor / every line. Seeded from
+  // Settings → Proposal terms; switchable per estimate right here.
+  const [priceDisplay, setPriceDisplay] = useState<
+    "totals" | "split" | "itemized"
+  >("totals");
   useEffect(() => {
     let alive = true;
     getMyFenceRates()
@@ -108,6 +115,11 @@ export function FenceEstimator() {
         if (alive && Object.keys(b).length > 0) setRateBook(b);
       })
       .catch(() => undefined); // no book ⇒ standard rates, never a blocker
+    getMyProposalDefaults()
+      .then((d) => {
+        if (alive) setPriceDisplay(d.priceDisplay);
+      })
+      .catch(() => undefined); // stock default, never a blocker
     return () => {
       alive = false;
     };
@@ -655,6 +667,7 @@ export function FenceEstimator() {
         return { ...seeded, coverShotId: seeded.shots[seeded.shots.length - 1].id };
       })(),
       jobType,
+      priceDisplay,
       fence: {
         type: typeId,
         heightFt,
@@ -880,7 +893,9 @@ export function FenceEstimator() {
               )}
             </div>
 
-            {/* Config + pricing rail */}
+
+            {/* Config rail — build choices only; the numbers live in the
+                full-width band below. */}
             <div className="space-y-4">
               {/* Fence type */}
               <section className="surface p-4">
@@ -1203,121 +1218,168 @@ export function FenceEstimator() {
                 </div>
               </section>
 
-              {/* Live takeoff */}
-              <section className="surface p-4">
-                <div className="flex items-baseline justify-between">
-                  <h3 className="font-label text-zinc-500">Material takeoff</h3>
-                  <span className="text-xs text-zinc-400">
-                    {totalLf} LF drawn · {corners} corners
-                  </span>
-                </div>
-                {takeoff ? (
-                  <ul className="mt-2 max-h-56 space-y-1 overflow-auto text-[13px]">
-                    {takeoff.bom.map((b) => (
-                      <li key={b.key} className="flex justify-between gap-2">
-                        <span className="text-zinc-600">{b.label}</span>
-                        <span className="shrink-0 tabular-nums font-medium text-zinc-900">
-                          {b.qty} {b.unit}
-                        </span>
-                      </li>
-                    ))}
-                    <li className="mt-1 flex justify-between border-t border-zinc-100 pt-1.5 text-zinc-500">
-                      <span>Crew time</span>
-                      <span className="tabular-nums">{takeoff.laborHours} hrs</span>
-                    </li>
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Draw the fence (or tap “Use property line”) and the material
-                    list builds itself.
-                  </p>
-                )}
-              </section>
+            </div>
 
-              {/* Tier pricing */}
-              {tierPrices.length > 0 && (
-                <section className="surface space-y-2 p-4">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <h3 className="font-label text-zinc-500">Price options</h3>
-                    {scan?.market && scan.market.resolution !== "national" && (
-                      <span className="text-[11px] font-medium text-zinc-500">
-                        {scan.market.label} rates
-                      </span>
-                    )}
+              {/* The numbers — a full-width band under the map: the takeoff
+                and the money side-by-side with room to actually read,
+                after the build choices on a phone. */}
+            <div className="grid items-start gap-5 lg:col-span-2 xl:grid-cols-2">
+                {/* Live takeoff */}
+                <section className="surface p-4">
+                  <div className="flex items-baseline justify-between">
+                    <h3 className="font-label text-zinc-500">Material takeoff</h3>
+                    <span className="text-xs text-zinc-400">
+                      {totalLf} LF drawn · {corners} corners
+                    </span>
                   </div>
-                  {tierPrices.map(({ tier, label, price }) => (
-                    <div
-                      key={tier.id}
-                      className={cn(
-                        "flex items-center justify-between rounded-xl border px-3 py-2",
-                        tier.recommended
-                          ? "border-accent-300 bg-accent-50"
-                          : "border-zinc-200 bg-white",
-                      )}
-                    >
-                      <div>
-                        <div className="text-sm font-semibold text-zinc-900">
-                          {tier.name} — {label}
-                        </div>
-                        <div className="text-[11px] text-zinc-500">
-                          {tier.tagline} · {fmt(price.pricePerLf)}/LF
-                        </div>
-                      </div>
-                      <div className="text-sm font-bold tabular-nums text-zinc-900">
-                        {fmt(price.total)}
-                      </div>
-                    </div>
-                  ))}
-                  {/* Where these numbers come from. Contractors get asked
-                      "why is this more than the guy down the road" — this
-                      is the answer, in the contractor's own hands. */}
-                  {scan?.market && (
-                    <details className="group mt-1">
-                      <summary className="cursor-pointer list-none text-[11px] font-medium text-zinc-500 hover:text-zinc-800">
-                        How this market is priced
-                        <span className="ml-1 inline-block transition-transform group-open:rotate-90">
-                          ›
-                        </span>
-                      </summary>
-                      <ul className="mt-2 space-y-1 border-l-2 border-zinc-200 pl-3 text-[11px] leading-relaxed text-zinc-500">
-                        {scan.market.basis.map((b, i) => (
-                          <li key={i}>{b}</li>
+                  {takeoff ? (
+                    <>
+                      <ul className="mt-2 max-h-80 gap-x-8 overflow-auto text-[13px] sm:columns-2">
+                        {takeoff.bom.map((b) => (
+                          <li
+                            key={b.key}
+                            className="flex break-inside-avoid justify-between gap-2 border-b border-zinc-50 py-0.5"
+                          >
+                            <span className="text-zinc-600">{b.label}</span>
+                            <span className="shrink-0 tabular-nums font-medium text-zinc-900">
+                              {b.qty} {b.unit}
+                            </span>
+                          </li>
                         ))}
                       </ul>
-                    </details>
+                      <div className="mt-2 flex justify-between border-t border-zinc-100 pt-1.5 text-[13px] text-zinc-500">
+                        <span>Crew time</span>
+                        <span className="tabular-nums">{takeoff.laborHours} hrs</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Draw the fence (or tap “Use property line”) and the
+                      material list builds itself.
+                    </p>
                   )}
                 </section>
-              )}
 
-              <Button
-                onClick={buildProposal}
-                disabled={!takeoff || totalLf === 0 || saving}
-                className="h-12 w-full"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Fence className="h-4 w-4" />
-                )}
-                Build the proposal
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-              {saveError && (
-                <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-200">
-                  {saveError}
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setScan(null);
-                  setScanState("idle");
-                }}
-                className="transition-smooth ring-focus w-full text-center text-xs text-zinc-400 hover:text-zinc-600"
-              >
-                Scan a different address
-              </button>
-            </div>
+                {/* Tier pricing + how the client will see it */}
+                <div className="space-y-4">
+                  {tierPrices.length > 0 && (
+                    <section className="surface space-y-2 p-4">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="font-label text-zinc-500">Price options</h3>
+                        {scan?.market && scan.market.resolution !== "national" && (
+                          <span className="text-[11px] font-medium text-zinc-500">
+                            {scan.market.label} rates
+                          </span>
+                        )}
+                      </div>
+                      {tierPrices.map(({ tier, label, price }) => (
+                        <div
+                          key={tier.id}
+                          className={cn(
+                            "flex items-center justify-between rounded-xl border px-3 py-2",
+                            tier.recommended
+                              ? "border-accent-300 bg-accent-50"
+                              : "border-zinc-200 bg-white",
+                          )}
+                        >
+                          <div>
+                            <div className="text-sm font-semibold text-zinc-900">
+                              {tier.name} — {label}
+                            </div>
+                            <div className="text-[11px] text-zinc-500">
+                              {tier.tagline} · {fmt(price.pricePerLf)}/LF
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold tabular-nums text-zinc-900">
+                            {fmt(price.total)}
+                          </div>
+                        </div>
+                      ))}
+                      {/* What the CLIENT will see on the proposal — set here,
+                          carried onto the draft, still switchable in the
+                          builder. "Totals" protects margin. */}
+                      <div className="flex flex-wrap items-center gap-1.5 border-t border-zinc-100 pt-2.5 text-xs">
+                        <span className="font-label text-zinc-500">Client sees</span>
+                        {(
+                          [
+                            { id: "totals", label: "Totals only" },
+                            { id: "split", label: "Materials + labor" },
+                            { id: "itemized", label: "Every line priced" },
+                          ] as const
+                        ).map((m) => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setPriceDisplay(m.id)}
+                            className={cn(
+                              "transition-smooth ring-focus rounded-full border px-2.5 py-1 font-medium",
+                              priceDisplay === m.id
+                                ? "border-accent-500 bg-accent-50 text-accent-900"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50",
+                            )}
+                          >
+                            {m.label}
+                          </button>
+                        ))}
+                        <span className="w-full text-[11px] text-zinc-400">
+                          {priceDisplay === "totals"
+                            ? "Scope listed, one confident price per package — recommended."
+                            : priceDisplay === "split"
+                              ? "Adds materials & parts vs labor & installation subtotals."
+                              : "Every line priced — commercial / insurance work."}
+                        </span>
+                      </div>
+                      {/* Where these numbers come from. Contractors get asked
+                          "why is this more than the guy down the road" — this
+                          is the answer, in the contractor's own hands. */}
+                      {scan?.market && (
+                        <details className="group mt-1">
+                          <summary className="cursor-pointer list-none text-[11px] font-medium text-zinc-500 hover:text-zinc-800">
+                            How this market is priced
+                            <span className="ml-1 inline-block transition-transform group-open:rotate-90">
+                              ›
+                            </span>
+                          </summary>
+                          <ul className="mt-2 space-y-1 border-l-2 border-zinc-200 pl-3 text-[11px] leading-relaxed text-zinc-500">
+                            {scan.market.basis.map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
+                    </section>
+                  )}
+
+                  <Button
+                    onClick={buildProposal}
+                    disabled={!takeoff || totalLf === 0 || saving}
+                    className="h-12 w-full"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Fence className="h-4 w-4" />
+                    )}
+                    Build the proposal
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                  {saveError && (
+                    <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 ring-1 ring-rose-200">
+                      {saveError}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScan(null);
+                      setScanState("idle");
+                    }}
+                    className="transition-smooth ring-focus w-full text-center text-xs text-zinc-400 hover:text-zinc-600"
+                  >
+                    Scan a different address
+                  </button>
+                </div>
+              </div>
           </div>
         )}
       </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Check, Copy, Headphones, Loader2, Mail, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,15 +53,21 @@ export function SendModal({
   const [messageDirty, setMessageDirty] = useState(false);
   const [copied, setCopied] = useState(false);
   // Which rails have keys connected; the default is the first, so the
-  // common case is already chosen when the modal opens.
+  // common case is already chosen when the modal opens. Defaulted only
+  // ONCE — an explicit "I'll invoice later" (null) must survive closing
+  // and reopening the modal, so `cur ?? first` can't run again.
   const [rails, setRails] = useState<Rail[]>([]);
   const [payWith, setPayWith] = useState<Rail | null>(null);
+  const payWithDefaulted = useRef(false);
   useEffect(() => {
     if (!open) return;
     listInvoiceProviders()
       .then((r) => {
         setRails(r);
-        setPayWith((cur) => cur ?? r[0] ?? null);
+        if (!payWithDefaulted.current) {
+          payWithDefaulted.current = true;
+          setPayWith((cur) => cur ?? r[0] ?? null);
+        }
       })
       .catch(() => undefined);
   }, [open]);
