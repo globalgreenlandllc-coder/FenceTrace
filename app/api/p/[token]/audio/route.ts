@@ -22,6 +22,10 @@ import { requestIp } from "@/lib/abuse/rate-limit";
 // spend TTS money, so only they are rate-limited.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// A cache-miss play synthesizes ~1 min of speech and uploads it — well
+// past Vercel's default function timeout. Same ceiling as the other
+// long-running routes.
+export const maxDuration = 60;
 
 export async function GET(
   request: Request,
