@@ -1,13 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AlertTriangle, Check, Copy, Headphones, Loader2, Mail, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Proposal } from "@/lib/proposal-mock";
 import { sendProposal } from "@/app/actions/proposals";
 import { createSubscriptionCheckout } from "@/app/actions/billing";
+import { listInvoiceProviders } from "@/app/actions/provider-invoices";
 import { cn } from "@/lib/utils";
+
+type Rail = "square" | "stripe" | "stax";
+
+const RAIL_LABELS: Record<Rail, string> = {
+  square: "Square",
+  stripe: "Stripe",
+  stax: "Stax",
+};
 
 function isPlausibleEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
@@ -43,6 +52,19 @@ export function SendModal({
   // the greeting auto-synced to the client-name field.
   const [messageDirty, setMessageDirty] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Which rails have keys connected; the default is the first, so the
+  // common case is already chosen when the modal opens.
+  const [rails, setRails] = useState<Rail[]>([]);
+  const [payWith, setPayWith] = useState<Rail | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    listInvoiceProviders()
+      .then((r) => {
+        setRails(r);
+        setPayWith((cur) => cur ?? r[0] ?? null);
+      })
+      .catch(() => undefined);
+  }, [open]);
   const [error, setError] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
   const [upgrading, setUpgrading] = useState(false);
@@ -116,6 +138,7 @@ export function SendModal({
         proposal: updated,
         subject,
         message,
+        payWith,
       });
       if (res.ok) {
         setSentPortalUrl(res.portalUrl);
@@ -261,6 +284,40 @@ export function SendModal({
                       </button>
                     </div>
                   </Row>
+                  {/* How they'll pay when they say yes. Picked here
+                      because this is the moment the contractor is
+                      thinking about this client — and because
+                      acceptance is when clients are most willing to
+                      pay. On accept the deposit is invoiced on this
+                      rail automatically and the portal's Pay button
+                      points at it. */}
+                  {rails.length > 0 && (
+                    <Row label="Pay by">
+                      <div className="flex w-full flex-wrap items-center gap-1.5">
+                        {[
+                          ...rails.map((r) => ({
+                            key: r as Rail | null,
+                            label: RAIL_LABELS[r],
+                          })),
+                          { key: null, label: "I'll invoice later" },
+                        ].map((o) => (
+                          <button
+                            key={o.label}
+                            type="button"
+                            onClick={() => setPayWith(o.key)}
+                            className={cn(
+                              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                              payWith === o.key
+                                ? "border-accent-400 bg-accent-50 text-accent-800"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300",
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </Row>
+                  )}
                 </div>
 
                 {limitHit && (

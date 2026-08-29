@@ -130,6 +130,8 @@ model User {
   fenceRates        ContractorFenceRate[]
   // One-time proposal boilerplate: terms + client price display default.
   proposalDefaults  ContractorProposalDefaults?
+  // Payment rails this contractor connected (Square / Stripe / Stax).
+  paymentConnections PaymentConnection[]
 
   // Referral program: shareable code (lazily minted on first visit to
   // Settings) + who referred this account (set once at creation from
@@ -214,6 +216,31 @@ model ContractorProfile {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("contractor_profiles")
+}
+
+// Per-contractor payment-rail connections: the API key that lets the
+// app send real Square / Stripe / Stax invoices from the contractor's
+// OWN account (their money, their processor, their fees). One key per
+// rail per contractor, AES-256-GCM encrypted with APP_ENCRYPTION_KEY —
+// same crypto as the admin ApiKey vault, but scoped to the tenant.
+// Distinct from ContractorProfile.stripePaymentUrl/squarePaymentUrl,
+// which are dumb pasted links; a connection lets the app create
+// invoices and hear when they're paid.
+model PaymentConnection {
+  id           String    @id @default(cuid())
+  userId       String
+  // "square" | "stripe" | "stax"
+  provider     String
+  encryptedKey String    @db.Text
+  fingerprint  String
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@map("payment_connections")
 }
 
 // -----------------------------------------------------------------------
@@ -362,6 +389,11 @@ model Proposal {
   clientName        String
   clientEmail       String
   status            ProposalStatus @default(DRAFT)
+  // Which payment rail to bill this job on, chosen when the proposal is
+  // SENT. "square" | "stripe" | "stax" | null (null = the contractor
+  // invoices by hand from the payments drawer). On acceptance the first
+  // installment is invoiced through this rail automatically.
+  payWith           String?
   selectedPackageId String?
   totalCents        Int            @default(0)
   paidCents         Int            @default(0)
@@ -482,6 +514,18 @@ model PaymentInstallment {
   // Reminder throttling for the daily cron + manual "Remind" button.
   remindedAt    DateTime?
   reminderCount Int               @default(0)
+  // The provider invoice this installment went out as, when the
+  // contractor invoiced through Square, Stripe, or Stax rather than by
+  // hand. invoiceUrl is the provider's hosted pay page — it backs the
+  // portal's "Pay now" button and the reminder emails' CTA.
+  invoiceProvider String? // "square" | "stripe" | "stax"
+  invoiceId       String?
+  invoiceUrl      String?
+  invoiceSentAt   DateTime?
+  // Set when the contractor revoked an invoice sent by mistake. While
+  // set, no pay link is quietly re-minted for this installment — an
+  // explicit re-invoice or installment edit lifts the hold.
+  invoiceCanceledAt DateTime?
   // Set when this installment was created by an approved change order.
   changeOrderId String?           @unique
   createdAt     DateTime          @default(now())

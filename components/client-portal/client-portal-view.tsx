@@ -57,6 +57,10 @@ export function ClientPortalView({
     "deposit",
   );
   const [accepted, setAccepted] = useState(false);
+  // Hosted Square/Stripe/Stax pay page for the first payment — comes
+  // back from the accept call so "You're all set" can offer a real
+  // Pay-now button for the exact amount due.
+  const [payNowUrl, setPayNowUrl] = useState<string | null>(null);
   const [acceptError, setAcceptError] = useState<string | null>(null);
   const [, startAccept] = useTransition();
   const [acceptPending, setAcceptPending] = useState(false);
@@ -117,6 +121,7 @@ export function ClientPortalView({
           squarePaymentUrl: proposal.contractor.squarePaymentUrl ?? null,
         }}
         signerName={signerName}
+        payNowUrl={payNowUrl}
       />
     );
   }
@@ -250,6 +255,7 @@ export function ClientPortalView({
                 setAcceptError(result.reason);
                 return;
               }
+              setPayNowUrl(result.payUrl ?? null);
               setAccepted(true);
             } catch (e) {
               setAcceptError(

@@ -294,7 +294,18 @@ export function PaymentHub({
 
                   {isNext && !complete && (
                     <div className="mt-3 flex flex-col gap-2 pl-8">
-                      {(stripeUrl || squareUrl) && (
+                      {/* A live invoice for this exact amount beats the
+                          generic profile links — show one or the other,
+                          never both. */}
+                      {state.payNowUrl ? (
+                        <div className="flex flex-wrap gap-2">
+                          <PayLink
+                            href={state.payNowUrl}
+                            label={`Pay ${fmt(i.amountCents)} now — card or bank`}
+                            primary
+                          />
+                        </div>
+                      ) : (stripeUrl || squareUrl) ? (
                         <div className="flex flex-wrap gap-2">
                           {stripeUrl && (
                             <PayLink
@@ -311,7 +322,7 @@ export function PaymentHub({
                             />
                           )}
                         </div>
-                      )}
+                      ) : null}
                       <p className="text-xs text-zinc-500">
                         Paying by cash or check? Hand it to{" "}
                         {proposal.contractor.company} — they&apos;ll mark it

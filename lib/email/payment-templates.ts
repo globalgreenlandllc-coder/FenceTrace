@@ -181,6 +181,10 @@ export type ReminderEmailVars = {
   amountCents: number;
   dueAt: Date | null;
   overdue: boolean;
+  /** Hosted Square/Stripe/Stax invoice for THIS installment — the exact
+   *  amount, card or bank. When present it's the one true pay button
+   *  and the generic profile links below are skipped. */
+  payUrl?: string | null;
   stripeUrl?: string | null;
   squareUrl?: string | null;
   portalUrl: string;
@@ -201,14 +205,18 @@ export function renderReminderEmail(v: ReminderEmailVars): {
       : `due ${dateLabel(v.dueAt)}`
     : "due on completion";
 
-  const payButtons = [
-    v.stripeUrl
-      ? `<a href="${escapeAttr(v.stripeUrl)}" style="display:inline-block;background:${BLUE};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:12px;margin:4px;">Pay ${money(v.amountCents)} online</a>`
-      : "",
-    v.squareUrl
-      ? `<a href="${escapeAttr(v.squareUrl)}" style="display:inline-block;background:${v.stripeUrl ? "#ffffff" : BLUE};color:${v.stripeUrl ? "#18181b" : "#ffffff"};border:1px solid ${v.stripeUrl ? "#e4e4e7" : BLUE};text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:12px;margin:4px;">Pay with Square</a>`
-      : "",
-  ].join("");
+  // A live invoice for this exact amount beats the generic profile
+  // links — show one or the other, never both.
+  const payButtons = v.payUrl
+    ? `<a href="${escapeAttr(v.payUrl)}" style="display:inline-block;background:${BLUE};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:12px;margin:4px;">Pay ${money(v.amountCents)} now — card or bank</a>`
+    : [
+        v.stripeUrl
+          ? `<a href="${escapeAttr(v.stripeUrl)}" style="display:inline-block;background:${BLUE};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:12px;margin:4px;">Pay ${money(v.amountCents)} online</a>`
+          : "",
+        v.squareUrl
+          ? `<a href="${escapeAttr(v.squareUrl)}" style="display:inline-block;background:${v.stripeUrl ? "#ffffff" : BLUE};color:${v.stripeUrl ? "#18181b" : "#ffffff"};border:1px solid ${v.stripeUrl ? "#e4e4e7" : BLUE};text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:12px;margin:4px;">Pay with Square</a>`
+          : "",
+      ].join("");
 
   const inner = `
     <tr>
@@ -251,8 +259,9 @@ export function renderReminderEmail(v: ReminderEmailVars): {
     ``,
     `A friendly reminder: the ${v.installmentLabel} of ${money(v.amountCents)} for ${v.address} is ${dueLine}.`,
     ``,
-    v.stripeUrl ? `Pay online: ${v.stripeUrl}` : "",
-    v.squareUrl ? `Pay with Square: ${v.squareUrl}` : "",
+    v.payUrl ? `Pay now (card or bank): ${v.payUrl}` : "",
+    !v.payUrl && v.stripeUrl ? `Pay online: ${v.stripeUrl}` : "",
+    !v.payUrl && v.squareUrl ? `Pay with Square: ${v.squareUrl}` : "",
     `Paying by cash or check? Just hand it to your contractor.`,
     ``,
     `Project & payment schedule: ${v.portalUrl}`,
@@ -412,6 +421,87 @@ export function renderChangeOrderDecisionEmail(v: ChangeOrderDecisionVars): {
     ``,
     `Dashboard: ${v.dashUrl}`,
   ].join("\n");
+
+  return { subject, html, text };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Invoice canceled — apology to the client                           */
+/* ------------------------------------------------------------------ */
+
+export type InvoiceApologyEmailVars = {
+  clientFirstName: string;
+  companyName: string;
+  address: string;
+  installmentLabel: string;
+  amountCents: number;
+  /** Optional contractor-written line ("wrong amount — corrected invoice
+   *  on the way"), shown verbatim to the client. */
+  note?: string | null;
+};
+
+/**
+ * Sent when the contractor revokes an invoice that went out by mistake.
+ * Says sorry plainly, tells them the pay link is dead, and covers the
+ * race where they already paid — "payment request" rather than
+ * "invoice" so it reads right whether they got the provider's email or
+ * only ever saw a pay button in the portal or a reminder.
+ */
+export function renderInvoiceApologyEmail(v: InvoiceApologyEmailVars): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const subject = `Please disregard that payment request — ${v.companyName}`;
+
+  const inner = `
+    <tr>
+      <td style="padding:28px;">
+        <div style="font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#71717a;font-weight:600;">
+          ${escapeHtml(v.companyName)} · Our apologies
+        </div>
+        <h1 style="margin:8px 0 0 0;font-size:24px;line-height:1.25;font-weight:700;color:#0c0a09;">
+          Hi ${escapeHtml(v.clientFirstName)} — please disregard that one.
+        </h1>
+        <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#52525b;">
+          The payment request for the <strong>${escapeHtml(v.installmentLabel)}</strong>
+          of <strong>${money(v.amountCents)}</strong> for ${escapeHtml(v.address)}
+          went out by mistake, and we've canceled it — the pay link on it no
+          longer works, and there's nothing you need to do.
+        </p>
+        ${
+          v.note
+            ? `<p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#52525b;">${escapeHtml(v.note)}</p>`
+            : ""
+        }
+        <p style="margin:12px 0 0 0;font-size:14px;line-height:1.6;color:#52525b;">
+          If you already paid it, don't worry — we see the payment on our side
+          and it counts toward your balance; we'll sort out anything else
+          ourselves. Sorry for the confusion, and thank you for your patience.
+        </p>
+        <p style="margin:16px 0 0 0;font-size:14px;color:#3f3f46;">— ${escapeHtml(v.companyName)}</p>
+      </td>
+    </tr>`;
+
+  const html = shell(
+    subject,
+    inner,
+    `Sent by ${escapeHtml(v.companyName)} via FenceScan.`,
+  );
+
+  const text = [
+    `Hi ${v.clientFirstName},`,
+    ``,
+    `Please disregard the payment request for the ${v.installmentLabel} of ${money(v.amountCents)} for ${v.address} — it went out by mistake and has been canceled. The pay link no longer works, and there's nothing you need to do.`,
+    v.note ? `` : null,
+    v.note ?? null,
+    ``,
+    `If you already paid it, don't worry — we see the payment on our side and it counts toward your balance. Sorry for the confusion!`,
+    ``,
+    `— ${v.companyName}`,
+  ]
+    .filter((l): l is string => l !== null)
+    .join("\n");
 
   return { subject, html, text };
 }

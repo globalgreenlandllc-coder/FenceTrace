@@ -8,6 +8,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/invoice-status",
+      "schedule": "*/2 * * * *"
+    },
+    {
       "path": "/api/cron/payment-reminders",
       "schedule": "0 16 * * *"
     },

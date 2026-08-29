@@ -30,6 +30,7 @@ export function AcceptedScreen({
   amount,
   contractor,
   signerName,
+  payNowUrl,
 }: {
   packageName: string;
   amount: number;
@@ -41,10 +42,15 @@ export function AcceptedScreen({
     squarePaymentUrl?: string | null;
   };
   signerName: string;
+  /** Hosted invoice pay page (Square/Stripe/Stax) created the moment
+   *  they accepted — the exact amount due, card or bank. When present
+   *  it IS the pay button; the generic profile links are only a
+   *  fallback. */
+  payNowUrl?: string | null;
 }) {
-  const stripeUrl = contractor.stripePaymentUrl ?? null;
-  const squareUrl = contractor.squarePaymentUrl ?? null;
-  const hasPayment = !!(stripeUrl || squareUrl);
+  const stripeUrl = payNowUrl ? null : (contractor.stripePaymentUrl ?? null);
+  const squareUrl = payNowUrl ? null : (contractor.squarePaymentUrl ?? null);
+  const hasPayment = !!(payNowUrl || stripeUrl || squareUrl);
   const reduce = useReducedMotion();
   return (
     <motion.div
@@ -84,9 +90,11 @@ export function AcceptedScreen({
           className="mt-3 max-w-md text-center text-zinc-600"
         >
           {contractor.company} received your signed proposal.{" "}
-          {hasPayment
-            ? `Pay ${formatCurrency(amount)} below to lock in scheduling.`
-            : `${contractor.name} will reach out shortly to arrange payment and scheduling.`}
+          {payNowUrl
+            ? `Pay ${formatCurrency(amount)} below to lock in scheduling — we also emailed you the invoice.`
+            : hasPayment
+              ? `Pay ${formatCurrency(amount)} below to lock in scheduling.`
+              : `${contractor.name} will reach out shortly to arrange payment and scheduling.`}
         </motion.p>
 
         {hasPayment && (
@@ -94,6 +102,13 @@ export function AcceptedScreen({
             variants={fadeInUp}
             className="mt-6 flex w-full flex-col items-stretch gap-2 sm:max-w-md"
           >
+            {payNowUrl && (
+              <PayButton
+                href={payNowUrl}
+                label={`Pay ${formatCurrency(amount)} now — card or bank`}
+                variant="primary"
+              />
+            )}
             {stripeUrl && (
               <PayButton
                 href={stripeUrl}

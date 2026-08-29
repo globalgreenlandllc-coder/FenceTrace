@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sendEmailViaResend } from "@/lib/email/resend";
 import { renderReminderEmail } from "@/lib/email/payment-templates";
+import { ensurePayLinkForInstallment } from "@/lib/payments/provider-invoices";
 
 export const maxDuration = 60;
 
@@ -44,6 +45,10 @@ export async function GET(request: Request) {
         dueAt: { lt: now },
         reminderCount: { lt: MAX_REMINDERS },
         OR: [{ remindedAt: null }, { remindedAt: { lt: cooldownCutoff } }],
+        // Never chase a payment whose invoice the contractor just
+        // revoked — "disregard that request" and "please pay" can't
+        // both go to the same client.
+        invoiceCanceledAt: null,
         proposal: { status: "ACCEPTED", completedAt: null },
       },
       include: {
@@ -87,6 +92,10 @@ export async function GET(request: Request) {
         squarePaymentUrl?: string | null;
       };
       const live = p.user?.contractorProfile;
+      // Give the nudge a real pay button: a hosted invoice page for
+      // this exact amount on the connected rail, minted quietly if none
+      // exists yet. Null just falls back to the generic pasted links.
+      const payUrl = await ensurePayLinkForInstallment(inst.id);
       const email = renderReminderEmail({
         clientFirstName:
           (p.clientName || "there").trim().split(/\s+/)[0] || "there",
@@ -96,6 +105,7 @@ export async function GET(request: Request) {
         amountCents: inst.amountCents,
         dueAt: inst.dueAt,
         overdue: true,
+        payUrl,
         stripeUrl: snap.stripePaymentUrl ?? live?.stripePaymentUrl ?? null,
         squareUrl: snap.squarePaymentUrl ?? live?.squarePaymentUrl ?? null,
         portalUrl: `${appBaseUrl()}/p/${p.publicToken}`,

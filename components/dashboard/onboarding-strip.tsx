@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 
 const STEPS = [
   {
-    id: "stripe",
+    id: "payments",
     icon: CreditCard,
-    label: "Connect Stripe",
-    sub: "Receive payments",
+    label: "Connect payments",
+    sub: "Square, Stripe, or Stax",
     done: false,
     href: "/dashboard/settings",
   },

@@ -10,10 +10,13 @@ import {
   CheckCircle2,
   ChevronDown,
   Clock,
+  ExternalLink,
+  FileText,
   Loader2,
   Mail,
   PartyPopper,
   Plus,
+  RefreshCw,
   RotateCcw,
   Send,
   Trash2,
@@ -37,8 +40,22 @@ import {
   type PaymentMethodId,
   type PaymentOverview,
 } from "@/app/actions/payments";
+import {
+  cancelProviderInvoice,
+  listInvoiceProviders,
+  refreshMyProviderInvoices,
+  sendProviderInvoice,
+} from "@/app/actions/provider-invoices";
 import { timeAgo } from "@/lib/dashboard-mock";
 import { SPRING } from "@/lib/motion";
+
+type Rail = "square" | "stripe" | "stax";
+
+const RAIL_LABEL: Record<string, string> = {
+  square: "Square",
+  stripe: "Stripe",
+  stax: "Stax",
+};
 
 const METHODS: { id: PaymentMethodId; label: string }[] = [
   { id: "CASH", label: "Cash" },
@@ -87,6 +104,10 @@ export function PaymentsDrawer({
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Which invoice rails have keys connected — drives the per-installment
+  // "Send invoice" menu. Empty = the contractor collects by hand.
+  const [rails, setRails] = useState<Rail[]>([]);
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -100,10 +121,47 @@ export function PaymentsDrawer({
         if (alive)
           setLoadError(e instanceof Error ? e.message : "Failed to load");
       });
+    listInvoiceProviders()
+      .then((r) => {
+        if (alive) setRails(r);
+      })
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [proposalId]);
+
+  /** Re-pull the overview after a provider-invoice action (those return
+   *  provider results, not a fresh overview). */
+  async function reloadOverview() {
+    try {
+      const o = await getPaymentOverview(proposalId);
+      if (o) setOverview(o);
+    } catch {
+      /* the stale view is still usable */
+    }
+  }
+
+  /** "Check now" — ask the providers whether anything got paid. */
+  async function checkForPayments() {
+    setChecking(true);
+    setError(null);
+    setFlash(null);
+    try {
+      const r = await refreshMyProviderInvoices();
+      await reloadOverview();
+      setFlash(
+        r.settled > 0
+          ? `${r.settled} payment${r.settled === 1 ? "" : "s"} came in — recorded 🎉`
+          : "No new payments yet — we check automatically every couple of minutes.",
+      );
+      setTimeout(() => setFlash(null), 4000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't check payments");
+    } finally {
+      setChecking(false);
+    }
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -279,8 +337,27 @@ export function PaymentsDrawer({
 
               {/* Schedule */}
               <section>
-                <div className="font-label mb-2 text-[11px] text-zinc-400">
-                  Payment schedule
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="font-label text-[11px] text-zinc-400">
+                    Payment schedule
+                  </div>
+                  {rails.length > 0 &&
+                    overview.installments.some(
+                      (i) => i.status === "PENDING" && i.invoiceUrl,
+                    ) && (
+                      <button
+                        type="button"
+                        disabled={checking}
+                        onClick={() => void checkForPayments()}
+                        title="Ask Square/Stripe/Stax whether anything got paid"
+                        className="transition-smooth ring-focus inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-60"
+                      >
+                        <RefreshCw
+                          className={cn("h-3 w-3", checking && "animate-spin")}
+                        />
+                        Check for payments
+                      </button>
+                    )}
                 </div>
                 {/* No overflow-hidden: it would clip the "Mark paid" method
                     menu on the LAST row (the final payment), which opens below
@@ -299,6 +376,66 @@ export function PaymentsDrawer({
                       inst={inst}
                       isLast={i === overview.installments.length - 1}
                       busy={busyId === inst.id}
+                      rails={rails}
+                      onSendInvoice={async (rail, achOnly) => {
+                        setBusyId(inst.id);
+                        setError(null);
+                        setFlash(null);
+                        try {
+                          const r = await sendProviderInvoice(
+                            inst.id,
+                            rail,
+                            achOnly,
+                          );
+                          if (!r.ok) {
+                            setError(r.reason);
+                            return;
+                          }
+                          await reloadOverview();
+                          setFlash(
+                            `${RAIL_LABEL[rail]} invoice sent — the client gets ${RAIL_LABEL[rail]}'s email with a hosted pay page${achOnly ? " (bank only)" : " (card or bank)"}.`,
+                          );
+                          setTimeout(() => setFlash(null), 5000);
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : "Invoice failed",
+                          );
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
+                      onCancelInvoice={async () => {
+                        const note = window.prompt(
+                          "We'll email the client an apology and kill the pay link. Add an optional note for them (e.g. “wrong amount — corrected invoice on the way”), or leave blank:",
+                        );
+                        if (note === null) return;
+                        setBusyId(inst.id);
+                        setError(null);
+                        setFlash(null);
+                        try {
+                          const r = await cancelProviderInvoice(
+                            inst.id,
+                            note.trim() || undefined,
+                          );
+                          if (!r.ok) {
+                            setError(r.reason);
+                            return;
+                          }
+                          await reloadOverview();
+                          setFlash(
+                            r.outcome === "already_paid"
+                              ? "They'd already paid it — the payment is recorded instead."
+                              : `Invoice canceled${r.apologySent ? " — apology emailed to the client." : "."}`,
+                          );
+                          setTimeout(() => setFlash(null), 5000);
+                        } catch (e) {
+                          setError(
+                            e instanceof Error ? e.message : "Cancel failed",
+                          );
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
                       onMarkPaid={(method) =>
                         run(
                           inst.id,
@@ -479,6 +616,9 @@ function InstallmentRow({
   inst,
   isLast,
   busy,
+  rails,
+  onSendInvoice,
+  onCancelInvoice,
   onMarkPaid,
   onRemind,
   onResendReceipt,
@@ -490,6 +630,10 @@ function InstallmentRow({
    *  at the bottom of the list / the scrolled drawer (the final-payment bug). */
   isLast: boolean;
   busy: boolean;
+  /** Connected invoice rails — one "Send invoice" entry each. */
+  rails: Rail[];
+  onSendInvoice: (rail: Rail, achOnly?: boolean) => void;
+  onCancelInvoice: () => void;
   onMarkPaid: (method: PaymentMethodId) => void;
   onRemind: () => void;
   onResendReceipt: () => void;
@@ -497,7 +641,9 @@ function InstallmentRow({
   onDelete: () => void;
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
   const paid = inst.status === "PAID";
+  const invoiced = !paid && !!inst.invoiceUrl;
 
   return (
     <li className="border-b border-zinc-100 px-4 py-3 last:border-b-0">
@@ -539,6 +685,12 @@ function InstallmentRow({
                 )
               ) : (
                 <>Due on completion</>
+              )}
+              {invoiced && (
+                <span className="ml-1 text-accent-700">
+                  · invoiced via {RAIL_LABEL[inst.invoiceProvider ?? ""] ?? inst.invoiceProvider}
+                  {inst.invoiceSentAt ? ` ${timeAgo(inst.invoiceSentAt)}` : ""}
+                </span>
               )}
             </div>
           </div>
@@ -597,6 +749,90 @@ function InstallmentRow({
                 </>
               )}
             </div>
+            {rails.length > 0 && !invoiced && (
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setInvoiceOpen((v) => !v)}
+                  title="Send a real invoice from your processor — the client pays online, the payment records itself"
+                  className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-md bg-accent-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-accent-700 disabled:opacity-60"
+                >
+                  <FileText className="h-3 w-3" />
+                  Send invoice
+                  <ChevronDown className="h-3 w-3 opacity-70" />
+                </button>
+                {invoiceOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setInvoiceOpen(false)}
+                    />
+                    <div
+                      className={cn(
+                        "anim-pop absolute left-0 z-20 w-60 overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-elevated",
+                        isLast
+                          ? "origin-bottom-left bottom-full mb-1"
+                          : "origin-top-left top-full mt-1",
+                      )}
+                    >
+                      {rails.map((rail) => (
+                        <button
+                          key={rail}
+                          type="button"
+                          onClick={() => {
+                            setInvoiceOpen(false);
+                            onSendInvoice(rail);
+                          }}
+                          className="transition-smooth ring-focus flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50"
+                        >
+                          {RAIL_LABEL[rail]} — card or bank (ACH)
+                        </button>
+                      ))}
+                      {rails.includes("square") && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoiceOpen(false);
+                            onSendInvoice("square", true);
+                          }}
+                          title="No card option on the pay page — skips the card fee on big amounts"
+                          className="transition-smooth ring-focus flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-xs text-zinc-700 hover:bg-zinc-50"
+                        >
+                          Square — bank only (no card fee)
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {invoiced && (
+              <>
+                {inst.invoiceUrl && (
+                  <a
+                    href={inst.invoiceUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title="The hosted pay page the client sees"
+                    className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:border-accent-300 hover:text-accent-700"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    Pay page
+                  </a>
+                )}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={onCancelInvoice}
+                  title="Revoke the invoice and email the client an apology"
+                  className="transition-smooth ring-focus press-scale inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-zinc-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"
+                >
+                  <X className="h-3 w-3" />
+                  Cancel invoice
+                </button>
+              </>
+            )}
             <button
               type="button"
               disabled={busy}
@@ -607,7 +843,7 @@ function InstallmentRow({
               <Bell className="h-3 w-3" />
               Remind
             </button>
-            {!inst.changeOrderId && (
+            {!inst.changeOrderId && !invoiced && (
               <button
                 type="button"
                 disabled={busy}

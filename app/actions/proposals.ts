@@ -27,6 +27,7 @@ import { FREE_PROPOSALS_PER_MONTH } from "@/lib/stripe";
 import { captureTakeoffCorrection } from "@/lib/ai/takeoff-corrections";
 import { getMe } from "./me";
 import { createDefaultSchedule } from "@/lib/payment-schedule";
+import { sendInvoiceForInstallment } from "@/lib/payments/provider-invoices";
 
 export type SendProposalResult =
   | {
@@ -57,11 +58,23 @@ export async function sendProposal(args: {
   proposal: Proposal;
   subject: string;
   message: string;
+  /** Which rail to bill this job on once the client accepts — "square" |
+   *  "stripe" | "stax", or null to invoice by hand later. Chosen at send
+   *  time because that is when the contractor is thinking about this
+   *  client. */
+  payWith?: "square" | "stripe" | "stax" | null;
 }): Promise<SendProposalResult> {
   const me = await getMe();
   if (!me) return { ok: false, reason: "Not signed in" };
 
   const { proposal, subject, message } = args;
+
+  // The rail the client will be billed on. Validated here rather than
+  // trusted: this drives a real charge later.
+  const payWith =
+    args.payWith === "square" || args.payWith === "stripe" || args.payWith === "stax"
+      ? args.payWith
+      : null;
 
   if (!proposal.client.email || !isPlausibleEmail(proposal.client.email)) {
     return { ok: false, reason: "Client email is missing or invalid" };
@@ -134,6 +147,7 @@ export async function sendProposal(args: {
     clientName: proposal.client.name,
     clientEmail: proposal.client.email,
     status: "SENT" as const,
+    payWith,
     data,
     contractorSnap,
     sentAt: new Date(),
@@ -150,6 +164,7 @@ export async function sendProposal(args: {
         data,
         contractorSnap,
         status: "SENT",
+        payWith,
         sentAt: new Date(),
         expiresAt: addDays(new Date(), proposal.validDays || 30),
       },
@@ -761,6 +776,11 @@ export type AcceptProposalResult =
       acceptedAt: string;
       proposalAddress: string;
       contractorNotified: boolean;
+      /** Hosted Square/Stripe/Stax pay page for the first payment due —
+       *  the accepted screen puts a real "Pay now" button behind it.
+       *  Null when no rail is connected (the contractor collects by
+       *  hand or via a pasted payment link). */
+      payUrl?: string | null;
     }
   | { ok: false; reason: string };
 
@@ -807,11 +827,19 @@ export async function acceptProposalByToken(args: {
     if (!row) return { ok: false, reason: "Proposal not found" };
 
     if (row.status === "ACCEPTED") {
+      // Re-accept is a no-op, but the client still deserves their pay
+      // button back — hand over the invoice link if one is already live.
+      const existing = await db.paymentInstallment.findFirst({
+        where: { proposalId: row.id, status: "PENDING", invoiceUrl: { not: null } },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { invoiceUrl: true },
+      });
       return {
         ok: true,
         acceptedAt: (row.acceptedAt ?? row.updatedAt).toISOString(),
         proposalAddress: row.address,
         contractorNotified: false,
+        payUrl: existing?.invoiceUrl ?? null,
       };
     }
 
@@ -860,6 +888,31 @@ export async function acceptProposalByToken(args: {
       });
     } catch (e) {
       console.warn("[acceptProposalByToken] schedule creation failed", e);
+    }
+
+    // The moment they sign is the moment they're readiest to pay — so
+    // the first payment due goes straight out as a real Square/Stripe/
+    // Stax invoice (provider's own email, card or bank), and its hosted
+    // pay page comes back to the accepted screen as a "Pay now" button.
+    // Best-effort: no rail connected or a provider hiccup just means
+    // the contractor collects the old way; acceptance never fails on it.
+    let payUrl: string | null = null;
+    try {
+      const firstDue = await db.paymentInstallment.findFirst({
+        where: { proposalId: row.id, status: "PENDING" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      if (firstDue) {
+        const invoiced = await sendInvoiceForInstallment({
+          ownerId: row.userId,
+          installmentId: firstDue.id,
+        });
+        if (invoiced.ok) payUrl = invoiced.url;
+        else console.warn("[acceptProposalByToken] auto-invoice skipped:", invoiced.reason);
+      }
+    } catch (e) {
+      console.warn("[acceptProposalByToken] auto-invoice failed", e);
     }
 
     await db.proposalEvent.create({
@@ -946,6 +999,7 @@ export async function acceptProposalByToken(args: {
       acceptedAt: now.toISOString(),
       proposalAddress: row.address,
       contractorNotified,
+      payUrl,
     };
   } catch (e) {
     console.error("[acceptProposalByToken] threw", e);

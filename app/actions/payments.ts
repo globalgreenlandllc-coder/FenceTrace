@@ -18,6 +18,10 @@ import { checkUserEmailBudget, checkPortalWrite } from "@/lib/abuse/guards";
 import { POLICIES } from "@/lib/abuse/policies";
 import { getMe } from "./me";
 import { ensureScheduleForProposal } from "@/lib/payment-schedule";
+import {
+  ensurePayLinkForInstallment,
+  providerWord,
+} from "@/lib/payments/provider-invoices";
 
 /* ------------------------------------------------------------------ */
 /*  Shared DTOs                                                        */
@@ -45,6 +49,12 @@ export type InstallmentDto = {
   remindedAt: string | null;
   reminderCount: number;
   changeOrderId: string | null;
+  /** Provider-invoice state (Square/Stripe/Stax), when this installment
+   *  was invoiced through a connected rail rather than by hand. */
+  invoiceProvider: string | null;
+  invoiceUrl: string | null;
+  invoiceSentAt: string | null;
+  invoiceCanceledAt: string | null;
 };
 
 export type ChangeOrderDto = {
@@ -139,6 +149,10 @@ function toInstallmentDto(
     remindedAt: Date | null;
     reminderCount: number;
     changeOrderId: string | null;
+    invoiceProvider: string | null;
+    invoiceUrl: string | null;
+    invoiceSentAt: Date | null;
+    invoiceCanceledAt: Date | null;
   },
   now: Date,
 ): InstallmentDto {
@@ -157,6 +171,12 @@ function toInstallmentDto(
     remindedAt: i.remindedAt ? i.remindedAt.toISOString() : null,
     reminderCount: i.reminderCount,
     changeOrderId: i.changeOrderId,
+    invoiceProvider: i.invoiceProvider,
+    invoiceUrl: i.invoiceUrl,
+    invoiceSentAt: i.invoiceSentAt ? i.invoiceSentAt.toISOString() : null,
+    invoiceCanceledAt: i.invoiceCanceledAt
+      ? i.invoiceCanceledAt.toISOString()
+      : null,
   };
 }
 
@@ -532,7 +552,14 @@ export async function updateInstallment(args: {
     if (!me) return { ok: false, reason: "Not signed in" };
     const inst = await db.paymentInstallment.findFirst({
       where: { id: args.installmentId, proposal: { userId: me.user.id } },
-      select: { id: true, status: true, proposalId: true, changeOrderId: true },
+      select: {
+        id: true,
+        status: true,
+        proposalId: true,
+        changeOrderId: true,
+        invoiceId: true,
+        invoiceProvider: true,
+      },
     });
     if (!inst) return { ok: false, reason: "Payment not found" };
     if (inst.status === "PAID") {
@@ -550,6 +577,14 @@ export async function updateInstallment(args: {
         reason: "Change-order amounts are set by the approved change order",
       };
     }
+    // A live provider invoice bills the OLD amount — changing the number
+    // under it would collect the wrong money. Cancel first, then edit.
+    if (inst.invoiceId && args.amountCents !== undefined) {
+      return {
+        ok: false,
+        reason: `A ${providerWord(inst.invoiceProvider)} invoice for this amount is already out — cancel it first, then edit.`,
+      };
+    }
     await db.paymentInstallment.update({
       where: { id: inst.id },
       data: {
@@ -564,6 +599,9 @@ export async function updateInstallment(args: {
             : args.dueAt
               ? new Date(args.dueAt)
               : null,
+        // A deliberate edit lifts the hold a past invoice-cancel left,
+        // so the portal/reminders may mint a fresh pay link again.
+        invoiceCanceledAt: null,
       },
     });
     revalidateAfterMutation();
@@ -585,7 +623,14 @@ export async function deleteInstallment(args: {
     if (!me) return { ok: false, reason: "Not signed in" };
     const inst = await db.paymentInstallment.findFirst({
       where: { id: args.installmentId, proposal: { userId: me.user.id } },
-      select: { id: true, status: true, proposalId: true, changeOrderId: true },
+      select: {
+        id: true,
+        status: true,
+        proposalId: true,
+        changeOrderId: true,
+        invoiceId: true,
+        invoiceProvider: true,
+      },
     });
     if (!inst) return { ok: false, reason: "Payment not found" };
     if (inst.status === "PAID") {
@@ -595,6 +640,14 @@ export async function deleteInstallment(args: {
       return {
         ok: false,
         reason: "This payment is tied to an approved change order",
+      };
+    }
+    // Deleting the row would orphan a live pay page the client can still
+    // pay — money with nowhere to land. Cancel the invoice first.
+    if (inst.invoiceId) {
+      return {
+        ok: false,
+        reason: `A ${providerWord(inst.invoiceProvider)} invoice is out for this payment — cancel it first, then remove.`,
       };
     }
     await db.paymentInstallment.delete({ where: { id: inst.id } });
@@ -647,6 +700,11 @@ export async function sendInstallmentReminder(args: {
 
     const snap = paymentUrlsFromSnap(inst.proposal.contractorSnap);
     const now = new Date();
+    // Give the nudge a real pay button: a hosted invoice page for this
+    // exact amount on the connected rail, minted quietly if none exists
+    // yet. Null (no rail, canceled invoice) falls back to the generic
+    // pasted links below.
+    const payUrl = await ensurePayLinkForInstallment(inst.id);
     const reminder = renderReminderEmail({
       clientFirstName: firstName(inst.proposal.clientName || "there"),
       companyName: snap.company || me.profile.company || "Your contractor",
@@ -655,6 +713,7 @@ export async function sendInstallmentReminder(args: {
       amountCents: inst.amountCents,
       dueAt: inst.dueAt,
       overdue: !!inst.dueAt && inst.dueAt.getTime() < now.getTime(),
+      payUrl,
       // Snapshot first, live profile as fallback — links connected after
       // the proposal was sent still reach the client.
       stripeUrl: snap.stripeUrl ?? me.profile.payments.stripeUrl,
@@ -929,6 +988,10 @@ export type PortalPaymentState = {
   remainingCents: number;
   progressPct: number;
   clientName: string;
+  /** Hosted Square/Stripe/Stax invoice page for the next payment due —
+   *  the exact amount, card or bank. When present it IS the pay button;
+   *  the generic payLinks below are only a fallback. */
+  payNowUrl: string | null;
   /** Pay-online links: proposal snapshot with a live-profile fallback,
    *  so links connected AFTER a proposal was sent still show up. */
   payLinks: { stripeUrl: string | null; squareUrl: string | null };
@@ -997,6 +1060,13 @@ export async function getPortalStateByToken(
   const now = new Date();
   const snap = paymentUrlsFromSnap(row.contractorSnap);
   const liveProfile = row.user?.contractorProfile;
+  // A live hosted invoice for the next unpaid installment — minted
+  // quietly on first view when a rail is connected. Never throws; null
+  // just means the portal falls back to the generic pasted links.
+  const nextDue = row.installments.find((i) => i.status === "PENDING");
+  const payNowUrl = nextDue
+    ? await ensurePayLinkForInstallment(nextDue.id)
+    : null;
   return {
     status: row.status,
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
@@ -1008,6 +1078,7 @@ export async function getPortalStateByToken(
         ? Math.min(100, Math.round((row.paidCents / row.totalCents) * 100))
         : 0,
     clientName: row.clientName,
+    payNowUrl,
     payLinks: {
       stripeUrl: snap.stripeUrl ?? liveProfile?.stripePaymentUrl ?? null,
       squareUrl: snap.squareUrl ?? liveProfile?.squarePaymentUrl ?? null,
