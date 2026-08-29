@@ -128,6 +128,8 @@ model User {
   financialSettings FinancialSettings?
   // The contractor's own fence price book (overrides the catalog).
   fenceRates        ContractorFenceRate[]
+  // One-time proposal boilerplate: terms + client price display default.
+  proposalDefaults  ContractorProposalDefaults?
 
   // Referral program: shareable code (lazily minted on first visit to
   // Settings) + who referred this account (set once at creation from
@@ -1348,6 +1350,30 @@ model ContractorFenceRate {
   @@unique([userId, fenceTypeId])
   @@index([userId])
   @@map("contractor_fence_rates")
+}
+
+/// The contractor's proposal boilerplate, written ONCE in Settings and
+/// stamped onto every new estimate automatically: scope of work,
+/// warranty, payment, scheduling, exclusions — plus how pricing
+/// presents to the client by default (totals / split / itemized).
+/// Absent row = the platform's sample terms, which is what every
+/// proposal shipped with before this existed.
+model ContractorProposalDefaults {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  /// Array of { id, title, body, enabled } term blocks (Proposal.terms).
+  terms Json?
+
+  /// "totals" | "split" | "itemized" — seed for Proposal.priceDisplay.
+  priceDisplay String @default("totals")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contractor_proposal_defaults")
 }
 
 model FinancialSettings {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { Pencil, X } from "lucide-react";
@@ -167,23 +167,69 @@ function Inner() {
     profile.logo.url,
   ]);
 
-  // Debounced autosave. Only runs once the draft already has a row
-  // (savedId) so merely opening /proposal never auto-creates a surprise
-  // draft — the first persist is an explicit Save (or Send). After that,
-  // every edit (materials, BOM, price, address…) is flushed 1.5s later.
+  // ---- Autosave — every edit persists itself. ----
+  //
+  // The old gate ("no autosave until the first explicit Save") meant a
+  // contractor could edit tiers for twenty minutes with the Save button
+  // sitting there un-clicked and lose all of it. Now the FIRST
+  // meaningful edit creates the draft too. "Meaningful" = the user
+  // changed something after load AND an address exists — merely opening
+  // /proposal still never creates a surprise row.
+  //
+  // Concurrency: one save in flight at a time; edits landing mid-save
+  // queue exactly one trailing save so the final state always wins.
+  // The row id adopts into the URL on create, same as manual Save.
+  const proposalRef = useRef(proposal);
+  proposalRef.current = proposal;
+  const savedIdRef = useRef(savedId);
+  savedIdRef.current = savedId;
+  const dirtyRef = useRef(false);
+  const seenFirstRef = useRef(false);
+  const inFlightRef = useRef(false);
+  const queuedRef = useRef(false);
+
+  const persist = useCallback(async () => {
+    if (inFlightRef.current) {
+      queuedRef.current = true;
+      return;
+    }
+    inFlightRef.current = true;
+    setSaveState({ kind: "saving" });
+    const res = await saveProposalDraft({
+      proposal: proposalRef.current,
+      proposalId: savedIdRef.current,
+    });
+    if (res.ok) {
+      setSaveState({ kind: "saved", at: Date.now() });
+      if (!savedIdRef.current) {
+        hydratedIdRef.current = res.id;
+        savedIdRef.current = res.id;
+        setSavedId(res.id);
+        router.replace(`/proposal?id=${res.id}`, { scroll: false });
+      }
+    } else {
+      setSaveState({ kind: "error", message: res.reason });
+    }
+    inFlightRef.current = false;
+    if (queuedRef.current) {
+      queuedRef.current = false;
+      void persist();
+    }
+  }, [router]);
+
   useEffect(() => {
-    if (!handoffApplied || !savedId || !proposal.address.trim()) return;
-    const t = setTimeout(async () => {
-      setSaveState({ kind: "saving" });
-      const res = await saveProposalDraft({ proposal, proposalId: savedId });
-      setSaveState(
-        res.ok
-          ? { kind: "saved", at: Date.now() }
-          : { kind: "error", message: res.reason },
-      );
-    }, 1500);
+    if (!handoffApplied) return;
+    // The first proposal value after load is the LOADED state, not an
+    // edit — only changes after it mark the draft dirty.
+    if (!seenFirstRef.current) {
+      seenFirstRef.current = true;
+      return;
+    }
+    dirtyRef.current = true;
+    if (!proposal.address.trim()) return;
+    const t = setTimeout(() => void persist(), 1500);
     return () => clearTimeout(t);
-  }, [proposal, handoffApplied, savedId]);
+  }, [proposal, handoffApplied, persist]);
 
   // Avoid a one-frame flash of the sample numbers while we read
   // localStorage. handoffApplied flips true on the first mount effect.
@@ -198,21 +244,7 @@ function Inner() {
       setSaveState({ kind: "error", message: "Add a property address first" });
       return;
     }
-    setSaveState({ kind: "saving" });
-    const res = await saveProposalDraft({ proposal, proposalId: savedId });
-    if (res.ok) {
-      setSaveState({ kind: "saved", at: Date.now() });
-      if (!savedId) {
-        // Adopt the new row id into the URL so a manual browser reload
-        // restores it. hydratedIdRef set first so the loader effect skips
-        // the refetch when ?id= appears.
-        hydratedIdRef.current = res.id;
-        setSavedId(res.id);
-        router.replace(`/proposal?id=${res.id}`, { scroll: false });
-      }
-    } else {
-      setSaveState({ kind: "error", message: res.reason });
-    }
+    await persist();
   }
 
   async function handleDelete() {

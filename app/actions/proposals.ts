@@ -3,6 +3,7 @@
 import { fenceTierPatches, type FenceDraftInput } from "@/lib/fence/proposal";
 import { normalizeViewSet, type FenceViewSet } from "@/lib/fence/viewpoints";
 import { freezeFenceRatesForEstimate } from "./fence-rates";
+import { loadProposalDefaults } from "@/lib/proposal-defaults";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@prisma/client";
@@ -448,6 +449,9 @@ async function saveDraftFromEstimateImpl(args: {
   existingId?: string;
   jobType?: "new" | "replacement";
   planId?: string;
+  /** How pricing presents to the client — the estimator's choice wins;
+   *  absent, the contractor's saved default applies. */
+  priceDisplay?: "totals" | "split" | "itemized";
 }): Promise<SaveDraftResult> {
   const me = await getMe();
   if (!me) return { ok: false, reason: "Not signed in" };
@@ -462,6 +466,11 @@ async function saveDraftFromEstimateImpl(args: {
   const fenceInput = args.fence
     ? { ...args.fence, rates: await freezeFenceRatesForEstimate() }
     : undefined;
+
+  // The contractor's saved boilerplate: terms written once in Settings
+  // ride onto every new draft in place of the platform samples, and
+  // their price-display default applies unless the estimator chose one.
+  const defaults = await loadProposalDefaults(me.user.id);
 
   // Compose a Proposal-shaped JSON blob so /proposal can re-hydrate the
   // draft later. We start from the blank template and overlay the live
@@ -508,6 +517,11 @@ async function saveDraftFromEstimateImpl(args: {
     planId: args.planId,
     address: args.address,
     measurements: args.measurements,
+    // The contractor's own boilerplate (Settings → Proposal terms) —
+    // scope, warranty, payment, exclusions go out with EVERY estimate
+    // without being retyped. Editable per proposal afterwards as ever.
+    terms: defaults.terms,
+    priceDisplay: args.priceDisplay ?? defaults.priceDisplay,
     takeoff: {
       eaves: args.eaves,
       rakes: args.rakes,

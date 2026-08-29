@@ -85,6 +85,12 @@ export async function generateProposalAudio(
 
     // The Blob store is configured private, so the stored URL is only
     // reachable through the presigned GET URLs minted per play.
+    //
+    // Token passed explicitly: without it the SDK prefers OIDC auth when
+    // VERCEL_OIDC_TOKEN + BLOB_STORE_ID are in the env (a `vercel env
+    // pull` leaves both), and a stale local OIDC token turns every
+    // upload into "Access denied".
+    const blobToken = resolveBlobToken() ?? undefined;
     const blob = await put(
       `proposal-audio/${row.id}/${hash}.${result.ext}`,
       result.audio,
@@ -92,6 +98,7 @@ export async function generateProposalAudio(
         access: "private",
         contentType: result.contentType,
         addRandomSuffix: true,
+        token: blobToken,
       },
     );
 
@@ -104,7 +111,7 @@ export async function generateProposalAudio(
     });
     if (stale && stale !== blob.url) {
       try {
-        await del(stale);
+        await del(stale, { token: blobToken });
       } catch {
         // best-effort cleanup — an orphaned old file is fine
       }
