@@ -1,4 +1,5 @@
 import { put, del, issueSignedToken, presignUrl } from "@vercel/blob";
+import { after } from "next/server";
 import { db } from "@/lib/db";
 import { getActiveApiKey } from "@/lib/api-keys";
 import {
@@ -141,13 +142,21 @@ export async function warmProposalAudio(
     if (!row) return false;
     const { script, hash } = scriptFor(row);
     if (isAudioFresh(row, hash)) return true;
+    const generation = generateProposalAudio(row, script, hash);
     const done = await Promise.race([
-      generateProposalAudio(row, script, hash),
+      generation,
       new Promise<null>((resolve) =>
         setTimeout(() => resolve(null), timeoutMs),
       ),
     ]);
-    return !!done;
+    if (done) return true;
+    // Slower than the send should wait for — but on Vercel, returning
+    // now would freeze the lambda mid-synthesis and the audio would
+    // never land. Hand the in-flight generation to after() so it runs
+    // to completion once the response is out; the client's first tap
+    // then hits the cache instead of burning its rate-limited lane.
+    after(generation);
+    return false;
   } catch (e) {
     console.error("[proposal-audio] warm failed", e);
     return false;
