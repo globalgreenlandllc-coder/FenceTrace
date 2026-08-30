@@ -133,6 +133,12 @@ function NavItem({
   return (
     <Link
       href={href}
+      // Full prefetch, not the default. These are dynamic routes, and
+      // Next's default only prefetches up to the loading.tsx boundary —
+      // so every tab click showed the route skeleton while the real
+      // page was fetched on demand. With prefetch, the destination's
+      // payload is already in the router cache when the click lands.
+      prefetch={true}
       title={collapsed ? label : undefined}
       className={cn(
         "transition-smooth ring-focus group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium",

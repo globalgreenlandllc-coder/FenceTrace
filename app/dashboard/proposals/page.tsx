@@ -17,6 +17,10 @@ import {
   type PaymentStats,
 } from "@/app/actions/payments";
 
+// Last successful payload, shared across visits within one session.
+// Always revalidated on mount — it only decides what paints FIRST.
+let listCache: { rows: MyProposalRow[]; money: PaymentStats } | null = null;
+
 export default function ProposalsListPage() {
   return (
     <AuthGate>
@@ -29,14 +33,21 @@ export default function ProposalsListPage() {
 }
 
 function Inner() {
-  const [rows, setRows] = useState<MyProposalRow[]>([]);
-  const [money, setMoney] = useState<PaymentStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Module-scope stale-while-revalidate (same pattern as the overview):
+  // coming back to this tab paints the last rows instantly instead of a
+  // skeleton, then a background refetch replaces them — so the page is
+  // never blank AND never staler than one visit.
+  const [rows, setRows] = useState<MyProposalRow[]>(listCache?.rows ?? []);
+  const [money, setMoney] = useState<PaymentStats | null>(
+    listCache?.money ?? null,
+  );
+  const [loading, setLoading] = useState(listCache === null);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([listMyProposals(), getPaymentStats()])
       .then(([r, m]) => {
+        listCache = { rows: r, money: m };
         if (cancelled) return;
         setRows(r);
         setMoney(m);
