@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
 import { getPlanPricing } from "@/lib/plan-pricing";
+import { isInvoiceProvider } from "@/lib/payments/provider-invoices";
 import {
   clearImpersonationCookie,
   setImpersonationCookie,
@@ -87,8 +88,17 @@ export type AdminUserRow = {
   acceptedTotal: number;
   revenueProcessedCents: number;
   payments: {
+    // Dumb pasted pay-page links (ContractorProfile) — legacy signal.
     stripe: boolean;
     square: boolean;
+    // Invoicing rails the contractor actually connected in Settings →
+    // Payments (their own processor API key). Provider + timestamps
+    // only — key material never leaves the vault.
+    connections: Array<{
+      provider: "square" | "stripe" | "stax";
+      connectedAt: string;
+      lastUsedAt: string | null;
+    }>;
   };
 };
 
@@ -111,6 +121,10 @@ export async function listUsersForAdmin(): Promise<AdminUserRow[]> {
       contractorProfile: true,
       creditWallet: true,
       subscription: true,
+      paymentConnections: {
+        select: { provider: true, createdAt: true, lastUsedAt: true },
+        orderBy: { createdAt: "asc" },
+      },
       _count: {
         select: { estimateRuns: true, proposals: true },
       },
@@ -162,6 +176,13 @@ export async function listUsersForAdmin(): Promise<AdminUserRow[]> {
       payments: {
         stripe: !!u.contractorProfile?.stripePaymentUrl,
         square: !!u.contractorProfile?.squarePaymentUrl,
+        connections: u.paymentConnections
+          .filter((c) => isInvoiceProvider(c.provider))
+          .map((c) => ({
+            provider: c.provider as "square" | "stripe" | "stax",
+            connectedAt: c.createdAt.toISOString(),
+            lastUsedAt: c.lastUsedAt ? c.lastUsedAt.toISOString() : null,
+          })),
       },
     };
   });

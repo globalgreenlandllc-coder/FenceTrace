@@ -72,8 +72,7 @@ export function UsersTable({
     if (filter === "active" && r.status !== "ACTIVE") return false;
     if (filter === "suspended" && r.status !== "SUSPENDED") return false;
     if (filter === "admin" && r.role !== "SUPER_ADMIN") return false;
-    if (filter === "no_payments" && (r.payments.stripe || r.payments.square))
-      return false;
+    if (filter === "no_payments" && hasAnyPayments(r.payments)) return false;
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     return (
@@ -110,9 +109,7 @@ export function UsersTable({
                   ? rows.filter((r) => r.status === "SUSPENDED").length
                   : f.id === "admin"
                   ? rows.filter((r) => r.role === "SUPER_ADMIN").length
-                  : rows.filter(
-                      (r) => !r.payments.stripe && !r.payments.square,
-                    ).length;
+                  : rows.filter((r) => !hasAnyPayments(r.payments)).length;
               const active = filter === f.id;
               return (
                 <button
@@ -314,23 +311,61 @@ function StatusBadge({ status }: { status: AdminUserRow["status"] }) {
   );
 }
 
+function hasAnyPayments(p: AdminUserRow["payments"]): boolean {
+  return p.stripe || p.square || p.connections.length > 0;
+}
+
+const PROVIDER_LABEL: Record<
+  AdminUserRow["payments"]["connections"][number]["provider"],
+  string
+> = { square: "Square", stripe: "Stripe", stax: "Stax" };
+
+/**
+ * What this contractor can collect money with. A real processor
+ * connection (their own API key, invoices created + tracked by the app)
+ * is the strong signal and renders emerald; a dumb pasted pay-page link
+ * is the weak one and renders as "link" so the admin can tell them
+ * apart at a glance.
+ */
 function PaymentsBadge({ payments }: { payments: AdminUserRow["payments"] }) {
-  const { stripe, square } = payments;
-  if (!stripe && !square) {
+  const { stripe, square, connections } = payments;
+  if (connections.length > 0) {
+    const title = connections
+      .map((c) => {
+        const used = c.lastUsedAt
+          ? `last used ${new Date(c.lastUsedAt).toLocaleDateString("en-US")}`
+          : "never used";
+        return `${PROVIDER_LABEL[c.provider]}: connected ${new Date(
+          c.connectedAt,
+        ).toLocaleDateString("en-US")}, ${used}`;
+      })
+      .join("\n");
     return (
-      <Badge tone="amber" className="gap-1">
+      <Badge tone="emerald" className="gap-1" title={title}>
         <CreditCard className="h-3 w-3" />
-        None
+        {connections.map((c) => PROVIDER_LABEL[c.provider]).join(" + ")}
       </Badge>
     );
   }
-  const labels = [stripe && "Stripe", square && "Square"]
-    .filter(Boolean)
-    .join(" + ");
+  if (stripe || square) {
+    const labels = [stripe && "Stripe", square && "Square"]
+      .filter(Boolean)
+      .join(" + ");
+    return (
+      <Badge
+        tone="neutral"
+        className="gap-1"
+        title="Pasted pay-page link only — no processor connection"
+      >
+        <CreditCard className="h-3 w-3" />
+        {labels} link
+      </Badge>
+    );
+  }
   return (
-    <Badge tone="emerald" className="gap-1">
+    <Badge tone="amber" className="gap-1">
       <CreditCard className="h-3 w-3" />
-      {labels}
+      None
     </Badge>
   );
 }
