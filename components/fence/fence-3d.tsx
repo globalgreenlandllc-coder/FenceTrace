@@ -1166,13 +1166,27 @@ export function Fence3D({
         // Chunks whose rise beats the racking limit SPLIT into
         // code-sized steps (extra posts, each drop ≤ MAX_STEP_DROP_FT)
         // — the same rule the slope engine prices.
-        const sections = Math.max(1, Math.ceil(len / spacingPx));
-        const bounds: number[] = [];
-        for (let c = 0; c <= sections; c++) {
-          bounds.push(iv.s + (len * c) / sections);
+        //
+        // Corners are MANDATORY chunk boundaries: a panel straddling a
+        // vertex draws a straight chord across it, which chamfered
+        // every 90° corner into a "rounded" one. Real fences put a
+        // post at the corner; so do we. Each straight stretch between
+        // corners then subdivides to its own even panel rhythm.
+        const cornerStops = terminalDs[ri]
+          .filter((td) => td > iv.s + 0.5 && td < iv.e - 0.5)
+          .sort((a, b) => a - b);
+        const stops = [iv.s, ...cornerStops, iv.e];
+        const bounds: number[] = [iv.s];
+        for (let k = 1; k < stops.length; k++) {
+          const s0 = stops[k - 1];
+          const s1 = stops[k];
+          const n = Math.max(1, Math.ceil((s1 - s0) / spacingPx));
+          for (let c = 1; c <= n; c++) {
+            bounds.push(s0 + ((s1 - s0) * c) / n);
+          }
         }
         const cuts: number[] = [bounds[0]];
-        for (let c = 0; c < sections; c++) {
+        for (let c = 0; c < bounds.length - 1; c++) {
           const c0 = bounds[c];
           const c1 = bounds[c + 1];
           const rise = hasGroundFor(ri)
