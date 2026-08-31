@@ -29,6 +29,8 @@ import {
   type Proposal,
 } from "@/lib/proposal-mock";
 import type { LineItem, Measurements, Stories } from "@/lib/types";
+import { FENCE_TYPES, fenceType, type FenceTypeId } from "@/lib/fence/catalog";
+import { computeFenceTakeoff } from "@/lib/fence/takeoff";
 import { saveProposalDraft } from "@/app/actions/proposals";
 import { getMyProposalDefaults } from "@/app/actions/proposal-defaults";
 import { MaterialsBuilder } from "@/components/proposal/materials-builder";
@@ -64,6 +66,7 @@ const EXTRA_PARTS: {
   { id: "permit", name: "Permit & inspection", unit: "ea", kind: "labor" },
 ];
 
+const BOM_PRICES_KEY = "fencescan.bomPartPrices";
 const PART_PRICES_KEY = "fencescan.extraPartPrices";
 function readPartPrices(): Record<string, number> {
   try {
@@ -74,6 +77,26 @@ function readPartPrices(): Record<string, number> {
     return {};
   }
 }
+function readBomPrices(): Record<string, number> {
+  try {
+    const raw = window.localStorage.getItem(BOM_PRICES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function rememberBomPrices(prices: Record<string, number>) {
+  try {
+    window.localStorage.setItem(
+      BOM_PRICES_KEY,
+      JSON.stringify({ ...readBomPrices(), ...prices }),
+    );
+  } catch {
+    // private mode — prices just don't stick
+  }
+}
+
 function rememberPartPrice(partId: string, price: number) {
   try {
     const all = readPartPrices();
@@ -277,6 +300,7 @@ export function ManualMeasureForm() {
   }
   const extrasTotal = extras.reduce((a, i) => a + i.quantity * i.unitPrice, 0);
 
+
   // Package whose MaterialsBuilder drawer is open (null = closed).
   const [materialsEditId, setMaterialsEditId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -306,6 +330,96 @@ export function ManualMeasureForm() {
     stories,
     wasteFactorPct,
   };
+
+  // ---- Auto parts list: pick a fence type, the engine counts the
+  // parts from the measured footage (posts per the chosen spacing,
+  // bags per post depth, rails, pickets, caps, gate kits). The
+  // contractor only supplies THEIR unit prices — remembered per part.
+  const [bomOpen, setBomOpen] = useState(false);
+  const [bomType, setBomType] = useState<FenceTypeId>("cedar-privacy");
+  const bomT = fenceType(bomType);
+  const [bomHeight, setBomHeight] = useState<number>(bomT.defaultHeightFt);
+  const [bomSpacing, setBomSpacing] = useState<number | null>(null);
+  const [bomPrices, setBomPrices] = useState<Record<string, string>>({});
+  const [bomLabRate, setBomLabRate] = useState("");
+  useEffect(() => {
+    // hydrate remembered prices once the card opens
+    if (!bomOpen) return;
+    const saved = readBomPrices();
+    setBomPrices((prev) => {
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(saved))
+        if (!(k in next) && v > 0) next[k] = String(v);
+      if (saved["labor-hr"] > 0 && !bomLabRate) setBomLabRate(String(saved["labor-hr"]));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bomOpen]);
+  const bomTakeoff = useMemo(() => {
+    if (!bomOpen || eaveLF <= 0) return null;
+    try {
+      return computeFenceTakeoff({
+        type: bomType,
+        heightFt: bomHeight,
+        totalLf: eaveLF,
+        corners,
+        ends: endCaps,
+        gatesSingle: downspoutCount,
+        gatesDouble: 0,
+        terrain: "flat",
+        wastePct: wasteFactorPct,
+        postSpacingFt: bomSpacing ?? undefined,
+      });
+    } catch {
+      return null;
+    }
+  }, [bomOpen, bomType, bomHeight, bomSpacing, eaveLF, corners, endCaps, downspoutCount, wasteFactorPct]);
+  const bomPricedTotal = (bomTakeoff?.bom ?? []).reduce((a, b) => {
+    const p = Number(bomPrices[b.key]) || 0;
+    return a + (p > 0 ? b.qty * p : 0);
+  }, 0);
+  const bomLaborTotal =
+    bomTakeoff && Number(bomLabRate) > 0
+      ? Math.round(bomTakeoff.laborHours * Number(bomLabRate) * 100) / 100
+      : 0;
+
+  /** Push every priced row (+ labor) into Extra work as real lines. */
+  function addBomToExtras() {
+    if (!bomTakeoff) return;
+    const remembered: Record<string, number> = {};
+    const lines: LineItem[] = [];
+    for (const b of bomTakeoff.bom) {
+      const price = Number(bomPrices[b.key]) || 0;
+      if (price <= 0 || b.qty <= 0) continue;
+      remembered[b.key] = price;
+      xSeq.current += 1;
+      lines.push({
+        id: `xtra-${xSeq.current}-${b.key}`,
+        name: b.label,
+        quantity: b.qty,
+        unit: b.unit,
+        unitPrice: price,
+        taxable: true,
+      });
+    }
+    const rate = Number(bomLabRate) || 0;
+    if (rate > 0 && bomTakeoff.laborHours > 0) {
+      remembered["labor-hr"] = rate;
+      xSeq.current += 1;
+      lines.push({
+        id: `xtra-${xSeq.current}-install-labor`,
+        name: `Installation labor — ${bomT.label}`,
+        quantity: bomTakeoff.laborHours,
+        unit: "hr",
+        unitPrice: rate,
+        taxable: false,
+      });
+    }
+    if (lines.length === 0) return;
+    rememberBomPrices(remembered);
+    setExtras((prev) => [...prev, ...lines]);
+    setBomOpen(false);
+  }
 
   // Job type owns the tear-off default (same rule the AI flows apply
   // server-side): replacement = FREE removal line, new build = none.
@@ -696,6 +810,180 @@ export function ManualMeasureForm() {
                       breakdown.
                     </p>
                   </div>
+                </div>
+
+
+                {/* ---- auto parts list from a fence type ---- */}
+                <div className="mt-3 rounded-lg border border-accent-200 bg-accent-50/50">
+                  <button
+                    type="button"
+                    onClick={() => setBomOpen((v) => !v)}
+                    className="ring-focus flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
+                  >
+                    <Ruler className="h-4 w-4 shrink-0 text-accent-700" />
+                    <span className="min-w-0 flex-1 text-[13px] font-semibold text-accent-900">
+                      Auto parts list from a fence type
+                      <span className="ml-1.5 font-normal text-accent-800/70">
+                        — pick cedar, chain link… and the engine counts posts,
+                        bags, rails &amp; pickets from your {eaveLF > 0 ? `${eaveLF} LF` : "footage"}
+                      </span>
+                    </span>
+                    <span className="text-xs font-semibold text-accent-700">
+                      {bomOpen ? "Hide" : "Open"}
+                    </span>
+                  </button>
+                  {bomOpen && (
+                    <div className="border-t border-accent-200/70 px-3.5 pb-3.5 pt-3">
+                      {eaveLF <= 0 ? (
+                        <p className="text-sm text-zinc-500">
+                          Add your fence runs first — the parts list counts
+                          itself from the footage.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="grid gap-2 sm:grid-cols-3">
+                            <label className="block">
+                              <span className={cn(MICROLABEL, "text-zinc-400")}>Fence type</span>
+                              <select
+                                value={bomType}
+                                onChange={(e) => {
+                                  const id = e.target.value as FenceTypeId;
+                                  setBomType(id);
+                                  setBomHeight(fenceType(id).defaultHeightFt);
+                                }}
+                                className="input mt-1"
+                              >
+                                {FENCE_TYPES.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block">
+                              <span className={cn(MICROLABEL, "text-zinc-400")}>Height</span>
+                              <select
+                                value={bomHeight}
+                                onChange={(e) => setBomHeight(Number(e.target.value))}
+                                className="input mt-1"
+                              >
+                                {bomT.heightsFt.map((h) => (
+                                  <option key={h} value={h}>
+                                    {h}′
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="block">
+                              <span className={cn(MICROLABEL, "text-zinc-400")}>Post spacing</span>
+                              <select
+                                value={bomSpacing ?? 0}
+                                onChange={(e) =>
+                                  setBomSpacing(Number(e.target.value) || null)
+                                }
+                                className="input mt-1"
+                              >
+                                <option value={0}>Standard ({bomT.postSpacingFt}′)</option>
+                                {[4, 6, 8, 10]
+                                  .filter((f) => f !== bomT.postSpacingFt)
+                                  .map((f) => (
+                                    <option key={f} value={f}>
+                                      {f}′ on center
+                                    </option>
+                                  ))}
+                              </select>
+                            </label>
+                          </div>
+
+                          {bomTakeoff && (
+                            <>
+                              <ul className="mt-3 divide-y divide-zinc-100 rounded-lg border border-zinc-200 bg-white">
+                                {bomTakeoff.bom.map((b) => {
+                                  const priced = Number(bomPrices[b.key]) > 0;
+                                  return (
+                                    <li
+                                      key={b.key}
+                                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-sm"
+                                    >
+                                      <span className="min-w-0 flex-1 truncate text-zinc-800">
+                                        {b.label}
+                                      </span>
+                                      <span className="tabular-nums text-zinc-500">
+                                        {b.qty} {b.unit}
+                                      </span>
+                                      <span className="relative">
+                                        <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                                          $
+                                        </span>
+                                        <input
+                                          value={bomPrices[b.key] ?? ""}
+                                          onChange={(e) =>
+                                            setBomPrices((prev) => ({
+                                              ...prev,
+                                              [b.key]: e.target.value,
+                                            }))
+                                          }
+                                          inputMode="decimal"
+                                          placeholder="/unit"
+                                          className="input num-input h-8 w-24 pl-5 text-xs"
+                                        />
+                                      </span>
+                                      <span className="w-20 text-right text-xs font-semibold tabular-nums text-zinc-900">
+                                        {priced
+                                          ? fmtMoney(b.qty * Number(bomPrices[b.key]))
+                                          : "—"}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                                <li className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-zinc-50/70 px-3 py-1.5 text-sm">
+                                  <span className="min-w-0 flex-1 truncate text-zinc-800">
+                                    Installation labor (engine estimate)
+                                  </span>
+                                  <span className="tabular-nums text-zinc-500">
+                                    {Math.round(bomTakeoff.laborHours)} hr
+                                  </span>
+                                  <span className="relative">
+                                    <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                                      $
+                                    </span>
+                                    <input
+                                      value={bomLabRate}
+                                      onChange={(e) => setBomLabRate(e.target.value)}
+                                      inputMode="decimal"
+                                      placeholder="/hr"
+                                      className="input num-input h-8 w-24 pl-5 text-xs"
+                                    />
+                                  </span>
+                                  <span className="w-20 text-right text-xs font-semibold tabular-nums text-zinc-900">
+                                    {bomLaborTotal > 0 ? fmtMoney(bomLaborTotal) : "—"}
+                                  </span>
+                                </li>
+                              </ul>
+                              <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={addBomToExtras}
+                                  disabled={bomPricedTotal + bomLaborTotal <= 0}
+                                  className="transition-smooth ring-focus press-scale inline-flex h-9 items-center gap-1.5 rounded-lg bg-accent-600 px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  Add priced lines
+                                  {bomPricedTotal + bomLaborTotal > 0 &&
+                                    ` — ${fmtMoney(bomPricedTotal + bomLaborTotal)}`}
+                                </button>
+                                <span className="text-[11px] leading-snug text-zinc-500">
+                                  Only rows you price get added. Quantities
+                                  recount live when the footage, spacing or
+                                  gates change; prices are remembered per part.
+                                </span>
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* part picker — the row fills itself from the catalog */}
