@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  Droplets,
   Hammer,
   Home,
   Loader2,
@@ -442,7 +441,7 @@ export function ManualMeasureForm() {
     : null;
 
   return (
-    <div className="mt-6 space-y-6">
+    <div className="mt-4 space-y-4">
       <div className={cn(MICROLABEL, "anim-enter-fade text-zinc-400")}>
         {step === "measure"
           ? "Step 1 of 2 — Measurements"
@@ -465,26 +464,28 @@ export function ManualMeasureForm() {
         </motion.div>
       )}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-3">
           {step === "measure" ? (
             <>
               {/* -------- Property -------- */}
               <motion.div
                 {...enter(0)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <MapPin className="h-4 w-4" />
                   </span>
                   <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
                     Property
                   </h2>
                 </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <div>
                 <label
                   htmlFor="manual-address"
-                  className={cn(MICROLABEL, "mt-4 block text-zinc-400")}
+                  className={cn(MICROLABEL, "block text-zinc-400")}
                 >
                   Property address
                 </label>
@@ -494,9 +495,10 @@ export function ManualMeasureForm() {
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="1247 Maple Ridge Drive, Austin, TX 78704"
                   autoComplete="street-address"
-                  className="transition-smooth mt-1.5 h-11 w-full rounded-lg border border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/15"
+                  className="transition-smooth mt-1.5 h-10 w-full rounded-lg border border-zinc-300 bg-white px-3.5 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-accent-500 focus:ring-2 focus:ring-accent-500/15"
                 />
-                <div className="mt-4 flex items-center gap-2">
+                </div>
+                <div className="flex items-center gap-2 pb-0.5">
                   <span className={cn(MICROLABEL, "text-zinc-400")}>Job</span>
                   <div className="inline-flex rounded-lg border border-zinc-200 p-0.5">
                     {(
@@ -529,15 +531,16 @@ export function ManualMeasureForm() {
                     })}
                   </div>
                 </div>
+                </div>
               </motion.div>
 
               {/* -------- Fence runs -------- */}
               <motion.div
                 {...enter(0.05)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <Ruler className="h-4 w-4" />
                   </span>
                   <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
@@ -674,66 +677,13 @@ export function ManualMeasureForm() {
                 )}
               </motion.div>
 
-              {/* -------- Gates & height -------- */}
-              <motion.div
-                {...enter(0.1)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
-                    <Droplets className="h-4 w-4" />
-                  </span>
-                  <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
-                    Gates &amp; height
-                  </h2>
-                </div>
-                <div className="mt-4 grid gap-5 sm:grid-cols-2">
-                  <Stepper
-                    label="Gates"
-                    value={downspoutCount}
-                    onChange={(v) => setDownspoutOverride(v)}
-                    auto={downspoutOverride === null}
-                    suggestion={suggestedDownspouts}
-                    onUseSuggestion={() => setDownspoutOverride(null)}
-                    hint="Auto-suggested from your runs — set the real gate count."
-                  />
-                  <div>
-                    <span className={cn(MICROLABEL, "text-zinc-400")}>
-                      Stories
-                    </span>
-                    <div className="mt-1.5 inline-flex rounded-lg border border-zinc-200 p-0.5">
-                      {([1, 2, 3] as const).map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setStories(s)}
-                          className={cn(
-                            "transition-smooth ring-focus rounded-md px-3 py-1.5 text-xs font-medium",
-                            stories === s
-                              ? "bg-zinc-100 text-zinc-900"
-                              : "text-zinc-500 hover:text-zinc-900",
-                          )}
-                        >
-                          {s}-story
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
-                      Sets the drop length (
-                      {stories === 1 ? 10 : stories === 2 ? 20 : 30} ft each)
-                      and hardware counts used in pricing.
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
               {/* -------- Extra work: labor & materials -------- */}
               <motion.div
                 {...enter(0.175)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <Wrench className="h-4 w-4" />
                   </span>
                   <div>
@@ -905,17 +855,53 @@ export function ManualMeasureForm() {
               {/* -------- Corners, posts & waste -------- */}
               <motion.div
                 {...enter(0.15)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <PenLine className="h-4 w-4" />
                   </span>
                   <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
-                    Corners, posts &amp; waste
+                    Gates, corners &amp; details
                   </h2>
                 </div>
-                <div className="mt-4 grid gap-5 sm:grid-cols-2">
+                <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  <Stepper
+                    label="Gates"
+                    value={downspoutCount}
+                    onChange={(v) => setDownspoutOverride(v)}
+                    auto={downspoutOverride === null}
+                    suggestion={suggestedDownspouts}
+                    onUseSuggestion={() => setDownspoutOverride(null)}
+                    hint="Auto-suggested from your runs — set the real gate count."
+                  />
+                  <div>
+                    <span className={cn(MICROLABEL, "text-zinc-400")}>
+                      Stories
+                    </span>
+                    <div className="mt-1.5 inline-flex rounded-lg border border-zinc-200 p-0.5">
+                      {([1, 2, 3] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setStories(s)}
+                          className={cn(
+                            "transition-smooth ring-focus rounded-md px-3 py-1.5 text-xs font-medium",
+                            stories === s
+                              ? "bg-zinc-100 text-zinc-900"
+                              : "text-zinc-500 hover:text-zinc-900",
+                          )}
+                        >
+                          {s}-story
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">
+                      Sets the drop length (
+                      {stories === 1 ? 10 : stories === 2 ? 20 : 30} ft each)
+                      and hardware counts used in pricing.
+                    </p>
+                  </div>
                   <Stepper
                     label="Outside corners"
                     value={outsideCorners}
@@ -952,10 +938,10 @@ export function ManualMeasureForm() {
               {/* -------- Client -------- */}
               <motion.div
                 {...enter(0.05)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <UserRound className="h-4 w-4" />
                   </span>
                   <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
@@ -1006,10 +992,10 @@ export function ManualMeasureForm() {
               {/* -------- Measurements recap -------- */}
               <motion.div
                 {...enter(0.1)}
-                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+                className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5"
               >
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
                     <Ruler className="h-4 w-4" />
                   </span>
                   <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
@@ -1051,7 +1037,7 @@ export function ManualMeasureForm() {
           {...enter(0.1)}
           className="lg:sticky lg:top-[80px] lg:self-start"
         >
-          <div className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card">
+          <div className="rounded-xl border border-zinc-300 bg-white p-4 shadow-card sm:p-5">
             <div className={cn(MICROLABEL, "text-zinc-400")}>Live takeoff</div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-3xl font-semibold tabular-nums tracking-tight text-zinc-900">
