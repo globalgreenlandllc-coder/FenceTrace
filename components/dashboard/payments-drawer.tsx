@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowRight,
   Banknote,
   Bell,
   CheckCircle2,
   ChevronDown,
   Clock,
+  CreditCard,
   ExternalLink,
   FileText,
   Loader2,
@@ -364,6 +366,27 @@ export function PaymentsDrawer({
                     the button and past the list's bottom edge — the exact
                     reason the final payment couldn't be marked paid. Rounded
                     corners still read fine without it (rows have no fill). */}
+                {/* The whole invoicing engine hides behind a connected
+                    key — without this nudge the office stares at Mark
+                    paid / Remind and concludes card + ACH don't exist. */}
+                {rails.length === 0 &&
+                  overview.installments.some((i) => i.status === "PENDING") && (
+                    <a
+                      href="/dashboard/settings"
+                      className="transition-smooth ring-focus mb-2 flex items-center gap-2 rounded-xl border border-accent-200 bg-accent-50/70 px-3.5 py-2.5 text-xs text-accent-900 hover:border-accent-300 hover:bg-accent-50"
+                    >
+                      <CreditCard className="h-4 w-4 shrink-0 text-accent-700" />
+                      <span className="min-w-0">
+                        <span className="font-semibold">
+                          Invoice this by card or bank (ACH)
+                        </span>{" "}
+                        — connect Square, Stripe or Stax once in Settings →
+                        Payments, and every unpaid row here gets a Send
+                        invoice button.
+                      </span>
+                      <ArrowRight className="ml-auto h-4 w-4 shrink-0 text-accent-700" />
+                    </a>
+                  )}
                 <ul className="rounded-xl border border-zinc-200">
                   {overview.installments.length === 0 && (
                     <li className="px-4 py-6 text-center text-sm text-zinc-500">
