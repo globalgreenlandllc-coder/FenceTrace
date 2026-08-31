@@ -1,19 +1,30 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Headphones, Loader2, Pause, Play, RotateCcw } from "lucide-react";
+import {
+  Headphones,
+  Loader2,
+  Pause,
+  Play,
+  RotateCcw,
+  RotateCw,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 /**
- * "Listen to this quote" — plays the server-generated TTS summary of the
- * proposal (scope, package prices, deposit, validity) for a client who
- * can't read the page right now, e.g. driving. The audio file is fetched
- * lazily from /api/p/[token]/audio on the first tap (a user gesture, so
- * mobile autoplay policies are satisfied) and the MediaSession metadata
- * makes the lock screen / CarPlay show it as a controllable track, so
- * playback survives the screen turning off.
+ * "Hear your proposal" — the voice-note hero of the client portal.
  *
- * The email deep-links here with ?listen=1: we scroll the card into view
- * and pulse it, but never autoplay — browsers block sound without a tap.
+ * Visually it's the ONE dark card on a white page: a big pulsing play
+ * button a thumb can't miss, live equalizer bars while it speaks, a
+ * chunky scrubbable progress bar, ±10s skips and speed chips — sized
+ * for a phone held in one hand in a truck.
+ *
+ * Mechanics unchanged from the original card: the audio file is
+ * fetched lazily from /api/p/[token]/audio on the first tap (a user
+ * gesture, so mobile autoplay policies are satisfied), MediaSession
+ * metadata puts it on the lock screen / CarPlay, and the email's
+ * ?listen=1 deep link scrolls here and pulses the ring — but never
+ * autoplays, browsers block sound without a tap.
  */
 export function ListenCard({
   token,
@@ -32,6 +43,7 @@ export function ListenCard({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0); // 0..1
   const [duration, setDuration] = useState(0); // seconds
+  const [rate, setRate] = useState(1);
   const [highlight, setHighlight] = useState(false);
 
   useEffect(() => {
@@ -73,6 +85,11 @@ export function ListenCard({
     el.currentTime = Math.max(0, Math.min(el.duration, el.currentTime + seconds));
   }
 
+  function setSpeed(next: number) {
+    setRate(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  }
+
   async function toggle() {
     const el = audioRef.current;
     if (!el) return;
@@ -92,6 +109,7 @@ export function ListenCard({
         throw new Error(body?.reason || "Couldn't load the audio summary.");
       }
       el.src = body.url;
+      el.playbackRate = rate;
       await el.play();
     } catch (e) {
       setStatus("error");
@@ -111,48 +129,93 @@ export function ListenCard({
   }
 
   const started = status === "playing" || status === "paused";
+  const playing = status === "playing";
 
   return (
     <div
       ref={cardRef}
-      className={`transition-smooth rounded-2xl border bg-white p-5 shadow-card ${
-        highlight
-          ? "border-accent-400 ring-2 ring-accent-300"
-          : "border-zinc-200"
-      }`}
+      className={cn(
+        "transition-smooth relative overflow-hidden rounded-2xl p-5 text-white shadow-card sm:p-6",
+        highlight && "ring-4 ring-accent-300",
+      )}
+      style={{
+        background:
+          "linear-gradient(125deg, #0D1B12 0%, #14351F 55%, #1E7340 130%)",
+      }}
     >
-      <div className="flex items-center gap-4">
+      {/* soft glow behind the button */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -left-10 -top-14 h-48 w-48 rounded-full bg-accent-500/25 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-30 [background-image:radial-gradient(rgba(255,255,255,0.14)_1px,transparent_1px)] [background-size:18px_18px] [mask-image:linear-gradient(to_right,black,transparent_70%)]"
+      />
+
+      <div className="relative flex items-center gap-4 sm:gap-5">
         <button
           type="button"
           onClick={() => void toggle()}
           disabled={status === "loading"}
           aria-label={
-            status === "playing" ? "Pause the audio summary" : "Play the audio summary"
+            playing ? "Pause the audio summary" : "Play the audio summary"
           }
-          className="press-scale ring-focus flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent-600 text-white shadow-sm hover:bg-accent-700 disabled:opacity-70"
+          className={cn(
+            "press-scale ring-focus-dark flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white text-accent-800 shadow-lg transition-smooth hover:bg-accent-50 disabled:opacity-70 sm:h-[4.5rem] sm:w-[4.5rem]",
+            status === "idle" && "listen-pulse",
+          )}
         >
           {status === "loading" ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : status === "playing" ? (
-            <Pause className="h-5 w-5" />
+            <Loader2 className="h-7 w-7 animate-spin" />
+          ) : playing ? (
+            <Pause className="h-7 w-7" />
           ) : status === "error" ? (
-            <RotateCcw className="h-5 w-5" />
+            <RotateCcw className="h-7 w-7" />
           ) : (
-            <Play className="ml-0.5 h-5 w-5" />
+            <Play className="ml-1 h-8 w-8" fill="currentColor" />
           )}
         </button>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Headphones className="h-4 w-4 shrink-0 text-accent-600" />
-            <div className="truncate text-sm font-semibold text-zinc-900">
-              Listen to this quote
-            </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Headphones className="h-4 w-4 shrink-0 text-accent-300" />
+            <span className="text-[17px] font-bold tracking-tight sm:text-lg">
+              Hear your proposal
+            </span>
+            {/* live equalizer — only once playback has started */}
+            {started && (
+              <span
+                aria-hidden
+                className="ml-1 flex h-4 items-end gap-[3px]"
+              >
+                {[0.9, 0.55, 1, 0.4, 0.75].map((h, i) => (
+                  <span
+                    key={i}
+                    className={cn("eq-bar w-[3px] rounded-full bg-accent-300", !playing && "eq-paused")}
+                    style={{ height: `${h * 100}%`, animationDelay: `${i * 0.13}s` }}
+                  />
+                ))}
+              </span>
+            )}
+            {duration > 0 && !started && (
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-white/80">
+                {formatTime(duration)}
+              </span>
+            )}
           </div>
+
           {status === "error" ? (
-            <p className="mt-1 text-xs text-red-600">{error}</p>
-          ) : started ? (
-            <div className="mt-2 flex items-center gap-3">
+            <p className="mt-1.5 text-[13px] leading-snug text-rose-300">
+              {error} — tap to try again.
+            </p>
+          ) : !started ? (
+            <p className="mt-1 text-[13px] leading-snug text-white/70">
+              Tap play — the scope, your options and the price, read aloud in
+              about a minute. Works with the screen off.
+            </p>
+          ) : (
+            <div className="mt-2.5">
               <div
                 role="slider"
                 aria-label="Playback position"
@@ -165,22 +228,57 @@ export function ListenCard({
                   if (e.key === "ArrowLeft") skipBy(-10);
                   if (e.key === "ArrowRight") skipBy(10);
                 }}
-                className="ring-focus h-1.5 flex-1 cursor-pointer rounded-full bg-zinc-200"
+                className="ring-focus-dark h-2.5 w-full cursor-pointer rounded-full bg-white/15"
               >
                 <div
-                  className="h-full rounded-full bg-accent-600"
-                  style={{ width: `${progress * 100}%` }}
-                />
+                  className="relative h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-300"
+                  style={{ width: `${Math.max(1.5, progress * 100)}%` }}
+                >
+                  <span className="absolute -right-1.5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow" />
+                </div>
               </div>
-              <span className="shrink-0 tabular-nums text-[11px] text-zinc-500">
-                {formatTime(progress * duration)} / {formatTime(duration)}
-              </span>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="tabular-nums text-xs text-white/70">
+                  {formatTime(progress * duration)} / {formatTime(duration)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => skipBy(-10)}
+                    aria-label="Back 10 seconds"
+                    className="ring-focus-dark flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-smooth hover:bg-white/20"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => skipBy(10)}
+                    aria-label="Forward 10 seconds"
+                    className="ring-focus-dark flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition-smooth hover:bg-white/20"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </button>
+                </span>
+                <span className="ml-auto flex items-center gap-1">
+                  {[1, 1.25, 1.5].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setSpeed(r)}
+                      aria-label={`Play at ${r}x speed`}
+                      className={cn(
+                        "ring-focus-dark rounded-full px-2.5 py-1.5 text-[11px] font-bold tabular-nums transition-smooth",
+                        rate === r
+                          ? "bg-white text-accent-900"
+                          : "bg-white/10 text-white/75 hover:bg-white/20",
+                      )}
+                    >
+                      {r}×
+                    </button>
+                  ))}
+                </span>
+              </div>
             </div>
-          ) : (
-            <p className="mt-0.5 text-xs text-zinc-500">
-              On the road? Hear the scope, your options, and pricing in about a
-              minute.
-            </p>
           )}
         </div>
       </div>
