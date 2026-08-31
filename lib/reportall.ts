@@ -93,7 +93,23 @@ async function queryMany(
   u.searchParams.set("rpp", String(Math.max(1, Math.min(50, rpp))));
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   try {
-    const res = await fetch(u.toString(), { signal: AbortSignal.timeout(15_000) });
+    // ReportAll throttles per second, and one scan legitimately fires a
+    // few of these in parallel (box + address + point) — so a 429 here
+    // is usually OUR OWN burst, not a spent quota. Backing off briefly
+    // and retrying turns "scan silently loses its boundaries" into one
+    // extra second of latency. A quota-exhausted 429 still fails after
+    // the retries and falls through to the Regrid fallback.
+    let res: Response;
+    for (let attempt = 0; ; attempt++) {
+      res = await fetch(u.toString(), { signal: AbortSignal.timeout(15_000) });
+      if (res.status !== 429 || attempt >= 2) break;
+      const ra = Number(res.headers.get("retry-after"));
+      const waitMs =
+        Number.isFinite(ra) && ra > 0
+          ? Math.min(ra * 1000, 3000)
+          : 700 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
     if (!res.ok) {
       console.warn(`[reportall] HTTP ${res.status}`);
       return [];
