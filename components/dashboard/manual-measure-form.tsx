@@ -12,6 +12,7 @@ import {
   Home,
   Loader2,
   Mail,
+  Wrench,
   MapPin,
   Minus,
   PenLine,
@@ -28,7 +29,7 @@ import {
   type Package,
   type Proposal,
 } from "@/lib/proposal-mock";
-import type { Measurements, Stories } from "@/lib/types";
+import type { LineItem, Measurements, Stories } from "@/lib/types";
 import { saveProposalDraft } from "@/app/actions/proposals";
 import { getMyProposalDefaults } from "@/app/actions/proposal-defaults";
 import { MaterialsBuilder } from "@/components/proposal/materials-builder";
@@ -166,6 +167,51 @@ export function ManualMeasureForm() {
       config: { ...p.config, oldGutterRemoval: "free" as const },
     })),
   );
+  // Extra work — free-form labor & material lines entered in the
+  // measure step. They fan into every tier's customLineItems, so the
+  // totals, tax split, client breakdown and scope sheet all price them
+  // through the same pipe as everything else. Ids are prefixed so the
+  // per-tier materials builder can still add ITS own custom lines
+  // without this card stomping them.
+  const [extras, setExtras] = useState<LineItem[]>([]);
+  const [xName, setXName] = useState("");
+  const [xKind, setXKind] = useState<"material" | "labor">("labor");
+  const [xQty, setXQty] = useState("");
+  const [xUnit, setXUnit] = useState("LF");
+  const [xPrice, setXPrice] = useState("");
+  const xSeq = useRef(0);
+  useEffect(() => {
+    setPkgs((prev) =>
+      prev.map((p) => ({
+        ...p,
+        customLineItems: [
+          ...(p.customLineItems ?? []).filter((i) => !i.id.startsWith("xtra-")),
+          ...extras,
+        ],
+      })),
+    );
+  }, [extras]);
+
+  function addExtra(preset?: Partial<LineItem> & { kind?: "material" | "labor" }) {
+    const name = (preset?.name ?? xName).trim();
+    const qty = preset?.quantity ?? Math.max(0, Number(xQty) || 0);
+    const unitPrice = preset?.unitPrice ?? Math.max(0, Number(xPrice) || 0);
+    const unit = preset?.unit ?? xUnit;
+    const taxable = preset ? preset.kind === "material" : xKind === "material";
+    if (!name || qty <= 0 || unitPrice <= 0) return;
+    xSeq.current += 1;
+    setExtras((prev) => [
+      ...prev,
+      { id: `xtra-${xSeq.current}-${name.slice(0, 12)}`, name, quantity: qty, unit, unitPrice, taxable },
+    ]);
+    if (!preset) {
+      setXName("");
+      setXQty("");
+      setXPrice("");
+    }
+  }
+  const extrasTotal = extras.reduce((a, i) => a + i.quantity * i.unitPrice, 0);
+
   // Package whose MaterialsBuilder drawer is open (null = closed).
   const [materialsEditId, setMaterialsEditId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -615,6 +661,176 @@ export function ManualMeasureForm() {
                 </div>
               </motion.div>
 
+              {/* -------- Extra work: labor & materials -------- */}
+              <motion.div
+                {...enter(0.175)}
+                className="rounded-2xl border border-zinc-200/70 bg-white p-6 shadow-card"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-50 text-accent-700">
+                    <Wrench className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
+                      Extra work — labor &amp; materials
+                    </h2>
+                    <p className="text-xs text-zinc-500">
+                      Anything beyond the fence itself, priced by the unit.
+                      Lands on every tier and on the client&apos;s itemized
+                      breakdown.
+                    </p>
+                  </div>
+                </div>
+
+                {/* one-tap starters for the lines every yard grows */}
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {[
+                    { label: "Tear-out & haul away", unit: "LF", kind: "labor" as const },
+                    { label: "Dump fee", unit: "load", kind: "labor" as const },
+                    { label: "Rocky-ground digging", unit: "post", kind: "labor" as const },
+                    { label: "Permit & inspection", unit: "ea", kind: "labor" as const },
+                    { label: "Extra concrete", unit: "bag", kind: "material" as const },
+                    { label: "Gate hardware upgrade", unit: "ea", kind: "material" as const },
+                  ].map((c) => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      onClick={() => {
+                        setXName(c.label);
+                        setXUnit(c.unit);
+                        setXKind(c.kind);
+                      }}
+                      className="transition-smooth ring-focus rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-medium text-zinc-600 hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* entry row */}
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_auto_78px_90px_100px_auto]">
+                  <input
+                    value={xName}
+                    onChange={(e) => setXName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addExtra()}
+                    placeholder="What's the work? (e.g. Remove old concrete footing)"
+                    className="input col-span-2 sm:col-span-1"
+                  />
+                  <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5">
+                    {(["labor", "material"] as const).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setXKind(k)}
+                        className={cn(
+                          "rounded-md px-2.5 py-1.5 text-xs font-semibold capitalize transition-smooth",
+                          xKind === k
+                            ? "bg-white text-zinc-900 shadow-sm"
+                            : "text-zinc-500 hover:text-zinc-800",
+                        )}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    value={xQty}
+                    onChange={(e) => setXQty(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addExtra()}
+                    inputMode="decimal"
+                    placeholder="Qty"
+                    className="input num-input"
+                  />
+                  <select
+                    value={xUnit}
+                    onChange={(e) => setXUnit(e.target.value)}
+                    className="input"
+                  >
+                    {["LF", "sqft", "ea", "hr", "day", "bag", "post", "panel", "load"].map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                      $
+                    </span>
+                    <input
+                      value={xPrice}
+                      onChange={(e) => setXPrice(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addExtra()}
+                      inputMode="decimal"
+                      placeholder="/unit"
+                      className="input num-input w-full pl-6"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addExtra()}
+                    disabled={!xName.trim() || !(Number(xQty) > 0) || !(Number(xPrice) > 0)}
+                    className="transition-smooth ring-focus press-scale inline-flex h-10 items-center justify-center gap-1 rounded-lg bg-accent-600 px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-accent-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+
+                {extras.length > 0 && (
+                  <ul className="mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200">
+                    {extras.map((it) => (
+                      <li
+                        key={it.id}
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2 text-sm"
+                      >
+                        <span className="min-w-0 flex-1 truncate font-medium text-zinc-800">
+                          {it.name}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            it.taxable
+                              ? "bg-sky-50 text-sky-700"
+                              : "bg-amber-50 text-amber-700",
+                          )}
+                        >
+                          {it.taxable ? "material" : "labor"}
+                        </span>
+                        <span className="tabular-nums text-zinc-500">
+                          {it.quantity} {it.unit} × {fmtMoney(it.unitPrice)}
+                        </span>
+                        <span className="w-24 text-right font-semibold tabular-nums text-zinc-900">
+                          {fmtMoney(it.quantity * it.unitPrice)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExtras((prev) => prev.filter((x) => x.id !== it.id))
+                          }
+                          aria-label={`Remove ${it.name}`}
+                          className="ring-focus rounded-md p-1.5 text-zinc-400 transition-smooth hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                    <li className="flex items-center justify-between bg-zinc-50/60 px-3.5 py-2 text-sm">
+                      <span className="font-medium text-zinc-600">
+                        Extra work total
+                      </span>
+                      <span className="font-semibold tabular-nums text-zinc-900">
+                        {fmtMoney(extrasTotal)}
+                      </span>
+                    </li>
+                  </ul>
+                )}
+                <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+                  Labor stays untaxed, materials join the taxable share —
+                  same split the client&apos;s breakdown shows. Each tier
+                  prices these through its own markup.
+                </p>
+              </motion.div>
+
               {/* -------- Corners, posts & waste -------- */}
               <motion.div
                 {...enter(0.15)}
@@ -747,6 +963,12 @@ export function ManualMeasureForm() {
                   />
                   <RecapItem label="End posts" value={`${endCaps}`} />
                   <RecapItem label="Waste" value={`${wasteFactorPct}%`} />
+                  {extras.length > 0 && (
+                    <RecapItem
+                      label="Extra work"
+                      value={`${extras.length} · ${fmtMoney(extrasTotal)}`}
+                    />
+                  )}
                 </dl>
               </motion.div>
             </>
