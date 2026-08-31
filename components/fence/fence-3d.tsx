@@ -620,9 +620,6 @@ export function Fence3D({
       maxElev = 0;
     }
     const relief = maxElev - minElev;
-    const softCap = heightFt * 5;
-    const soften = (ft: number) =>
-      ft <= softCap ? ft : softCap + (ft - softCap) * 0.35;
 
     const bilinear = (x: number, y: number): number => {
       if (!grid) return minElev;
@@ -639,6 +636,47 @@ export function Fence3D({
         grid[r0 + 1][c0 + 1] * sx * sy
       );
     };
+
+    // Softening must never touch the ground the fence actually stands
+    // on. The old cap was scene-relative (true scale for the first
+    // 5×height above the SCENE minimum, 0.35× beyond) — so a ravine or
+    // hill anywhere in the viewport pushed the whole yard into the
+    // compressed zone and a 27′ sloped fence line rendered flat while
+    // the pricing engine priced 90 steps. Now the fence's own elevation
+    // band renders 1:1 (padded a fence-height each way) and only relief
+    // beyond that band compresses.
+    let bandLo = Infinity;
+    let bandHi = -Infinity;
+    models.forEach((m, i) => {
+      if (!m) return;
+      for (const v of runElevationsFt![i]) {
+        bandLo = Math.min(bandLo, v);
+        bandHi = Math.max(bandHi, v);
+      }
+    });
+    if (!Number.isFinite(bandLo) && grid) {
+      for (const r of runs) {
+        for (const p of r.points) {
+          const v = bilinear(p.x, p.y);
+          bandLo = Math.min(bandLo, v);
+          bandHi = Math.max(bandHi, v);
+        }
+      }
+    }
+    if (!Number.isFinite(bandLo)) {
+      // No fence on the ground yet — fall back to the old scene cap.
+      bandLo = minElev;
+      bandHi = minElev + heightFt * 5;
+    }
+    const lo = Math.max(0, bandLo - heightFt - minElev);
+    const hi = bandHi + heightFt - minElev;
+    const soften = (ft: number) =>
+      ft < lo
+        ? lo - (lo - ft) * 0.35
+        : ft <= hi
+          ? ft
+          : hi + (ft - hi) * 0.35;
+
     const zAtPlan = (x: number, y: number): number =>
       soften(bilinear(x, y) - minElev) * scale * HEIGHT_EXAGGERATION;
 
