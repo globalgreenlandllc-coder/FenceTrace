@@ -7,9 +7,15 @@ import { POLICIES } from "@/lib/abuse/policies";
 import type { LatLng } from "@/lib/fence/geo";
 
 /**
- * fence-topo.ts — terrain along the drawn fence, via the Google
- * Elevation API (same key that powers geocoding + the satellite tile;
- * enable "Elevation API" on the key's Cloud project if calls 403).
+ * fence-topo.ts — terrain along the drawn fence.
+ *
+ * Source order matters: USGS 3DEP first (lidar bare-earth, free, no
+ * key), Google Elevation as the fallback. Google's DEM is canopy-
+ * contaminated over dense forest — a flat Florida lot backing onto a
+ * wooded preserve read as a 40-foot hill, and the 3D dutifully stepped
+ * the fence down a slope that doesn't exist. 3DEP reports the actual
+ * ground under the trees. It only covers the US, and silently omits
+ * points outside coverage, so any gap falls back to Google wholesale.
  *
  * One batched request per call: every post position across every run
  * (≤512 locations), so a layout edit costs a fraction of a cent. The
@@ -22,6 +28,68 @@ export type FenceTopoResult =
   | { ok: false; reason: string };
 
 const MAX_POINTS = 500;
+const METERS_TO_FT = 3.28084;
+
+/**
+ * Bare-earth elevations (ft) from the USGS 3DEP lidar DEM, one batched
+ * getSamples call. Returns null — never throws — when any point lacks
+ * coverage or the service misbehaves, so the caller can fall back to
+ * Google for the whole batch. Results are matched back to inputs by
+ * coordinate (the service omits uncovered points rather than marking
+ * them), keyed at ~0.1 m so colocated jitter vertices share a sample.
+ */
+async function usgsElevationsFt(points: LatLng[]): Promise<number[] | null> {
+  // Cheap gate: 3DEP is US-only (incl. Alaska across the antimeridian).
+  const inUs = points.every(
+    (p) =>
+      p.lat > 17 &&
+      p.lat < 72 &&
+      ((p.lng > -180 && p.lng < -64) || p.lng > 170),
+  );
+  if (!inUs) return null;
+  try {
+    const key = (p: { x: number; y: number }) =>
+      `${p.x.toFixed(6)},${p.y.toFixed(6)}`;
+    const body = new URLSearchParams({
+      geometry: JSON.stringify({
+        points: points.map((p) => [p.lng, p.lat]),
+        spatialReference: { wkid: 4326 },
+      }),
+      geometryType: "esriGeometryMultipoint",
+      returnFirstValueOnly: "true",
+      f: "json",
+    });
+    const res = await fetch(
+      "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer/getSamples",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+        signal: AbortSignal.timeout(12_000),
+      },
+    );
+    if (!res.ok) return null;
+    const parsed = (await res.json()) as {
+      samples?: Array<{ location?: { x: number; y: number }; value?: string }>;
+    };
+    if (!Array.isArray(parsed.samples)) return null;
+    const byLoc = new Map<string, number>();
+    for (const s of parsed.samples) {
+      if (!s.location) continue;
+      const m = parseFloat(s.value ?? "");
+      if (Number.isFinite(m)) byLoc.set(key(s.location), m * METERS_TO_FT);
+    }
+    const out: number[] = [];
+    for (const p of points) {
+      const v = byLoc.get(key({ x: p.lng, y: p.lat }));
+      if (v === undefined) return null; // gap in coverage — Google takes over
+      out.push(v);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
 
 export async function sampleFenceElevations(
   runs: LatLng[][],
@@ -45,6 +113,20 @@ export async function sampleFenceElevations(
   });
   if (!rl.ok) return { ok: false, reason: rl.reason };
 
+  const flat = runs.flat();
+
+  // Lidar bare earth first — see the header comment for why.
+  const usgs = await usgsElevationsFt(flat);
+  if (usgs) {
+    const out: number[][] = [];
+    let i = 0;
+    for (const c of counts) {
+      out.push(usgs.slice(i, i + c));
+      i += c;
+    }
+    return { ok: true, runElevationsFt: out };
+  }
+
   // The vault key may be a browser-restricted key (added for the leads
   // map) that Google denies for server calls — try it first, then fall
   // back to the env key when they differ.
@@ -53,7 +135,6 @@ export async function sampleFenceElevations(
   const keys = [...new Set([vaultKey, envKey].filter(Boolean))] as string[];
   if (keys.length === 0) return { ok: false, reason: "Google Maps key missing" };
 
-  const flat = runs.flat();
   let body: any = null;
   let lastStatus: string | null = null;
   for (const key of keys) {
