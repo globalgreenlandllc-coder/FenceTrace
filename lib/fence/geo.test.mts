@@ -130,3 +130,79 @@ test("cornerFlags: closed rectangle has 4 corners, no ends", async () => {
   assert.equal(r.corners, 4);
   assert.equal(r.ends, 0);
 });
+
+/* ---- cleanDisplayRing ---- */
+import { cleanDisplayRing } from "./geo.ts";
+
+// pxPerFt = 2 in these tests: thresholds become closeEps 1px,
+// minSeg 3px, so the numbers below stay easy to reason about.
+const PPF = 2;
+const SQUARE = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
+];
+
+test("cleanDisplayRing: a clean square passes through untouched", () => {
+  const out = cleanDisplayRing(SQUARE, PPF);
+  assert.deepEqual(out, SQUARE);
+});
+
+test("cleanDisplayRing: strips the GeoJSON closing duplicate", () => {
+  const out = cleanDisplayRing([...SQUARE, { x: 0.2, y: 0.3 }], PPF);
+  assert.equal(out.length, 4);
+});
+
+test("cleanDisplayRing: merges a stacked jitter cluster into one vertex", () => {
+  // Three sub-3px vertices piled on the 2nd corner — the "blob of dots".
+  const ring = [
+    SQUARE[0],
+    { x: 99, y: 0 },
+    { x: 100, y: 0.8 },
+    { x: 100.5, y: 1.6 },
+    SQUARE[2],
+    SQUARE[3],
+  ];
+  const out = cleanDisplayRing(ring, PPF);
+  assert.ok(out.length <= 4, `expected ≤4 vertices, got ${out.length}`);
+});
+
+test("cleanDisplayRing: removes a retrace spike (the thick-solid-line bug)", () => {
+  // Out-and-back leg on the top edge: 50,0 → 70,-40 → back toward 90,0.
+  // The spike apex bends <15°, so it's garbage, not a corner.
+  const ring = [
+    SQUARE[0],
+    { x: 50, y: 0 },
+    { x: 52, y: -60 },
+    { x: 54, y: 0 },
+    SQUARE[1],
+    SQUARE[2],
+    SQUARE[3],
+  ];
+  const out = cleanDisplayRing(ring, PPF);
+  assert.ok(
+    out.every((p) => p.y >= 0),
+    `spike apex survived: ${JSON.stringify(out)}`,
+  );
+});
+
+test("cleanDisplayRing: drops collinear jitter on a straight edge, keeps real corners", () => {
+  const ring = [
+    SQUARE[0],
+    { x: 30, y: 0.2 },
+    { x: 60, y: -0.2 },
+    SQUARE[1],
+    SQUARE[2],
+    SQUARE[3],
+  ];
+  const out = cleanDisplayRing(ring, PPF);
+  assert.equal(out.length, 4);
+  // The four real 90° corners all survive.
+  for (const c of SQUARE) {
+    assert.ok(
+      out.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < 1),
+      `corner ${JSON.stringify(c)} was dropped`,
+    );
+  }
+});

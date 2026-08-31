@@ -19,6 +19,7 @@ import {
   CANVAS_H,
   CANVAS_W,
   canvasPolylineFt,
+  cleanDisplayRing,
   type Pt,
 } from "@/lib/fence/geo";
 import type { FenceScanResult } from "@/app/actions/fence-scan";
@@ -259,6 +260,15 @@ export function FenceCanvas({
   };
 
   const pxPerFt = scan.canvasPxPerFt;
+
+  // New scans arrive pre-cleaned by scan-core, but proposals saved
+  // before that carry raw county rings — closure dups, jitter-dot
+  // chains, retrace spikes (the "thick solid line") — so the display
+  // layer cleans defensively. Idempotent on already-clean rings.
+  const displayParcelRings = useMemo(
+    () => scan.parcelRings.map((r) => cleanDisplayRing(r, pxPerFt)),
+    [scan.parcelRings, pxPerFt],
+  );
 
   /* ---- camera: pan + zoom over the aerial ---- */
   const [cam, setCam] = useState({ cx: CANVAS_W / 2, cy: CANVAS_H / 2, k: 1 });
@@ -1409,7 +1419,7 @@ export function FenceCanvas({
           })}
 
           {/* Parcel boundary — the Regrid property line */}
-          {scan.parcelRings.map((ring, i) => {
+          {displayParcelRings.map((ring, i) => {
             const pts = ring.map((p) => `${p.x},${p.y}`).join(" ");
             return (
               // White reads on any imagery because it rides a soft dark

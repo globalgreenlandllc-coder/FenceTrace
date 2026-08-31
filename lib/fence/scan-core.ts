@@ -15,6 +15,7 @@ import {
   canvasPxPerFt,
   centroid,
   canvasToLatLng,
+  cleanDisplayRing,
   latLngToCanvas,
   zoomToFit,
   type LatLng,
@@ -366,11 +367,13 @@ export async function fenceScanCore(
     ring.map((p) => latLngToCanvas(p, center, zoom)),
   );
   // Suggested fence = the parcel ring itself (closed), one run per ring.
-  // GeoJSON rings usually arrive already closed (first == last) — only
-  // append the closing vertex when it's genuinely missing, else the
-  // duplicate point reads as a phantom corner.
+  // Seeded from the CLEANED ring: Douglas-Peucker alone keeps retrace
+  // spikes (they're maximum-deviation points), so seeding from the raw
+  // county vertices handed the fence a phantom leg. cleanDisplayRing
+  // strips the closure dup too, so the ring is re-closed explicitly.
   const pxPerFt = canvasPxPerFt(center.lat, zoom);
-  const suggestedRuns: FenceRunSeed[] = rings.map((ring, i) => {
+  const cleanedRings = rings.map((r) => cleanDisplayRing(r, pxPerFt));
+  const suggestedRuns: FenceRunSeed[] = cleanedRings.map((ring, i) => {
     const closed =
       ring.length >= 2 &&
       Math.hypot(ring[0].x - ring[ring.length - 1].x, ring[0].y - ring[ring.length - 1].y) < 1;
@@ -385,10 +388,17 @@ export async function fenceScanCore(
     zoom,
     canvasPxPerFt: canvasPxPerFt(center.lat, zoom),
     aerial: { imageDataUrl, width: CANVAS_W, height: CANVAS_H, zoom },
-    parcelRings: rings,
+    // Display rings are cleaned (closure dup, jitter dots, retrace
+    // spikes); the fence seed above starts from the same cleaned shape.
+    parcelRings: cleanedRings,
     suggestedRuns,
     neighborRings: neighbors.flatMap((n) =>
-      n.rings.map((ring) => ring.map((pt) => latLngToCanvas(pt, center, zoom))),
+      n.rings.map((ring) =>
+        cleanDisplayRing(
+          ring.map((pt) => latLngToCanvas(pt, center, zoom)),
+          pxPerFt,
+        ),
+      ),
     ),
     neighborInfo: neighbors.flatMap((n) =>
       n.rings.map((ringLL) => ({

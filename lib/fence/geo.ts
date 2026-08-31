@@ -235,3 +235,89 @@ export function countCornersAndEnds(
   }
   return { corners, ends };
 }
+
+/* ------------------------------------------------------------------ */
+/*  Parcel-ring display cleaning                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Clean a county parcel ring for DISPLAY. Provider rings arrive with
+ * three kinds of garbage that render badly: the GeoJSON closing
+ * duplicate (a phantom corner dot on top of a real one), dense
+ * sub-foot jitter chains (a blob of stacked vertex dots), and
+ * doubled-back "spike" edges (two dashed strokes overlapping at
+ * opposite phase — which reads as one THICK SOLID line). This strips
+ * all three while keeping every real corner, so the drawn line still
+ * sits on the county boundary.
+ *
+ * Distinct from straightenSeed in scan-core: that cleans the FENCE
+ * seed aggressively; this is the lightest touch that makes the
+ * boundary itself render honestly.
+ */
+export function cleanDisplayRing(ring: Pt[], pxPerFt: number): Pt[] {
+  if (ring.length < 3) return ring;
+  let pts = ring.slice();
+
+  // 1. GeoJSON closure duplicate(s): the polygon element closes itself.
+  const closeEps = Math.max(1, pxPerFt * 0.5);
+  while (
+    pts.length > 1 &&
+    Math.hypot(pts[0].x - pts[pts.length - 1].x, pts[0].y - pts[pts.length - 1].y) < closeEps
+  ) {
+    pts.pop();
+  }
+
+  // 2. Merge consecutive near-duplicates (< ~1.5 ft apart) — each one
+  //    was a full-size corner dot stacked on its neighbour.
+  const minSeg = Math.max(1.2, pxPerFt * 1.5);
+  const merged: Pt[] = [];
+  for (const p of pts) {
+    const last = merged[merged.length - 1];
+    if (!last || Math.hypot(p.x - last.x, p.y - last.y) >= minSeg) merged.push(p);
+  }
+  while (
+    merged.length > 3 &&
+    Math.hypot(
+      merged[0].x - merged[merged.length - 1].x,
+      merged[0].y - merged[merged.length - 1].y,
+    ) < minSeg
+  ) {
+    merged.pop();
+  }
+  pts = merged;
+
+  // 3. Spike + jitter removal, one cyclic pass repeated to fixpoint:
+  //    - a vertex whose incoming and outgoing edges point in nearly the
+  //      SAME direction (<15° between them) is a retrace artifact,
+  //      never a real lot corner — counties bend, they don't double
+  //      back;
+  //    - a vertex that barely deflects the line (<4°) is GPS jitter on
+  //      a straight edge — the edge renders identically without it, and
+  //      its corner dot disappears.
+  const COS_SPIKE = Math.cos((15 * Math.PI) / 180);
+  const COS_STRAIGHT = -Math.cos((4 * Math.PI) / 180);
+  for (let pass = 0; pass < 6 && pts.length >= 4; pass++) {
+    const n = pts.length;
+    const keep: Pt[] = [];
+    let dropped = false;
+    for (let i = 0; i < n; i++) {
+      const a = pts[(i + n - 1) % n];
+      const b = pts[i];
+      const c = pts[(i + 1) % n];
+      const bax = a.x - b.x, bay = a.y - b.y;
+      const bcx = c.x - b.x, bcy = c.y - b.y;
+      const la = Math.hypot(bax, bay) || 1;
+      const lc = Math.hypot(bcx, bcy) || 1;
+      const cos = (bax * bcx + bay * bcy) / (la * lc);
+      if (cos > COS_SPIKE || cos < COS_STRAIGHT) {
+        dropped = true;
+        continue;
+      }
+      keep.push(b);
+    }
+    pts = keep;
+    if (!dropped) break;
+  }
+
+  return pts.length >= 3 ? pts : ring;
+}
