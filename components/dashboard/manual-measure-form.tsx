@@ -38,6 +38,52 @@ import { SendModal } from "@/components/proposal/send-modal";
 import { useProfile } from "@/lib/auth-mock";
 
 type JobType = "replacement" | "new";
+
+/** The parts a fence job actually grows — picking one fills the row
+ *  (name, unit, labor/material) so typing is only for the odd case.
+ *  No platform prices exist per part (pricing is per-LF composite), so
+ *  the price is the contractor's — remembered per part after first use. */
+const EXTRA_PARTS: {
+  id: string;
+  name: string;
+  unit: string;
+  kind: "material" | "labor";
+}[] = [
+  { id: "post-wood", name: "Posts — 4×4 pressure-treated", unit: "post", kind: "material" },
+  { id: "post-steel", name: "Posts — galvanized steel", unit: "post", kind: "material" },
+  { id: "concrete", name: "Concrete — 60 lb bags", unit: "bag", kind: "material" },
+  { id: "pickets", name: "Pickets", unit: "ea", kind: "material" },
+  { id: "rails", name: "Rails — 2×4", unit: "ea", kind: "material" },
+  { id: "caps", name: "Post caps", unit: "ea", kind: "material" },
+  { id: "gate-kit", name: "Gate kit", unit: "ea", kind: "material" },
+  { id: "hardware", name: "Hinges & latch set", unit: "set", kind: "material" },
+  { id: "stain", name: "Stain & seal", unit: "LF", kind: "material" },
+  { id: "tearout", name: "Tear-out & haul away", unit: "LF", kind: "labor" },
+  { id: "dump", name: "Dump fee", unit: "load", kind: "labor" },
+  { id: "rocky", name: "Digging — rocky ground", unit: "post", kind: "labor" },
+  { id: "labor-hr", name: "Extra labor", unit: "hr", kind: "labor" },
+  { id: "permit", name: "Permit & inspection", unit: "ea", kind: "labor" },
+];
+
+const PART_PRICES_KEY = "fencescan.extraPartPrices";
+function readPartPrices(): Record<string, number> {
+  try {
+    const raw = window.localStorage.getItem(PART_PRICES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function rememberPartPrice(partId: string, price: number) {
+  try {
+    const all = readPartPrices();
+    all[partId] = price;
+    window.localStorage.setItem(PART_PRICES_KEY, JSON.stringify(all));
+  } catch {
+    // private mode — the convenience just doesn't stick
+  }
+}
 type EntryMode = "runs" | "total";
 type Step = "measure" | "review";
 
@@ -174,6 +220,7 @@ export function ManualMeasureForm() {
   // per-tier materials builder can still add ITS own custom lines
   // without this card stomping them.
   const [extras, setExtras] = useState<LineItem[]>([]);
+  const [xPart, setXPart] = useState("custom");
   const [xName, setXName] = useState("");
   const [xKind, setXKind] = useState<"material" | "labor">("labor");
   const [xQty, setXQty] = useState("");
@@ -205,10 +252,29 @@ export function ManualMeasureForm() {
       { id: `xtra-${xSeq.current}-${name.slice(0, 12)}`, name, quantity: qty, unit, unitPrice, taxable },
     ]);
     if (!preset) {
+      if (xPart !== "custom") rememberPartPrice(xPart, unitPrice);
+      setXPart("custom");
       setXName("");
       setXQty("");
       setXPrice("");
     }
+  }
+
+  /** Part picked → the row fills itself; price comes from memory when
+   *  this part was ever priced before (still editable). */
+  function pickPart(id: string) {
+    setXPart(id);
+    if (id === "custom") {
+      setXName("");
+      return;
+    }
+    const part = EXTRA_PARTS.find((x) => x.id === id);
+    if (!part) return;
+    setXName(part.name);
+    setXUnit(part.unit);
+    setXKind(part.kind);
+    const remembered = readPartPrices()[id];
+    if (remembered > 0) setXPrice(String(remembered));
   }
   const extrasTotal = extras.reduce((a, i) => a + i.quantity * i.unitPrice, 0);
 
@@ -682,29 +748,34 @@ export function ManualMeasureForm() {
                   </div>
                 </div>
 
-                {/* one-tap starters for the lines every yard grows */}
-                <div className="mt-4 flex flex-wrap gap-1.5">
-                  {[
-                    { label: "Tear-out & haul away", unit: "LF", kind: "labor" as const },
-                    { label: "Dump fee", unit: "load", kind: "labor" as const },
-                    { label: "Rocky-ground digging", unit: "post", kind: "labor" as const },
-                    { label: "Permit & inspection", unit: "ea", kind: "labor" as const },
-                    { label: "Extra concrete", unit: "bag", kind: "material" as const },
-                    { label: "Gate hardware upgrade", unit: "ea", kind: "material" as const },
-                  ].map((c) => (
-                    <button
-                      key={c.label}
-                      type="button"
-                      onClick={() => {
-                        setXName(c.label);
-                        setXUnit(c.unit);
-                        setXKind(c.kind);
-                      }}
-                      className="transition-smooth ring-focus rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-medium text-zinc-600 hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
-                    >
-                      {c.label}
-                    </button>
-                  ))}
+                {/* part picker — the row fills itself from the catalog */}
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-[240px_minmax(0,1fr)]">
+                  <select
+                    value={xPart}
+                    onChange={(e) => pickPart(e.target.value)}
+                    className="input"
+                  >
+                    <option value="custom">Custom line…</option>
+                    <optgroup label="Parts & materials">
+                      {EXTRA_PARTS.filter((x) => x.kind === "material").map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Labor & fees">
+                      {EXTRA_PARTS.filter((x) => x.kind === "labor").map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                  <p className="self-center text-[11px] leading-snug text-zinc-400">
+                    Pick a part and the name, unit and labor/material type
+                    fill in — your price is remembered per part after the
+                    first use. Custom stays free-form.
+                  </p>
                 </div>
 
                 {/* entry row */}
@@ -746,7 +817,7 @@ export function ManualMeasureForm() {
                     onChange={(e) => setXUnit(e.target.value)}
                     className="input"
                   >
-                    {["LF", "sqft", "ea", "hr", "day", "bag", "post", "panel", "load"].map((u) => (
+                    {["LF", "sqft", "ea", "set", "hr", "day", "bag", "post", "panel", "load"].map((u) => (
                       <option key={u} value={u}>
                         {u}
                       </option>
